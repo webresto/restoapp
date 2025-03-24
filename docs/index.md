@@ -11,7 +11,7 @@ Perfect for franchises, as you have full control over the code. We are also prep
 
 ---
 
-## System Functionality
+## Core system Functionality
 
 ### 1. Adapters for Integrations
 Enable connection to various systems for external and internal integrations:
