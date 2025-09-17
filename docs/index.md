@@ -1,6 +1,7 @@
-# RestoApp: Open-Source Backend for Food Delivery and Local Commerce
 
-[Install](./install.md) | [Features](./features.md)
+# [Install](./install.md) | [Features](./features.md) | [Модули](./modules.md)
+
+# RestoApp: Open-Source Backend for Food Delivery and Local Commerce
 
 RestoApp is an open-source backend for food delivery and local commerce applications and websites. It deploys easily via Docker and offers flexible customization. The system automatically updates stop lists, supports product modifiers, recommended items, and promotions that can be configured through a visual editor. It also allows switching between cities, making it ideal for multi-location businesses.
 
