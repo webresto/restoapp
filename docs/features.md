@@ -26,4 +26,3 @@ If you need a new feature or integration, please send your request by email to:
 **mail@webresto.org**
 
 We are open to suggestions and improve the platform based on user requests!
-# [Install](./install.md) | [Features](./features.md) | [Модули](./modules.md)
