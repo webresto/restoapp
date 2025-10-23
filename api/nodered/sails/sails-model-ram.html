@@ -1,0 +1,31 @@
+<script type="text/javascript">
+  RED.nodes.registerType('sails-model-ram',{
+      category: 'function',
+      color: '#a6bbcf',
+      defaults: {
+          name: {value:""},
+          model: {value:""},
+      },
+      inputs: 1,
+      outputs: 1,
+      icon: "db.svg",
+      label: function() {
+          return this.name||"sails-model-ram";
+      }
+  });
+</script>
+
+<script type="text/html" data-template-name="sails-model-ram">
+  <div class="form-row">
+      <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+      <input type="text" id="node-input-name" placeholder="Name">
+  </div>
+  <div class="form-row">
+      <label for="node-input-model"><i class="fa fa-database"></i> Model</label>
+      <input type="text" id="node-input-model" placeholder="Model">
+  </div>
+</script>
+
+<script type="text/html" data-help-name="sails-model-ram">
+  <p>This is a listener that permanently stores data from models in RAM, should not be used for large models, limit is 300 values</p>
+</script>

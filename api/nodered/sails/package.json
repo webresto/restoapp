@@ -1,0 +1,9 @@
+{
+  "name" : "node-red-contrib-restoapp-sails",
+  "node-red" : {
+      "nodes": {
+          "sails-model-ram": "sails-model-ram.js",
+          "sails-model-after": "sails-model-after.js"
+      }
+  }
+}

@@ -1,0 +1,28 @@
+<script type="text/javascript">
+  RED.nodes.registerType('emitter-emit',{
+      category: 'function',
+      color: '#a6bbcf',
+      defaults: {
+          event: {value:"node-red-test"}
+      },
+      inputs: 1,
+      outputs: 0,
+      icon: "event.svg",
+      label: function() {
+          return this.name || "emitter-emit";
+      }
+  });
+</script>
+
+<script type="text/html" data-template-name="emitter-emit">
+  <div class="form-row">
+      <label for="node-input-event"><i class="fa fa-bell"></i> Event</label>
+      <input type="text" id="node-input-event" placeholder="Event">
+  </div>
+</script>
+
+<script type="text/html" data-help-name="emitter-emit">
+  <p>A node that make event through emitter.emit.
+    All arguments from payload payload to be passed
+  </p>
+</script>

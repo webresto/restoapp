@@ -1,0 +1,88 @@
+<script type="text/javascript">
+  RED.nodes.registerType('emitter-on',{
+      category: 'function',
+      color: '#a6bbcf',
+      defaults: {
+        event: {value:"node-red-test"},
+          name: {value:"node-red-test-name"}
+      },
+      inputs: 0,
+      outputs: 1,
+      icon: "event.svg",
+      label: function() {
+          return this.name || "emitter-on";
+      }
+  });
+</script>
+
+<script type="text/html" data-template-name="emitter-on">
+  <div class="form-row">
+      <label for="node-input-event"><i class="fa fa-bell"></i> Event</label>
+      <input type="text" id="node-input-event" placeholder="Event">
+  </div>
+  <div class="form-row">
+      <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+      <input type="text" id="node-input-name" placeholder="Name">
+  </div>
+</script>
+
+<script type="text/html" data-help-name="emitter-on">
+  <p>A node that subscribes to events and waits for them to occur.
+    All arguments will be delivered to payload
+  </p>
+</script>
+
+
+<script type="text/javascript">
+  RED.nodes.registerType('emitter-end', {
+      category: 'function',
+      color: '#a6bbcf',
+      defaults: {
+          name: {value:""}
+      },
+      inputs:1,
+      outputs:0,
+      icon: "file.png",
+      label: function() {
+          return this.name || "emitter-end";
+      }
+  });
+</script>
+
+<script type="text/html" data-template-name="emitter-end">
+  <div class="form-row">
+      <label for="node-input-name"><i class="icon-tag"></i> Name</label>
+      <input type="text" id="node-input-name" placeholder="Name">
+  </div>
+</script>
+
+<script type="text/html" data-help-name="emitter-end">
+  <p>Emitter On End node receives msg.emitterRayId and executes the corresponding function associated with it by merging payload into _args.</p>
+</script>
+
+<script type="text/javascript">
+  RED.nodes.registerType('emitter-throw', {
+      category: 'function',
+      color: '#a6bbcf',
+      defaults: {
+          name: {value:""}
+      },
+      inputs:1,
+      outputs:0,
+      icon: "file.png",
+      label: function() {
+          return this.name || "emitter-throw";
+      }
+  });
+</script>
+
+<script type="text/html" data-template-name="emitter-throw">
+  <div class="form-row">
+      <label for="node-input-name"><i class="icon-tag"></i> Name</label>
+      <input type="text" id="node-input-name" placeholder="Name">
+  </div>
+</script>
+
+<script type="text/html" data-help-name="emitter-throw">
+  <p>Emitter On End node receives msg.emitterRayId and executes the corresponding function associated with it by merging payload into _args.</p>
+</script>

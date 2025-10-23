@@ -1,0 +1,9 @@
+{
+  "name" : "node-red-contrib-restoapp-dialogbox",
+  "node-red" : {
+      "nodes": {
+          "dialog-box": "dialog-box.js",
+          "dialog-box-process": "dialog-box-process.js"
+      }
+  }
+}

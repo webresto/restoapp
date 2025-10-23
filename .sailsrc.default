@@ -1,0 +1,16 @@
+{
+  "generators": {
+    "modules": {}
+  },
+  "hooks": {
+    "grunt": false,
+    ".ci": false,
+    "sockets": false,
+    "pubsub": false,
+    "blueprints": false,
+    "webhook": false
+  },
+  "paths": {
+    "hooks": "modules"
+  }
+}

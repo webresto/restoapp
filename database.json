@@ -1,0 +1,16 @@
+{
+    "dev": {
+        "driver": "postgres",
+        "user": "postgres",
+        "password": "postgres",
+        "host":"127.0.0.1",
+        "database": "postgres"
+    },
+    "prod": {
+        "driver": "postgres",
+        "user": {"ENV": "PG_USER"},
+        "password": {"ENV": "PG_PASSWORD"},
+        "host":{"ENV": "PG_HOST"},
+        "database": {"ENV": "PG_DATABASE"}
+    }
+}

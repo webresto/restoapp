@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "ES2022",
+    "sourceMap": false,
+    "declaration": true,
+    "removeComments": false,
+    "experimentalDecorators": true,
+    "skipLibCheck": true,
+    "types": [
+      "@webresto/core",
+      "mocha",
+      "node"
+    ]
+  },
+  "exclude": [
+    "@webresto",
+    "node_modules"
+  ],
+  "include": [
+    "test/**/*.d.ts",
+    "test/**/*.ts"
+  ]
+}
