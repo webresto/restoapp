@@ -3,11 +3,7 @@
 module.exports.adminpanel = {
   models: {
   },
-  // administrator: {
-	// 	login: process.env.ADMIN_LOGIN === undefined ? 'admin' : process.env.ADMIN_LOGIN,
-	// 	password: process.env.ADMIN_PASS === undefined ? 'Eng&&ner' : process.env.ADMIN_PASS
-	// },
-  auth: process.env.NODE_ENV === "production" ? true : process.env.ADMINIZER_AUTH_ENABLE !== undefined ? true : false,
+  auth: true,
   translation: {
     locales: [
     "en",
