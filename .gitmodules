@@ -1,3 +1,6 @@
 [submodule "local_modules/core"]
 	path = local_modules/core
 	url = git@github.com:webresto/core.git
+[submodule "local_modules/graphql"]
+	path = local_modules/graphql
+	url = git@github.com:webresto/graphql.git
