@@ -1,0 +1,91 @@
+name: Build and publish Docker image
+
+on:
+  push:
+    branches:  
+      # - main
+      # - staging
+      # - next
+      - dev
+  workflow_dispatch: {}
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set branch, short sha and version
+        id: vars
+        run: |
+          set -euo pipefail
+          BRANCH=${GITHUB_REF_NAME}
+          # short sha
+          SHORT_SHA=${GITHUB_SHA::8}
+
+          # Try reading version from @webresto/core package.json like in GitLab CI, fallback to root package.json
+          if [ -f "@webresto/core/package.json" ]; then
+            RAW_VERSION=$(jq -r '.version' @webresto/core/package.json || echo "0.0.0")
+          elif [ -f "package.json" ]; then
+            RAW_VERSION=$(jq -r '.version' package.json || echo "0.0.0")
+          else
+            RAW_VERSION="0.0.0"
+          fi
+          VERSION=$(echo "$RAW_VERSION" | awk -F'.' '{print $1"."$2}')
+
+          echo "BRANCH=$BRANCH" >> $GITHUB_ENV
+          echo "SHORT_SHA=$SHORT_SHA" >> $GITHUB_ENV
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log Docker Hub in (for pushing)
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_HUB_LOGIN }}
+          password: ${{ secrets.DOCKER_HUB_PASSWORD }}
+
+      - name: Log GHCR in (for pushing)
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate Docker metadata (tags and labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        env:
+          BRANCH: ${{ env.BRANCH }}
+          SHORT_SHA: ${{ env.SHORT_SHA }}
+          VERSION: ${{ env.VERSION }}
+        with:
+          images: |
+            webresto/restoapp
+            ghcr.io/webresto/restoapp
+          tags: |
+            type=raw,value=${{ env.BRANCH }}
+            type=raw,value=${{ env.VERSION }}-${{ env.BRANCH }},enable=${{ env.BRANCH != 'main' }}
+            type=raw,value=${{ env.VERSION }}-${{ env.BRANCH }}-commit-${{ env.SHORT_SHA }},enable=${{ env.BRANCH != 'main' }}
+            type=raw,value=commit-${{ env.SHORT_SHA }},enable=${{ env.BRANCH != 'main' }}
+            type=raw,value=latest,enable=${{ env.BRANCH == 'main' }}
+            type=raw,value=${{ env.VERSION }},enable=${{ env.BRANCH == 'main' }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            BRANCH=${{ env.BRANCH }}
+            COMMIT_HASH=${{ env.SHORT_SHA }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+
