@@ -70,7 +70,7 @@ jobs:
           VERSION: ${{ env.VERSION }}
         with:
           images: |
-            webresto/restoapp
+            # webresto/restoapp
             ghcr.io/webresto/restoapp
           tags: |
             type=raw,value=${{ env.BRANCH }}
