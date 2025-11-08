@@ -1,0 +1,33 @@
+#!/bin/bash
+# Shared helpers for CI scripts
+# Provides log_debug, log_info, log_warn, log_error and respects LOG_LEVEL (DEBUG|INFO|WARN|ERROR)
+
+# Convert level name to numeric severity (lower means more verbose)
+_helper_log_level_value() {
+  case "${1^^}" in
+    DEBUG) echo 0 ;;
+    INFO) echo 1 ;;
+    WARN) echo 2 ;;
+    ERROR) echo 3 ;;
+    *) echo 1 ;;
+  esac
+}
+
+# Default LOG_LEVEL if not set
+: ${LOG_LEVEL:=INFO}
+
+# Internal logger that respects LOG_LEVEL
+_helper_log() {
+  local level="$1"; shift
+  local msg="$*"
+  local lvl_val=$(_helper_log_level_value "$level")
+  local cur_val=$(_helper_log_level_value "${LOG_LEVEL}")
+  if [ "$lvl_val" -ge "$cur_val" ]; then
+    echo "$level: $msg" >&2
+  fi
+}
+
+log_debug() { _helper_log DEBUG "$*"; }
+log_info()  { _helper_log INFO "$*"; }
+log_warn()  { _helper_log WARN "$*"; }
+log_error() { _helper_log ERROR "$*"; }

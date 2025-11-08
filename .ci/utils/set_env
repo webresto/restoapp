@@ -1,0 +1,35 @@
+#!/bin/bash
+
+ENV_FILE=${3:-".env"}
+KEY=$1
+VALUE=$2
+
+# Source shared logging helpers
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/helpers"
+
+log_info "set_env called with KEY='$KEY' VALUE='${VALUE:0:50}' ENV_FILE='$ENV_FILE'"
+
+# Check if required arguments are provided
+if [[ -z "$KEY" || -z "$VALUE" ]]; then
+    log_error "Usage: $0 <KEY> <VALUE> [ENV_FILE]"
+    exit 1
+fi
+
+# Create the .env file if it does not exist
+if [[ ! -f "$ENV_FILE" ]]; then
+    log_info "ENV file '$ENV_FILE' not found - creating"
+    echo "# Environment variables" > "$ENV_FILE"
+    log_info "File $ENV_FILE created"
+fi
+
+# Update the variable if it exists, otherwise add it
+if grep -q "^$KEY=" "$ENV_FILE"; then
+    log_info "Updating existing key '$KEY' in $ENV_FILE"
+    sed -i "s/^$KEY=.*/$KEY=$VALUE/" "$ENV_FILE"
+else
+    log_info "Adding new key '$KEY' to $ENV_FILE"
+    echo "$KEY=$VALUE" >> "$ENV_FILE"
+fi
+
+log_info "The variable $KEY has been updated to $VALUE in $ENV_FILE."

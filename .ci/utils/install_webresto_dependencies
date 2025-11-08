@@ -1,0 +1,101 @@
+#!/bin/bash
+# Enable strict mode
+set -e
+
+# Source shared logging helpers
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/helpers"
+
+###
+# install WebResto modules from webresto-modules.list
+OUT_DIR=$2
+mkdir -p "$OUT_DIR"
+
+WR_MODULES_LIST_FILE=$1
+WEBRESTO_LICENSE=$3
+
+# Set STAGING when building from "next" branch
+STAGING="0"
+if [[ "${BRANCH}" == "next" ]]; then
+    STAGING="1"
+    log_info "Branch is 'next' - enabling staging installs"
+else
+    log_info "Branch is '${BRANCH:-unknown}' - staging disabled"
+fi
+
+if [[ -z "$WEBRESTO_LICENSE" ]]; then
+    log_error "WEBRESTO_LICENSE is empty - cannot install modules"
+    exit 1
+fi
+
+# add new line if not exist
+if [[ -f $WR_MODULES_LIST_FILE && $(tail -c1 $WR_MODULES_LIST_FILE) ]]; then
+    log_info "Adding trailing newline to $WR_MODULES_LIST_FILE"
+    echo '' >> "$WR_MODULES_LIST_FILE"
+fi
+
+if [[ -f "$WR_MODULES_LIST_FILE" ]]; then
+    log_info "Install WebResto modules from list: $WR_MODULES_LIST_FILE"
+    while IFS=$' \t\r\n' read -r module; do
+        if [[ -n "$module" ]]; then
+
+            # Skip comments starting with #
+            if [[ "${module:0:1}" == "#" ]]; then
+                log_info "Skipping commented module line"
+                continue
+            fi
+
+            log_info "Processing module entry: $module"
+
+            # Check for empty folders
+            if [ -d "$OUT_DIR/$module" ] && [ -z "$(ls -A "$OUT_DIR/$module")" ]; then
+                log_info "Found empty module folder $OUT_DIR/$module - removing"
+                rm -rf "$OUT_DIR/$module"
+            fi
+
+            # Remove existing module directory if WR_FORCE_MODULE_REINSTALL is set and directory is not empty
+            if [[ ! -z "${WR_FORCE_MODULE_REINSTALL}" && -d "$OUT_DIR/$module" ]]; then
+                log_info "WR_FORCE_MODULE_REINSTALL set - removing existing module directory for $module"
+                rm -rf "$OUT_DIR/$module"
+            fi
+
+
+            if [[ -d "$OUT_DIR/$module" && ( ( ! -z "${WR_AUTOUPDATE_MODULES}" && "${WR_AUTOUPDATE_MODULES}" != "0" ) || "$NODE_ENV" != "production" ) ]]; then
+                log_info "Module $module exists - checking marketplace for updates"
+                latestVersion=$(curl -s "https://marketplace.restoapp.org/getModuleDetails?appId=$module&license=$WEBRESTO_LICENSE" | jq -r '.latestVersion')
+                currentVersion=$(jq -r '.version' "$OUT_DIR/$module/package.json")
+                log_info "Latest: '$latestVersion' Current: '$currentVersion'"
+                if [[ "$latestVersion" != "$currentVersion" && ! -z "$latestVersion" ]]; then
+                    log_info "Newer version detected for $module - removing old folder to update"
+                    rm -rf "$OUT_DIR/$module"
+                else
+                    log_info "Module $module is up-to-date (version $currentVersion) - skipping"
+                    continue
+                fi
+            fi
+            
+            if [[ ! -d "$OUT_DIR/$module" || (! -z "${WR_DISABLE_MODULE_EXIST_CHECK}" && -z "$(ls -A "$OUT_DIR/$module")") ]]; then
+                log_info "Installing module: $module"
+                if [[ "$STAGING" == "1" ]]; then
+                    webresto install "$module" -c "staging"
+                else
+                    webresto install "$module"
+                fi
+
+                # Run npm install for the module
+                if [ -d "$OUT_DIR/$module" ]; then
+                    cd "$OUT_DIR/$module" || { log_error "Failed to cd to $OUT_DIR/$module"; continue; }
+                    log_info "Running npm install for module $module"
+                    npm install --omit=dev --force
+                    currentVersion=$(jq -r '.version' "$OUT_DIR/$module/package.json")
+                    log_info "Successfully installed ${module}@${currentVersion}"
+                    cd /app || true
+                else
+                    log_warn "Module $module install did not create expected directory $OUT_DIR/$module"
+                fi
+            fi
+        fi
+    done < "$WR_MODULES_LIST_FILE"
+else
+    log_info "WebResto modules list file not found: $WR_MODULES_LIST_FILE - nothing to install"
+fi

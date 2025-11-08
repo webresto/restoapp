@@ -1,0 +1,46 @@
+#!/bin/bash
+
+# Enable debugging (uncomment to enable)
+set -e
+
+# Path to the script
+SCRIPT_PATH="/app/modules/admin-frontend/.ci/bake_admin_frontend.js"
+LOG_FILE="/app/modules/admin-frontend/.ci/script.log"
+
+# Check if Node.js is installed
+if ! command -v node &> /dev/null; then
+    echo "Node.js is not installed. Please install Node.js to proceed."
+    exit 1
+fi
+
+# Check if the script exists
+if [ -f "$SCRIPT_PATH" ]; then
+    # Record the start time
+    START_TIME=$(date +%s)
+
+    echo "AdminFrontend > $(cat /app/modules/admin-frontend/package.json | grep version)"
+    # If the file exists, execute it using Node.js and log the output
+    /usr/local/bin/tsx "$SCRIPT_PATH" >> "$LOG_FILE" 2>&1
+    EXIT_CODE=$?
+
+    ls /app/modules/admin-frontend/baked_frontend
+
+    # Record the end time
+    END_TIME=$(date +%s)
+
+    # Calculate the elapsed time in seconds
+    ELAPSED_TIME=$((END_TIME - START_TIME))
+
+    # Check if the Node.js script exited with an error
+    if [ $EXIT_CODE -ne 0 ]; then
+        echo "Error:\n"
+        cat $LOG_FILE
+        exit $EXIT_CODE
+    else
+        echo "Frontend build completed successfully in $ELAPSED_TIME seconds."
+    fi
+else
+    # If the file does not exist, print a message and exit with code 0
+    echo "Script bake_admin_frontend not found: $SCRIPT_PATH"
+    exit 0
+fi

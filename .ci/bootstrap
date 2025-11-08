@@ -1,0 +1,304 @@
+#!/bin/bash
+
+# Enable debuging
+set -e;
+
+
+# Source shared logging helpers
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/utils/helpers"
+
+# set default env's
+export PROJECT_NAME=${PROJECT_NAME:-restoapp}
+export DEPLOY_TIME=$(date '+%d_%m_%Y_%H_%M')
+
+# run nginx
+log_info "Checking if action is 'start' to run nginx (action='$1')"
+if [ "$1" = 'start' ]; then
+    log_info "Action is 'start' - entering nginx start block"
+    # set default registry if not provided
+    export DOCKER_REGISTRY=${DOCKER_REGISTRY:-webresto}
+    # update DOCKER_IMAGE env
+    /app/.ci/utils/set_env DOCKER_IMAGE "${DOCKER_REGISTRY}/restoapp:commit-${COMMIT_HASH}" "/app/.env"
+    if [ "$SKIP_NGINX" != "true" ]; then
+        log_info "SKIP_NGINX is '$SKIP_NGINX' - will attempt to start nginx"
+        if [ -x "$(command -v nginx)" ]; then
+            # Start Nginx in the background
+            nginx -g "daemon off;" &
+            log_info "Nginx started in the background."
+        else
+            log_warn "Nginx not found on the system. Start skipped."
+        fi
+    else
+        log_info "ENV SKIP_NGINX is [${SKIP_NGINX}]. Nginx start skipped by env."
+    fi
+else
+    log_info "Action is not 'start' (action='$1'), skipping nginx block"
+fi
+
+
+# Add static domain A record to hosts file
+log_info "Checking if ADD_HOST is set"
+if [[ ! -z "${ADD_HOST}" ]]; then
+    # Split domains by semicolon
+    IFS=';' read -r -a domains <<< "$ADD_HOST"
+
+    # Iterate over each provided host entry and add it to /etc/hosts.
+    # Logs include timestamps, and entries are added idempotently (skip if already present).
+    for domain in "${domains[@]}"; do
+        # Trim whitespace
+        domain_trimmed=$(echo "$domain" | xargs)
+        if [[ -z "$domain_trimmed" ]]; then
+            continue
+        fi
+
+        echo "$(date '+%Y-%m-%d %H:%M:%S') INFO: Processing hosts entry: ${domain_trimmed}" >&2
+
+        # If the exact line is not already present in /etc/hosts, append it.
+        if ! grep -Fxq "${domain_trimmed}" /etc/hosts; then
+            echo "${domain_trimmed}" >> /etc/hosts
+            echo "$(date '+%Y-%m-%d %H:%M:%S') INFO: Added hosts entry: ${domain_trimmed}" >&2
+        else
+            echo "$(date '+%Y-%m-%d %H:%M:%S') INFO: Hosts entry already exists, skipping: ${domain_trimmed}" >&2
+        fi
+    done
+    log_info "Finished processing ADD_HOST entries"
+else
+    log_info "ADD_HOST is not set - skipping hosts update"
+fi
+
+log_info "Printing project version from /app/package.json"
+# Print project version
+cat /app/package.json | grep version
+
+
+# Install and update modules
+# copy assets from seed
+log_info "Checking for seed assets in /app/seeds/assets"
+if [ -d /app/seeds/assets ]; then
+    log_info "Seed assets directory found - copying to /app/.tmp/public"
+    mkdir -p /app/.tmp/public
+    \cp -R /app/seeds/assets/* /app/.tmp/public 2>/dev/null || true
+else
+    log_info "No seed assets directory found - skipping copy"
+fi
+
+# Copy restocore files
+log_info "Checking for existing /app/.tmp/public/webresto"
+if [ ! -d /app/.tmp/public/webresto ]; then
+    log_info "/app/.tmp/public/webresto missing - copying from /app/assets/webresto"
+    \cp -R /app/assets/webresto /app/.tmp/public
+else
+    log_info "/app/.tmp/public/webresto already exists - skipping copy"
+fi
+
+### 
+# Install node_modules
+log_info "Checking for NPM_MODULES_LISTFILE ('$NPM_MODULES_LISTFILE')"
+if [[ ! -z "$NPM_MODULES_LISTFILE" && -f $NPM_MODULES_LISTFILE ]]; then
+    log_info "NPM modules list file found - installing NPM dependencies"
+    /app/.ci/utils/install_npm_dependencies $NPM_MODULES_LISTFILE /app/node_modules
+else
+    log_info "No NPM modules list file provided or file not found - skipping npm install"
+fi
+
+###
+# Install webresto modules
+log_info "Checking for WEBRESTO_MODULES_LISTFILE ('$WEBRESTO_MODULES_LISTFILE')"
+if [[ ! -z "$WEBRESTO_MODULES_LISTFILE" && -f $WEBRESTO_MODULES_LISTFILE ]]; then
+    log_info "Webresto modules list file found - installing modules"
+    /app/.ci/utils/install_webresto_dependencies $WEBRESTO_MODULES_LISTFILE /app/modules $WEBRESTO_LICENSE
+    export MODULES_TO_ENABLE="${MODULES_TO_ENABLE};$(paste -sd ";" $WEBRESTO_MODULES_LISTFILE)";
+else
+    log_info "No WEBRESTO_MODULES_LISTFILE provided or file not found - skipping"
+fi
+
+log_info "Checking if /app/modules exists and is empty"
+if [ -d /app/modules ] && [ -z "$(ls -A /app/modules)" ]; then
+    log_info "/app/modules is present but empty - copying seed modules"
+    \cp -R /app/seeds/modules/* /app/modules
+else
+    log_info "/app/modules either missing or not empty - skipping seed copy"
+fi
+
+# Update webresto modules
+log_info "Checking MODULES_AUTO_UPDATE ('$MODULES_AUTO_UPDATE')"
+if [[ ! -z "$MODULES_AUTO_UPDATE" ]]; then
+    log_info "MODULES_AUTO_UPDATE set - updating webresto modules"
+    /app/.ci/utils/update_webresto_dependencies /app/modules $WEBRESTO_LICENSE
+else
+    log_info "MODULES_AUTO_UPDATE not set - skipping modules auto-update"
+fi
+
+
+
+cd /app
+
+log_info "Checking DROPFILE_INIT ('$DROPFILE_INIT')"
+if [[ ! -z "$DROPFILE_INIT" ]]; then
+    log_info "DROPFILE_INIT set - creating ./.tmp/dropfile"
+    mkdir -p ./.tmp && touch ./.tmp/dropfile
+else
+    log_info "DROPFILE_INIT not set - skipping dropfile creation"
+fi
+
+# Sleep before run
+log_info "Checking SLEEP_BEFORE_RUN_APP ('${SLEEP_BEFORE_RUN_APP}')"
+if [[ ! -z "${SLEEP_BEFORE_RUN_APP}" ]]; then
+    if [[ ${SLEEP_BEFORE_RUN_APP} =~ '^[0-9]+$' ]]; then 
+        log_info "Sleeping for ${SLEEP_BEFORE_RUN_APP} seconds before running the app"
+        sleep ${SLEEP_BEFORE_RUN_APP};
+    else
+        log_warn "SLEEP_BEFORE_RUN_APP is not a number ('${SLEEP_BEFORE_RUN_APP}') - ignoring"
+    fi
+else
+    log_info "No SLEEP_BEFORE_RUN_APP specified - continuing immediately"
+fi
+
+
+log_info "Checking DATASTORE type ('${DATASTORE}')"
+if [[ "${DATASTORE}" == "postgres" ]]; then
+    log_info "DATASTORE is 'postgres' - entering postgres-related setup"
+
+    export DB_MIGRATE=safe
+    export PG_HOST=${PG_HOST:-postgres}
+    export PG_USER=${PG_USER:-postgres}
+    export PG_DATABASE=${PG_DATABASE:-postgres}
+    export PG_PASSWORD=${PG_PASSWORD:-postgres}
+
+    # install client
+    log_info "Checking for 'pg_dump' availability"
+    if ! command -v pg_dump &> /dev/null; then
+        log_info "pg_dump command not found - installing postgresql-client"
+        apk add postgresql-client
+    else
+        log_info "pg_dump is available"
+    fi
+    
+    wait_for_database() {
+        local max_attempts=10
+        local attempt=1
+        local timeout=5
+
+        echo "Waiting for the database to be available..."
+
+        while [[ $attempt -le $max_attempts ]]; do
+            if PGPASSWORD="$PG_PASSWORD" psql -h "$PG_HOST" -U "$PG_USER" -d "$PG_DATABASE" -c "SELECT 1;" &>/dev/null; then
+                echo "Database is available."
+                return 0
+            else
+                echo "Attempt $attempt: Database not yet available. Retrying in $timeout seconds..."
+                sleep "$timeout"
+                ((attempt++))
+            fi
+        done
+
+        echo "Database did not become available within the specified number of attempts."
+        return 1
+    }
+
+    log_info "Checking POSTGRES_BACKUP ('$POSTGRES_BACKUP')"
+    if [[ "$POSTGRES_BACKUP" != "FALSE" ]]; then
+        log_info "POSTGRES_BACKUP enabled - will attempt backup/restore operations"
+        wait_for_database
+
+        POSTGRES_BACKUP_PATH=${POSTGRES_BACKUP_PATH:-"/backup"}
+        mkdir -p $POSTGRES_BACKUP_PATH
+
+    create_backup=true  # Flag indicating whether to create a backup
+
+        # Check if there are files created less than an hour ago in the backup folder
+        current_time=$(date +%s)
+        for file in "$POSTGRES_BACKUP_PATH"/*; do
+            if [[ -f "$file" ]]; then
+                file_mtime=$(stat -c %Y "$file")
+                time_diff=$((current_time - file_mtime))
+                if ((time_diff < 3600)); then
+                    log_info "Recent backup found ($file) - skipping new backup"
+                    create_backup=false
+                    break
+                fi
+            fi
+        done
+
+        # Restore (inside current container)
+        # PGPASSWORD=postgres psql -h localhost -U postgres -d postgres -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+        # PGPASSWORD=postgres pg_restore -h localhost -U postgres -d postgres -Fc /backup/restoapp_.dump.sql
+        if [ "$create_backup" = true ]; then
+            log_info "Creating new backup to $POSTGRES_BACKUP_PATH/${PROJECT_NAME}_${DEPLOY_TIME}.dump.sql"
+            PGPASSWORD=$PG_PASSWORD pg_dump -h ${PG_HOST} -Fc -U ${PG_USER} ${PG_DATABASE} > $POSTGRES_BACKUP_PATH/${PROJECT_NAME}_${DEPLOY_TIME}.dump.sql
+        else
+            log_info "Skipping backup creation because a recent backup was found"
+        fi
+    fi
+
+
+
+    log_info "Checking MIGRATIONS_PATH ('$MIGRATIONS_PATH')"
+    if [[ "$MIGRATIONS_PATH" != "FALSE" ]]; then
+        log_info "MIGRATIONS_PATH enabled - collecting migration files"
+        # Migrations
+        export MIGRATIONS_PATH="/app/@webresto/**/migrations:/app/modules/**/migrations:$MIGRATIONS_PATH"
+        destination_folder="/app/migrations"
+        IFS=':' read -ra path_array <<< "$MIGRATIONS_PATH"
+
+        for path in "${path_array[@]}"; do
+            expanded_path=$(eval echo "$path"/*.js)
+
+            for file in $expanded_path; do
+                base_file=$(basename "$file")
+                if [ -e "$file" ]; then
+                    log_info "Copying migration file $file -> $destination_folder/$base_file"
+                    cp -n "$file" "$destination_folder/$base_file"
+                else
+                    log_warn "Migration file '$file' not found. Skipping..."
+                fi
+            done
+        done
+    else
+        log_info "MIGRATIONS_PATH disabled - skipping migration collection"
+    fi
+    
+    log_info "Checking AUTO_MIGRATION ('$AUTO_MIGRATION')"
+    if [[ "$AUTO_MIGRATION" == "TRUE" ]]; then
+        log_info "AUTO_MIGRATION is TRUE - waiting for DB and running migrations"
+        wait_for_database
+        npm run migrate
+    else
+        log_info "AUTO_MIGRATION not enabled - skipping automatic migration"
+    fi
+else
+    log_info "DATASTORE is not 'postgres' - skipping postgres related setup"
+fi
+
+log_info "Main action dispatcher - action='$1'"
+if [ "$1" = 'start' ]; then    
+    log_info "Action 'start' - preparing to start app"
+    cd /app
+    : ${PM2_MODE:=FORK}
+    # Prefer the project-local tsx binary if present (use `which` to detect availability), otherwise fall back to node.
+    INTERPRETER_PATH="/usr/local/bin/tsx"
+    if which "$INTERPRETER_PATH" >/dev/null 2>&1; then
+        INTERPRETER="$INTERPRETER_PATH"
+        log_info "Using interpreter found at: $INTERPRETER"
+    elif which tsx >/dev/null 2>&1; then
+        # If tsx is available in PATH use it
+        log_info "tsx found in PATH - installing global tsx and using it"
+        npm i -g tsx
+        INTERPRETER=$(which tsx)
+        log_info "Using tsx from PATH: $INTERPRETER"
+    else
+        INTERPRETER="node"
+        log_warn "tsx not found; falling back to interpreter: $INTERPRETER"
+    fi
+    # Run the app via chosen interpreter so TSX/TypeScript files can be executed if available.
+    log_info "Starting pm2-runtime with interpreter: $INTERPRETER (PM2_MODE=$PM2_MODE)"
+    pm2-runtime start restoapp.js --interpreter "$INTERPRETER" -i $( [ "$PM2_MODE" = "CLUSTER" ] && echo "max" || echo "1" )
+elif [ "$1" = 'test' ]; then
+    log_info "Action 'test' - running db migrations and tests"
+    npx db-migrate up:all --env dev
+    npm run test
+else
+    log_info "No recognized action provided (action='$1') - action not selected"
+    echo 'action not selected'
+fi

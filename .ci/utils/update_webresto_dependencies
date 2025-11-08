@@ -1,0 +1,114 @@
+#!/bin/bash
+# Enable debugging and exit on error
+set -e
+set -x
+
+# Source shared logging helpers
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/helpers"
+
+###
+# install WebResto modules from directories in OUT_DIR
+OUT_DIR=$1
+WEBRESTO_LICENSE=$2
+
+log_info "Starting module update process"
+log_info "Output directory: $OUT_DIR"
+log_info "WebResto license: ${WEBRESTO_LICENSE:-(none)}"
+
+if [[ -z "$WEBRESTO_LICENSE" ]]; then
+    log_warn "WEBRESTO_LICENSE not set - defaulting to 'ci'"
+    WEBRESTO_LICENSE="ci"
+fi
+
+# Iterate over each directory in OUT_DIR
+for moduleDir in "$OUT_DIR"/*/; do
+    moduleDir=${moduleDir%/} # Remove trailing slash
+    log_info "Processing directory: $moduleDir"
+
+    # Check if package.json exists in the directory
+    if [[ -f "$moduleDir/package.json" ]]; then
+        log_info "Found package.json in $moduleDir"
+
+        # Extract appId from package.json
+        appId=$(jq -r '.appId' "$moduleDir/package.json")
+        log_info "Extracted appId: $appId"
+
+        # Skip if appId is empty
+        if [[ -z "$appId" ]]; then
+            log_warn "appId is empty in $moduleDir/package.json. Skipping this directory."
+            continue
+        fi
+
+        # Check for empty folder and remove it
+        if [ -z "$(ls -A "$moduleDir")" ]; then
+            log_info "Directory $moduleDir is empty. Removing it."
+            rm -rf "$moduleDir"
+            continue
+        fi
+
+        # Fetch the latest version from the WebResto API
+        log_info "Checking for updates for module $appId..."
+        CHANNEL=main
+        if [[ "$STAGING" == "1" ]]; then
+          CHANNEL="staging"
+        fi
+        response=$(curl -s "https://marketplace.restoapp.org/getModuleDetails?appId=$appId&license=$WEBRESTO_LICENSE&channel=$CHANNEL")
+        log_info "API response for $appId: ${response:0:400}"
+
+        latestVersion=$(echo "$response" | jq -r '.latestVersion')
+        log_info "Extracted latest version: $latestVersion"
+
+        if [[ -z "$latestVersion" ]]; then
+            log_error "Could not get latest version for $appId from API. Skipping module."
+            continue
+        fi
+
+        # Getting current version from package.json
+        currentVersion=$(jq -r '.version' "$moduleDir/package.json")
+        log_info "Current installed version of $appId: $currentVersion"
+
+        if [[ -z "$currentVersion" ]]; then
+            log_error "Current version is empty or missing in $moduleDir/package.json. Skipping module."
+            continue
+        fi
+
+        # If the versions are different, remove the old version and install the latest one
+        if [[ "$latestVersion" != "$currentVersion" ]]; then
+            log_info "Version mismatch detected for $appId. Updating from $currentVersion to $latestVersion..."
+            rm -rf "$moduleDir"
+        else
+            log_info "Module $appId is up to date. Current version: $currentVersion"
+            continue
+        fi
+
+        # Install module
+        log_info "Installing module $appId..."
+
+        if [[ "$STAGING" == "1" ]]; then
+          webresto install "$appId" -c "staging"
+        else
+          webresto install "$appId" 
+        fi
+
+
+        # Run npm install after the module is installed
+        log_info "Running npm install for $appId in $moduleDir..."
+        cd "$moduleDir" || { log_error "Failed to cd to $moduleDir"; continue; }
+        npm install --omit=dev
+
+        # Check the installed version
+        if [[ -f "$moduleDir/package.json" ]]; then
+            currentVersion=$(jq -r '.version' "$moduleDir/package.json")
+            log_info "Successfully installed ${appId}@${currentVersion}"
+        else
+            log_warn "package.json not found after installation for $appId in $moduleDir. Something may have gone wrong."
+        fi
+
+        cd /app || true
+    else
+        log_warn "package.json not found in $moduleDir. Skipping this directory."
+    fi
+done
+
+log_info "Module installation process completed."

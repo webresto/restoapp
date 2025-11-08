@@ -1,0 +1,53 @@
+#!/bin/bash
+# Enable strict mode: exit on error
+set -e
+
+# Source shared logging helpers
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/helpers"
+
+### Install node_modules from a list file
+DEP_FILE=$1  # /app/npm-dependencies.list
+OUT_DIR=$2
+
+log_info "install_npm_dependencies called with DEP_FILE='$DEP_FILE' OUT_DIR='$OUT_DIR'"
+
+# add trailing newline if file exists and doesn't end with newline
+if [[ -f $DEP_FILE && $(tail -c1 $DEP_FILE) ]]; then
+    log_info "Adding trailing newline to dependency file: $DEP_FILE"
+    echo '' >> $DEP_FILE
+fi
+
+if [[ -f "$DEP_FILE" ]]; then
+    MOD_TMP_DIR=/tmp/install_modules
+
+    log_info "Dependency file found. Preparing temporary dir: $MOD_TMP_DIR"
+    mkdir -p "$MOD_TMP_DIR"
+    cd "$MOD_TMP_DIR"
+
+    log_info "Beginning to read dependency file: $DEP_FILE"
+    while IFS=$' \t\r\n' read -r module; do
+        if [[ -n "$module" ]]; then
+            # skip comments
+            if [[ "${module:0:1}" != "#" ]]; then
+                log_info "Installing npm module: $module"
+                if npm install "$module" --omit=dev; then
+                    log_info "Successfully installed: $module"
+                else
+                    log_warn "npm install failed for: $module"
+                fi
+            else
+                log_info "Skipping commented line: $module"
+            fi
+        fi
+    done < "$DEP_FILE"
+
+    log_info "Copying installed node_modules to: $OUT_DIR"
+    cp -R "$MOD_TMP_DIR/node_modules/"* "$OUT_DIR" || log_warn "No node_modules to copy or copy failed"
+
+    log_info "Cleaning up temporary directory: $MOD_TMP_DIR"
+    rm -rf "$MOD_TMP_DIR"
+    log_info "install_npm_dependencies completed"
+else
+    log_info "Dependency file not found: $DEP_FILE - nothing to install"
+fi
