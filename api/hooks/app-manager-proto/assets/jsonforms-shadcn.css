@@ -1,0 +1,476 @@
+/**
+ * JSON Forms - shadcn/ui inspired styles
+ * Based on shadcn/ui design system with Tailwind CSS
+ */
+
+/* CSS Variables - shadcn/ui color palette */
+:root {
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 222.2 84% 4.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222.2 84% 4.9%;
+  --primary: 221.2 83.2% 53.3%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 210 40% 96.1%;
+  --secondary-foreground: 222.2 47.4% 11.2%;
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+  --accent: 210 40% 96.1%;
+  --accent-foreground: 222.2 47.4% 11.2%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 214.3 31.8% 91.4%;
+  --input: 214.3 31.8% 91.4%;
+  --ring: 221.2 83.2% 53.3%;
+  --radius: 0.5rem;
+}
+
+.dark-theme {
+  --background: 222.2 84% 4.9%;
+  --foreground: 210 40% 98%;
+  --card: 222.2 84% 4.9%;
+  --card-foreground: 210 40% 98%;
+  --popover: 222.2 84% 4.9%;
+  --popover-foreground: 210 40% 98%;
+  --primary: 217.2 91.2% 59.8%;
+  --primary-foreground: 222.2 47.4% 11.2%;
+  --secondary: 217.2 32.6% 17.5%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 217.2 32.6% 17.5%;
+  --muted-foreground: 215 20.2% 65.1%;
+  --accent: 217.2 32.6% 17.5%;
+  --accent-foreground: 210 40% 98%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 217.2 32.6% 17.5%;
+  --input: 217.2 32.6% 17.5%;
+  --ring: 224.3 76.3% 48%;
+}
+
+/* Base Container Styles */
+.jsonforms-container {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+/* Form Control Base */
+.control {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+/* Label Styling */
+.control .label,
+.label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  color: hsl(var(--foreground));
+  margin-bottom: 0.5rem;
+  display: block;
+}
+
+/* Description Text */
+.control .description,
+.description {
+  font-size: 0.875rem;
+  color: hsl(var(--muted-foreground));
+  margin-top: 0.25rem;
+  line-height: 1.25rem;
+}
+
+/* Input Base Styles - shadcn/ui inspired */
+.control .input,
+.text-input,
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="url"],
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"],
+textarea,
+select {
+  display: flex;
+  height: 2.5rem;
+  width: 100%;
+  border-radius: calc(var(--radius) - 2px);
+  border: 1px solid hsl(var(--input));
+  background-color: hsl(var(--background));
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: hsl(var(--foreground));
+  transition: all 0.2s;
+  outline: none;
+}
+
+.control .input:focus,
+.text-input:focus,
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 3px hsla(var(--ring), 0.1);
+}
+
+.control .input:disabled,
+input:disabled,
+textarea:disabled,
+select:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  background-color: hsl(var(--muted));
+}
+
+.control .input::placeholder,
+input::placeholder,
+textarea::placeholder {
+  color: hsl(var(--muted-foreground));
+}
+
+/* Textarea Specific */
+.control .textarea,
+.text-area,
+textarea {
+  min-height: 5rem;
+  resize: vertical;
+  padding: 0.75rem;
+  height: auto;
+}
+
+/* Select Specific */
+.control .select,
+.select,
+select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.5rem center;
+  background-repeat: no-repeat;
+  background-size: 1.5em 1.5em;
+  padding-right: 2.5rem;
+}
+
+/* Checkbox and Radio Styles */
+input[type="checkbox"],
+input[type="radio"] {
+  height: 1rem;
+  width: 1rem;
+  border-radius: calc(var(--radius) - 4px);
+  border: 1px solid hsl(var(--primary));
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+input[type="radio"] {
+  border-radius: 50%;
+}
+
+input[type="checkbox"]:checked,
+input[type="radio"]:checked {
+  background-color: hsl(var(--primary));
+  border-color: hsl(var(--primary));
+}
+
+input[type="checkbox"]:focus,
+input[type="radio"]:focus {
+  box-shadow: 0 0 0 3px hsla(var(--ring), 0.1);
+  outline: none;
+}
+
+/* Error/Validation Styles */
+.control .error,
+.error,
+.validation,
+.validation_error {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: hsl(var(--destructive));
+  margin-top: 0.25rem;
+  line-height: 1.25rem;
+}
+
+.control.error .input,
+.control.error input,
+.control.error textarea,
+.control.error select {
+  border-color: hsl(var(--destructive));
+}
+
+.control.error .input:focus,
+.control.error input:focus,
+.control.error textarea:focus,
+.control.error select:focus {
+  box-shadow: 0 0 0 3px hsla(var(--destructive), 0.1);
+}
+
+/* Array/List Styles */
+.array-list,
+.array-list-root {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.array-list-item {
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  padding: 1rem;
+  background-color: hsl(var(--card));
+  position: relative;
+}
+
+.array-list-toolbar {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+/* Button Styles - shadcn/ui inspired */
+.array-button,
+.btn,
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: calc(var(--radius) - 2px);
+  font-size: 0.875rem;
+  font-weight: 500;
+  height: 2.5rem;
+  padding: 0.5rem 1rem;
+  transition: all 0.2s;
+  cursor: pointer;
+  outline: none;
+  border: none;
+}
+
+.btn-green,
+button[type="submit"],
+.array-button.add {
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border: 1px solid hsl(var(--primary));
+}
+
+.btn-green:hover,
+button[type="submit"]:hover,
+.array-button.add:hover {
+  background-color: hsl(var(--primary) / 0.9);
+}
+
+.btn-green:disabled,
+button[type="submit"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-grey,
+.array-button.remove {
+  background-color: hsl(var(--secondary));
+  color: hsl(var(--secondary-foreground));
+  border: 1px solid hsl(var(--border));
+}
+
+.btn-grey:hover,
+.array-button.remove:hover {
+  background-color: hsl(var(--accent));
+}
+
+.array-button.remove {
+  background-color: hsl(var(--destructive));
+  color: hsl(var(--destructive-foreground));
+}
+
+.array-button.remove:hover {
+  background-color: hsl(var(--destructive) / 0.9);
+}
+
+/* Layout Styles */
+.vertical-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.horizontal-layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+}
+
+.group-layout {
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  background-color: hsl(var(--card));
+}
+
+.group-layout > .group-label {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: hsl(var(--foreground));
+}
+
+/* Wrapper Styles */
+.wrapper {
+  width: 100%;
+}
+
+/* Root Container */
+.control-root,
+.root {
+  width: 100%;
+}
+
+/* Form Container */
+.myform {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+.form {
+  width: 100%;
+}
+
+/* Additional Utility Classes */
+.required::after {
+  content: " *";
+  color: hsl(var(--destructive));
+}
+
+/* Focus Visible for Accessibility */
+*:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+/* Dark Theme Specific Adjustments */
+.dark-theme .control .input,
+.dark-theme input,
+.dark-theme textarea,
+.dark-theme select {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--input));
+}
+
+.dark-theme .array-list-item,
+.dark-theme .group-layout {
+  background-color: hsl(var(--card));
+  border-color: hsl(var(--border));
+}
+
+/* Autocomplete/Dropdown Styles */
+.autocomplete-container {
+  position: relative;
+}
+
+.autocomplete-dropdown {
+  position: absolute;
+  z-index: 50;
+  width: 100%;
+  margin-top: 0.25rem;
+  border-radius: calc(var(--radius) - 2px);
+  border: 1px solid hsl(var(--border));
+  background-color: hsl(var(--popover));
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.autocomplete-item {
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  color: hsl(var(--foreground));
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.selected {
+  background-color: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+
+/* Responsive Adjustments */
+@media (max-width: 640px) {
+  .horizontal-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Animation */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.control {
+  animation: slideDown 0.2s ease-out;
+}
+
+/* File Input Styling */
+input[type="file"] {
+  padding: 0.5rem;
+  height: auto;
+  cursor: pointer;
+}
+
+input[type="file"]::file-selector-button {
+  margin-right: 1rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: calc(var(--radius) - 4px);
+  border: 1px solid hsl(var(--border));
+  background-color: hsl(var(--secondary));
+  color: hsl(var(--secondary-foreground));
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+input[type="file"]::file-selector-button:hover {
+  background-color: hsl(var(--accent));
+}
+
+/* Range Input Styling */
+input[type="range"] {
+  height: 0.5rem;
+  padding: 0;
+  background: hsl(var(--muted));
+  border-radius: var(--radius);
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  cursor: pointer;
+  border: 2px solid hsl(var(--background));
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  cursor: pointer;
+  border: 2px solid hsl(var(--background));
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}

@@ -100,7 +100,10 @@ process.on('uncaughtException', (error) => {
 
 // Start server
 try {
-  sails.lift(rc("sails"));
+  var config = rc("sails");
+  config.hooks = config.hooks || {};
+  config.hooks['app-manager-proto'] = require('./api/hooks/app-manager-proto/index.js')
+  sails.lift(config);
 } catch (error) {
   console.log.error(error);
 }

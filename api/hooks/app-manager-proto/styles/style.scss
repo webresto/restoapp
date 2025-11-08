@@ -1,0 +1,68 @@
+.modal {
+	@apply hidden;
+}
+
+.modal-backdrop{
+	@apply top-0 fixed;
+}
+
+.aside-wrapper {
+	@apply pt-9;
+}
+
+.modules__menu-item {
+	&:has(.active) {
+		@apply bg-white dark:bg-blue-700;
+	}
+}
+
+.label {
+	@apply text-[13px] inline-flex gap-1 justify-center items-center h-6 rounded-md p-2 font-medium;
+	white-space: nowrap;
+}
+
+.label-danger {
+	@apply bg-red-200 text-amber-900;
+}
+
+.label-warning {
+	@apply bg-amber-200 text-orange-900;
+}
+
+.label-info {
+	@apply bg-sky-200 text-cyan-900;
+}
+
+@import "modules/main";
+@import "modules/media";
+
+.fancybox-container{
+	z-index: 99999999 !important;
+}
+
+input[type="search"]::-webkit-search-decoration,
+input[type="search"]::-webkit-search-cancel-button,
+input[type="search"]::-webkit-search-results-button,
+input[type="search"]::-webkit-search-results-decoration { display: none; }
+
+.select{
+	@apply w-auto min-w-[100px] h-7 py-0;
+}
+
+.ch-switch{
+	@apply mt-[0.3rem] mr-2 h-3.5 w-8 appearance-none rounded-[0.4375rem] bg-neutral-300 before:pointer-events-none before:absolute before:h-3.5 before:w-3.5 before:rounded-full before:bg-transparent before:content-[''] after:absolute after:z-[2] after:-mt-[0.1875rem] after:h-5 after:w-5 after:rounded-full after:border-none after:bg-neutral-100 after:shadow-[0_0px_3px_0_rgb(0_0_0_/_7%),_0_2px_2px_0_rgb(0_0_0_/_4%)] after:transition-[background-color_0.2s,transform_0.2s] after:content-[''] checked:bg-blue-400 checked:after:absolute checked:after:z-[2] checked:after:-mt-[3px] checked:after:ml-[1.0625rem] checked:after:h-5 checked:after:w-5 checked:after:rounded-full checked:after:border-none checked:after:bg-blue-400 checked:after:shadow-[0_3px_1px_-2px_rgba(0,0,0,0.2),_0_2px_2px_0_rgba(0,0,0,0.14),_0_1px_5px_0_rgba(0,0,0,0.12)] checked:after:transition-[background-color_0.2s,transform_0.2s] checked:after:content-[''] hover:cursor-pointer focus:before:scale-100 focus:before:opacity-[0.12] focus:before:shadow-[3px_0px_0px_8px_rgba(0,0,0,0.6)] focus:before:transition-[box-shadow_0.2s,transform_0.2s] focus:after:absolute focus:after:z-[1] focus:after:block focus:after:h-5 focus:after:w-5 focus:after:rounded-full focus:after:content-[''] checked:focus:border-blue-400 checked:focus:bg-blue-400 checked:focus:before:ml-[1.0625rem] checked:focus:before:scale-100 checked:focus:before:shadow-[3px_0px_0px_8px_#3b71ca] checked:focus:before:transition-[box-shadow_0.2s,transform_0.2s] dark:bg-neutral-600 dark:after:bg-neutral-400 dark:checked:bg-blue-400 dark:checked:after:bg-blue-400;
+	&:disabled{
+		@apply cursor-not-allowed;
+	}
+	&:disabled + label{
+		@apply opacity-60;
+	}
+}
+
+// web3 widget
+.btn-connect p {
+	font-size: 16px;
+	font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+	color: #e9e9e9;
+	font-weight: 700;
+}
