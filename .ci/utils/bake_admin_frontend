@@ -19,11 +19,13 @@ if [ -f "$SCRIPT_PATH" ]; then
     START_TIME=$(date +%s)
 
     echo "AdminFrontend > $(cat /app/modules/admin-frontend/package.json | grep version)"
-    # If the file exists, execute it using Node.js and log the output
-    /usr/local/bin/tsx "$SCRIPT_PATH" >> "$LOG_FILE" 2>&1
+    # If the file exists, execute it using tsx and stream output to the Docker logs (no redirection)
+    echo "Running: /usr/local/bin/tsx $SCRIPT_PATH"
+    /usr/local/bin/tsx "$SCRIPT_PATH"
     EXIT_CODE=$?
 
-    ls /app/modules/admin-frontend/baked_frontend
+    # List baked frontend (if created)
+    ls -la /app/modules/admin-frontend/baked_frontend || true
 
     # Record the end time
     END_TIME=$(date +%s)
@@ -33,8 +35,9 @@ if [ -f "$SCRIPT_PATH" ]; then
 
     # Check if the Node.js script exited with an error
     if [ $EXIT_CODE -ne 0 ]; then
-        echo "Error:\n"
-        cat $LOG_FILE
+        echo "Error: bake_admin_frontend failed with exit code $EXIT_CODE"
+        echo "---- script log (if any) ----"
+        [ -f "$LOG_FILE" ] && sed -n '1,200p' "$LOG_FILE" || echo "(no $LOG_FILE)"
         exit $EXIT_CODE
     else
         echo "Frontend build completed successfully in $ELAPSED_TIME seconds."

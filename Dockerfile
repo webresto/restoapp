@@ -1,4 +1,4 @@
-FROM node:20-alpine as base
+FROM node:22-alpine AS base
 
 LABEL maintainer="WebResto"
 
@@ -10,10 +10,12 @@ RUN apk add --no-cache \
     ca-certificates && update-ca-certificates
 
 RUN npm i -g @webresto/cli tsx
-RUN curl -vI https://base-layouts-next.resto.cloud
 
 ARG BRANCH=main
 ENV BRANCH=$BRANCH
+
+# TODO: delete after release
+ENV STAGING=1
 
 # Corepack/yarn workaround
 RUN corepack enable || true
@@ -22,7 +24,7 @@ WORKDIR /app
 
 ###################################
 #### NPM CACHER - Root Project Dependencies
-FROM base as cacher_modules
+FROM base AS cacher_modules
 RUN apk add git python3 build-base
 WORKDIR /app
 COPY . .
@@ -32,15 +34,12 @@ RUN yarn workspaces focus --production
 
 ###################################
 #### BASE MODULES PREPARE 
-FROM base as cacher_base_modules
+FROM base AS cacher_base_modules
 RUN apk add --no-cache git build-base  && update-ca-certificates
-ENV WEBRESTO_LICENSE null
+ENV WEBRESTO_LICENSE=null
 WORKDIR /app
 COPY . .
-RUN curl -vI https://base-layouts-next.resto.cloud
-RUN cat /app/.ci/utils/install_webresto_dependencies
 
-# Удаляем символы CR, если файл был скопирован из Windows
 RUN sed -i 's/\r$//' /app/.ci/utils/install_webresto_dependencies
 RUN bash /app/.ci/utils/install_webresto_dependencies /app/seeds/modules.list /app/modules $WEBRESTO_LICENSE
 RUN sed -i 's/\r$//' /app/.ci/utils/bake_admin_frontend
@@ -80,18 +79,10 @@ WORKDIR /app
 
 EXPOSE 8080
 
-# TODO stop expose  this ports
-EXPOSE 42880
-EXPOSE 42881
-
 ARG BRANCH=main
 ENV BRANCH=$BRANCH
 
-# satging
-# ARG STAGING=0
-# TODO: delete after release
-ARG STAGING=1 
-
+ARG STAGING=0
 ENV STAGING=$STAGING
 
 ARG COMMIT_HASH
@@ -103,7 +94,7 @@ COPY .ci/config/nginx.conf /etc/nginx/nginx.conf
 COPY .ci/config/maintenance.html /var/lib/html/maintenance.html
 
 
-ENV WEBRESTO_MODULES_PATH /app/modules
+ENV WEBRESTO_MODULES_PATH=/app/modules
 
 WORKDIR /app
 COPY --from=cacher_modules /app/ .

@@ -14,13 +14,13 @@ mkdir -p "$OUT_DIR"
 WR_MODULES_LIST_FILE=$1
 WEBRESTO_LICENSE=$3
 
-# Set STAGING when building from "next" branch
-STAGING="0"
+# STAGING can be set externally. Default to 0 only if not provided.
+: ${STAGING:=0}
 if [[ "${BRANCH}" == "next" ]]; then
     STAGING="1"
-    log_info "Branch is 'next' - enabling staging installs"
+    log_info "Branch is 'next' - enabling staging installs (STAGING=$STAGING)"
 else
-    log_info "Branch is '${BRANCH:-unknown}' - staging disabled"
+    log_info "Branch is '${BRANCH:-unknown}' - staging set to $STAGING"
 fi
 
 if [[ -z "$WEBRESTO_LICENSE" ]]; then
