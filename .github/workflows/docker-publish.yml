@@ -26,9 +26,9 @@ jobs:
           # short sha
           SHORT_SHA=${GITHUB_SHA::8}
 
-          # Try reading version from @webresto/core package.json like in GitLab CI, fallback to root package.json
-          if [ -f "@webresto/core/package.json" ]; then
-            RAW_VERSION=$(jq -r '.version' @webresto/core/package.json || echo "0.0.0")
+          # Try reading version from local_modules/core package.json like in GitLab CI, fallback to root package.json
+          if [ -f "local_modules/core/package.json" ]; then
+            RAW_VERSION=$(jq -r '.version' local_modules/core/package.json || echo "0.0.0")
           elif [ -f "package.json" ]; then
             RAW_VERSION=$(jq -r '.version' package.json || echo "0.0.0")
           else
