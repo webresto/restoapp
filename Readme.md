@@ -10,11 +10,6 @@ It includes:
 - The Admin Panel for managing content and system settings
 - The RestoCore engine, the e-commerce core for restaurants and local businesses
 
-For integrations with various services, we use abstract classes called [adapters](https://github.com/webresto/core/tree/staging/adapters)
-
-
-## Description
-This project is a backend system for a food delivery service, designed to provide quick deployment and setup of an online platform for ordering and delivering food. It is developed in Node.js using modules that can be easily installed and configured via an module manager.
 
 ## Join Our Community
 
@@ -42,11 +37,7 @@ Join our community to get support for everyone interested in food delivery using
 - [x] **Marketing Customization**: Create a custom system of bonuses, discounts, surcharges, promo codes, roulette, and gift certificates. Synchronize social media pages with the user dashboard.
 - [x] **Admin Panel**: Access an administrative panel to manage and configure the platform's settings, and oversee business operations.
 - [x] **Visual Programming**: Utilize a visual programming environment to intercept events on both the frontend and backend, allowing for modifications and the implementation of custom features without extensive programming knowledge.
-- [ ] **User Dashboard**: Manage all delivery-related information on the website, including menu items, order history, and delivery addresses.
-
-## Event managaer
-
-The application architecture is designed to intercept events on both the frontend and backend. These events are passed to a Node visual programming environment where they can be modified and the necessary information provided to the client. This allows for running A/B tests, implementing custom features, and making modifications on the fly without requiring deep programming knowledge.
+- [x] **User Dashboard**: Manage all delivery-related information on the website, including menu items, order history, and delivery addresses.
 
 ## Mobile Application
 
@@ -59,14 +50,9 @@ For support inquiries or purchasing the PRO version, please contact us on Telegr
 
 [Telegram @webresto_support](https://t.me/webresto_support)
 
-## Join Our Community
-
-Join our community to get support for everyone interested in food delivery using our restaurant engine. This is the place where restaurateurs and developers collaborate on the restaurant system. Get the latest news and share ideas. Join us!
-
-[![Discord](https://img.shields.io/badge/Join-Discord-%237289DA?logo=discord&style=flat-square)](https://discord.gg/mbT4AeBJZ6)
-[![Telegram](https://img.shields.io/badge/Join-Telegram-%232CA5E0?logo=telegram&style=flat-square)](https://t.me/restoapp_community)
-
 ## Installation
+
+For detailed installation instructions, see [docs/install.md](docs/install.md).
 
 The system installation is done via a Docker container and takes only 15 minutes. After installation, an installer appears, allowing you to configure parameters and launch the food delivery site.
 
@@ -122,38 +108,18 @@ dish
 
 Environment variables are loaded into the container from the `.env` file (case-sensitive).
 
-### Build and Run Commands
-
-```bash
-docker build -t webresto/restoapp:$(git rev-parse --abbrev-ref HEAD) .
-docker push webresto/restoapp:$(git rev-parse --abbrev-ref HEAD)
-```
-
-For local build:
-
-```bash
-docker build -t webresto/restoapp:$(git rev-parse --abbrev-ref HEAD) . -f Dockerfile.local
-```
 
 ### ENV_LIST
 
 *(Description not available)*
 
-### Dependencies
-
-To install additional modules into the container at startup, add the `/app/dependencies` file containing the module list, with each module on a new line. Each line will be executed using the `npm install $line_module` template.
-
-Example:
-
-```
-faker
-dummy@1.2.0
-# comment
 ```
 
 ### RestoApp Modules
 
 To install additional RestoApp modules into the container at startup, add the `/app/webresto-modules.list` file containing the module list, with each module on a new line. Each line will be executed using the `webresto install $line_module` template.
+
+You can find more modules or even upload your own modules from [https://marketplace.restoapp.org/](https://marketplace.restoapp.org/).
 
 Example:
 
