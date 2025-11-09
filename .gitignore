@@ -30,7 +30,7 @@ docs
 orders.log
 models/ts
 yarn-error.log
-yarn.lock
+# yarn.lock
 .vscode/pinned-files.json
 *.tar.xz
 *.tar.gz
@@ -48,3 +48,7 @@ api/bootstrap/*
 config/locales/en.json
 installStepper/uploadedImages
 adminizer
+.yarn/install-state.gz
+.pnp.cjs
+.gitignore
+.pnp.loader.mjs
