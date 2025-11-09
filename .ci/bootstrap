@@ -265,8 +265,11 @@ if [[ "${DATASTORE}" == "postgres" ]]; then
         log_info "AUTO_MIGRATION is TRUE - waiting for DB and running migrations"
         wait_for_database
         
-        log_info "Ensuring public schema exists"
-        PGPASSWORD="$PG_PASSWORD" psql -h "$PG_HOST" -U "$PG_USER" -d "$PG_DATABASE" -c "CREATE SCHEMA IF NOT EXISTS public;" || { log_error "Failed to create public schema"; exit 1; }
+        log_info "Ensuring public schema exists and search_path is set"
+        PGPASSWORD="$PG_PASSWORD" psql -v ON_ERROR_STOP=1 -h "$PG_HOST" --username "$PG_USER" --dbname "$PG_DATABASE" <<-EOSQL
+          CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION "$PG_USER";
+          ALTER DATABASE "$PG_DATABASE" SET search_path TO public;
+EOSQL
         
         if npm run migrate; then
             log_info "Migrations completed successfully"
