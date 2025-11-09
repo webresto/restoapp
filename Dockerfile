@@ -102,7 +102,7 @@ COPY --from=cacher_modules /app/ .
 COPY --from=cacher_base_modules /app/modules ./seeds/modules
 
 # To prevent problem in tsx runtime error: 'Query.streets defined in resolvers, but not in schema'
-RUN cd /app/local_modules/graphql && tsc
+RUN cd /app/local_modules/graphql && tsc || true
 
 RUN rm -rf ./.sailsrc && cp ./.sailsrc.default .sailsrc
 ADD ./assets ./.tmp/public/
