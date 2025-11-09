@@ -90,7 +90,7 @@ ARG COMMIT_HASH
 ENV COMMIT_HASH=$COMMIT_HASH
 
 RUN apk add --no-cache nginx
-RUN npm i -g pm2 tsx
+RUN npm i -g pm2 tsx typescript
 COPY .ci/config/nginx.conf /etc/nginx/nginx.conf
 COPY .ci/config/maintenance.html /var/lib/html/maintenance.html
 
@@ -100,6 +100,10 @@ ENV WEBRESTO_MODULES_PATH=/app/modules
 WORKDIR /app
 COPY --from=cacher_modules /app/ .
 COPY --from=cacher_base_modules /app/modules ./seeds/modules
+
+# To prevent problem in tsx runtime error: 'Query.streets defined in resolvers, but not in schema'
+RUN cd /app/local_modules/graphql && tsc
+
 RUN rm -rf ./.sailsrc && cp ./.sailsrc.default .sailsrc
 ADD ./assets ./.tmp/public/
 RUN yarn set version berry
