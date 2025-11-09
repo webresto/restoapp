@@ -11,6 +11,7 @@
         "user": {"ENV": "PG_USER"},
         "password": {"ENV": "PG_PASSWORD"},
         "host":{"ENV": "PG_HOST"},
-        "database": {"ENV": "PG_DATABASE"}
+        "database": {"ENV": "PG_DATABASE"},
+        "schema": "public"
     }
 }
