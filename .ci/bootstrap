@@ -198,7 +198,7 @@ if [[ "${DATASTORE}" == "postgres" ]]; then
     }
 
     log_info "Checking POSTGRES_BACKUP ('$POSTGRES_BACKUP')"
-    if [[ "$(parse_boolean "$POSTGRES_BACKUP")" == "true" ]]; then
+    if [[ "$(parse_boolean "$POSTGRES_BACKUP" "true")" == "true" ]]; then
         log_info "POSTGRES_BACKUP enabled - will attempt backup/restore operations"
         wait_for_database
 
@@ -234,11 +234,11 @@ if [[ "${DATASTORE}" == "postgres" ]]; then
 
 
 
-    log_info "Checking MIGRATIONS_PATH ('$MIGRATIONS_PATH')"
-    if [[ "$(parse_boolean "$MIGRATIONS_PATH")" == "true" ]]; then
-        log_info "MIGRATIONS_PATH enabled - collecting migration files"
+    log_info "Checking COLLECT_MIGRATIONS ('$COLLECT_MIGRATIONS')"
+    if [[ "$(parse_boolean "$COLLECT_MIGRATIONS" "true")" == "true" ]]; then
+        log_info "COLLECT_MIGRATIONS enabled - collecting migration files"
         # Migrations
-        export MIGRATIONS_PATH="/app/@webresto/**/migrations:/app/modules/**/migrations::/app/api/hooks/**/migrations:$MIGRATIONS_PATH"
+        export MIGRATIONS_PATH="/app/@webresto/**/migrations:/app/modules/**/migrations:/app/api/hooks/**/migrations:$MIGRATIONS_PATH"
         destination_folder="/app/migrations"
         IFS=':' read -ra path_array <<< "$MIGRATIONS_PATH"
 
@@ -256,11 +256,11 @@ if [[ "${DATASTORE}" == "postgres" ]]; then
             done
         done
     else
-        log_info "MIGRATIONS_PATH disabled - skipping migration collection"
+        log_info "COLLECT_MIGRATIONS disabled - skipping migration collection"
     fi
     
     log_info "Checking AUTO_MIGRATION ('$AUTO_MIGRATION')"
-    if [[ "$(parse_boolean "$AUTO_MIGRATION")" == "true" ]]; then
+    if [[ "$(parse_boolean "$AUTO_MIGRATION" "true")" == "true" ]]; then
         log_info "AUTO_MIGRATION is TRUE - waiting for DB and running migrations"
         wait_for_database
         

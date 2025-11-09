@@ -34,11 +34,12 @@ log_error() { _helper_log ERROR "$*"; }
 
 # Parse boolean value from string
 # Returns "true" or "false"
-# Empty values are treated as false
+# Empty values are treated as the default value (second parameter, defaults to "false")
 parse_boolean() {
     local value="$1"
+    local default="${2:-false}"
     if [[ -z "$value" ]]; then
-        echo "false"
+        echo "$default"
         return
     fi
     local true_values=("yes" "YES" "Yes" "1" "true" "TRUE" "True")
@@ -55,8 +56,8 @@ parse_boolean() {
             return
         fi
     done
-    # Default to false if not recognized
-    echo "false"
+    # Default to the specified default if not recognized
+    echo "$default"
 }
 
 # Exit helper that respects EXIT_BEHAVIOR environment variable
