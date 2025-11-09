@@ -1,10 +1,14 @@
 
-# RestoApp 
+# RestoApp Platform Repository 
 
-Food E-Commerce backend core repository.
+This repository is the main hub of the RestoApp ecosystem, powering both websites and mobile apps built on the platform.
+It serves as the core framework that unifies all modules, handling their setup, dependencies, and configuration.
 
-<span class="badge-npmversion"><a href="https://npmjs.org/package/@webresto/core" title="View this project on NPM"><img src="https://img.shields.io/npm/v/@webresto/core.svg" alt="NPM version" /></a></span>
-
+It includes:
+- The module and package manager for integrating published modules
+- The GraphQL API as the main interface for client–server communication
+- The Admin Panel for managing content and system settings
+- The RestoCore engine, the e-commerce core for restaurants and local businesses
 
 For integrations with various services, we use abstract classes called [adapters](https://github.com/webresto/core/tree/staging/adapters)
 
