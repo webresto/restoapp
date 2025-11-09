@@ -238,7 +238,7 @@ if [[ "${DATASTORE}" == "postgres" ]]; then
     if [[ "$(parse_boolean "$COLLECT_MIGRATIONS" "true")" == "true" ]]; then
         log_info "COLLECT_MIGRATIONS enabled - collecting migration files"
         # Migrations
-        export MIGRATIONS_PATH="/app/local_modules/**/migrations:/app/modules/**/migrations:/app/api/hooks/**/migrations:$MIGRATIONS_PATH"
+        export MIGRATIONS_PATH="/app/node_modules/sails-adminpanel/migrations:/app/local_modules/**/migrations:/app/modules/**/migrations:/app/api/hooks/**/migrations:$MIGRATIONS_PATH"
         destination_folder="/app/migrations"
         IFS=':' read -ra path_array <<< "$MIGRATIONS_PATH"
 

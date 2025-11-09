@@ -37,7 +37,7 @@ module.exports.http = {
             return middlewareFn;
         })(),
         poweredBy: function (req, res, next) {
-            res.set('X-Powered-By', "RestoApp");
+            res.set('X-Powered-By', "WebResto");
             return next();
         },
         frontendRoutes: function (req, res, next) {
