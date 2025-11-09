@@ -30,13 +30,8 @@ RUN apk add git python3 build-base
 WORKDIR /app
 COPY . .
  RUN echo "nodeLinker: node-modules" > .yarnrc.yml
- # Use yarn lockfile if present; otherwise fall back to workspaces focus
  RUN yarn set version berry || true
- RUN if [ -f yarn.lock ]; then \
-             yarn install --frozen-lockfile; \
-         else \
-             yarn workspaces focus --production; \
-         fi
+ RUN yarn workspaces focus --production
 
 ###################################
 #### BASE MODULES PREPARE 
