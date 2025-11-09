@@ -15,7 +15,9 @@ Module._resolveFilename = function (request, parent, isMain, options) {
     return resolvePath(__dirname, './lib/installStepper/InstallStepAbstract.ts');
   }
   if (request === 'sails-adminpanel/helper/accessRightsHelper') {
-    return originalResolveFilename.call(this, 'adminizer/helpers/accessRightsHelper', parent, isMain, options);
+    // Resolve absolute path to adminizer helpers since exports don't allow subpath access
+    const adminzerPath = originalResolveFilename.call(this, 'adminizer', parent, isMain, options);
+    return resolvePath(dirname(adminzerPath), 'helpers/accessRightsHelper.js');
   }
   return originalResolveFilename.call(this, request, parent, isMain, options);
 };
