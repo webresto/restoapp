@@ -17,7 +17,6 @@ Join our community to get support for everyone interested in food delivery using
 
 [![Discord](https://img.shields.io/badge/Join-Discord-%237289DA?logo=discord&style=flat-square)](https://discord.gg/mbT4AeBJZ6)
 [![Telegram](https://img.shields.io/badge/Join-Telegram-%232CA5E0?logo=telegram&style=flat-square)](https://t.me/restoapp_community)
-[![WhatsApp](https://img.shields.io/badge/Join-WhatsApp-%2325D366?logo=whatsapp&style=flat-square)](https://chat.whatsapp.com/CIc1MXXjbquAqeYHCt3k40)
 
 
 ## Features
