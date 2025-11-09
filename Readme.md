@@ -112,21 +112,12 @@ Environment variables are loaded into the container from the `.env` file (case-s
 
 *(Description not available)*
 
-```
-
 ### RestoApp Modules
 
 To install additional RestoApp modules into the container at startup, add the `/app/webresto-modules.list` file containing the module list, with each module on a new line. Each line will be executed using the `webresto install $line_module` template.
 
 You can find more modules or even upload your own modules from [https://marketplace.restoapp.org/](https://marketplace.restoapp.org/).
 
-Example:
-
-```
-payment
-webhook
-# comment
-```
 
 ## Environment Variables
 
