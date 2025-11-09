@@ -1,0 +1,173 @@
+<!-- Ваш ejs-файл -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Install Stepper</title>
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+</head>
+<body style="overflow: auto;">
+
+<!--<pre><%= JSON.stringify(currentStep, null, 2) %></pre>-->
+<p>Step <%= totalStepCount - leftStepsCount + 1 %> of <%= totalStepCount %></p>
+
+<% if (currentStep.payload.type === 'single') { %>
+    <!-- Если тип single -->
+    <h2><%= currentStep.title %></h2>
+    <p><%= currentStep.description %></p>
+    <label for="<%= 'input0' %>"><%= currentStep.payload.data.name %>:</label>
+    <br>
+    <textarea id="<%= 'input0' %>" rows="15" cols="120"></textarea>
+    <div>
+        <small>
+            <%= currentStep.payload.data.key %> - <%= currentStep.payload.data.description %> (<%= currentStep.payload.data.tooltip %>)
+        </small>
+    </div>
+    <button id="nextButton">Next</button>
+    <button id="skipButton" <% if (!currentStep.canBeSkipped) { %> style="display: none;" <% } %>>Skip</button>
+
+    <script>
+		// Pass variables from EJS to the script
+		var currentStepData = <%- JSON.stringify(currentStep) %>;
+
+		$("#nextButton").on('click', function () {
+			console.log("Next Button was clicked");
+			let inputData = {};
+
+			const inputId = 'input0';
+			let value = $(`#${inputId}`).val();
+
+			try {
+				value = JSON.parse(value);
+			} catch (error) {
+				console.log("Error parsing JSON:", error);
+				return;
+			}
+
+			inputData[currentStepData.payload.data.key] = value;
+
+			$.post(`<%- sails.config.adminpanel.routePrefix %>/install/<%=stepperId%>`, {
+				inputData: JSON.stringify(inputData),
+				action: "next",
+				currentStepId: currentStepData.id
+			})
+				.done(function () {
+					console.log("Step successfully processed");
+					location.reload();
+				})
+				.fail(function () {
+					console.log("Step was not processed");
+				});
+		});
+
+		$("#skipButton").on('click', function () {
+			console.log("Skip Button was clicked");
+
+			$.post(`<%- sails.config.adminpanel.routePrefix %>/install/<%=stepperId%>`, {
+				action: "skip",
+				currentStepId: currentStepData.id
+			})
+				.done(function () {
+					console.log("Step successfully skipped");
+					location.reload();
+				})
+				.fail(function () {
+					console.log("Step was not skipped");
+				});
+		});
+
+        // for testing
+        let example = {
+            "name": "Sample Task",
+            "description": "A brief description of the task",
+            "done": true,
+            "rating": 4,
+            "recurrence": "Weekly",
+            "recurrenceInterval": 7
+        }
+
+    </script>
+
+<% } else if (currentStep.payload.type === 'multi') { %>
+    <div id="multiForm">
+        <% for (let i = 0; i < currentStep.payload.data.length; i++) { %>
+            <div style="margin-bottom: 10px;">
+                <label for="<%= `input${i}` %>"><%= currentStep.payload.data[i].name %>:</label>
+                <% if (currentStep.payload.data[i].type === 'number') { %>
+                    <input type="number" id="<%= `input${i}` %>" />
+                <% } else if (currentStep.payload.data[i].type === 'string') { %>
+                    <input type="text" id="<%= `input${i}` %>" />
+                <% } else if (currentStep.payload.data[i].type === 'boolean') { %>
+                    <input type="checkbox" id="<%= `input${i}` %>" />
+                <% } %>
+                <small><%= currentStep.payload.data[i].key %> - <%= currentStep.payload.data[i].description %> (<%= currentStep.payload.data[i].tooltip %>)</small>
+            </div>
+        <% } %>
+        <!-- Кнопки "Next" и "Skip" -->
+        <button id="nextButton">Next</button>
+        <button id="skipButton" <% if (!currentStep.canBeSkipped) { %> style="display: none;" <% } %>>Skip</button>
+    </div>
+
+    <script>
+		// Pass variables from EJS to the script
+		var currentStepData = <%- JSON.stringify(currentStep) %>;
+
+		$("#nextButton").on('click', function () {
+			console.log("Next Button was clicked");
+			let inputData = {};
+
+			// Сбор значений с полей ввода
+			for (let i = 0; i < currentStepData.payload.data.length; i++) {
+				const inputId = `input${i}`;
+				let value;
+
+				if (currentStepData.payload.data[i].type === 'boolean') {
+					value = $(`#${inputId}`).is(':checked');
+				} else if (currentStepData.payload.data[i].type === 'number') {
+					value = parseFloat($(`#${inputId}`).val());
+				} else {
+					value = $(`#${inputId}`).val();
+				}
+
+				inputData[currentStepData.payload.data[i].key] = value;
+			}
+
+			$.post(`<%- sails.config.adminpanel.routePrefix %>/install/<%=stepperId%>`, {
+				inputData: JSON.stringify(inputData),
+				action: "next",
+				currentStepId: currentStepData.id
+			})
+				.done(function () {
+					console.log("Step successfully processed");
+					location.reload();
+				})
+				.fail(function (err) {
+					console.log("Step was not processed");
+				});
+		});
+
+		$("#skipButton").on('click', function () {
+			console.log("Skip Button was clicked");
+
+			$.post(`<%- sails.config.adminpanel.routePrefix %>/install/<%=stepperId%>`, {
+				action: "skip",
+				currentStepId: currentStepData.id
+			})
+				.done(function () {
+					console.log("Step successfully skipped");
+					location.reload();
+				})
+				.fail(function (err) {
+					console.log("Step was not skipped");
+				});
+		});
+    </script>
+
+<% } else { %>
+    <p>Unsupported type: <%= currentStep.payload.type %></p>
+<% } %>
+
+</body>
+</html>

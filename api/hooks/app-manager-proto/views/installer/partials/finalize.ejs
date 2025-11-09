@@ -1,0 +1,162 @@
+<style>
+    #controls {
+        display: none;
+    }
+
+    #header {
+        display: none;
+    }
+
+    .shim-blue {
+        position: relative;
+        overflow: hidden;
+        background-color: rgba(0, 155, 255, 0.7);
+    }
+    .shim-blue::after {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        transform: translateX(-100%);
+        background-image: linear-gradient(
+                90deg,
+                rgba(233, 233, 233, 1) 0,
+                rgba(233, 233, 233, 0.9) 50%,
+                rgba(233, 233, 233, 0.8) 100%
+        );
+        animation: shimmer 2.5s ease-out infinite;
+        content: "";
+    }
+
+    @keyframes shimmer {
+        100% {
+            transform: translateX(0%);
+            opacity: 0;
+        }
+    }
+
+</style>
+
+
+<div>
+    <h1 class="text-2xl font-medium text-gray-800 pb-5"><%= __("Install finalize progress") %></h1>
+
+    <div id="progress-bar" class="relative w-full bg-gray-200 rounded-lg overflow-hidden">
+        <div id="progress-bar-fill" class="h-8 bg-blue-500 text-white text-sm flex items-center justify-center shim-blue">
+            <%= __("Loading...") %>
+        </div>
+    </div>
+
+    <p id="status-text" class="mt-4 text-gray-600"><%= __("Status: Loading...") %></p>
+
+    <ul id="finalize-list" class="mt-4"></ul>
+
+    <br />
+    <button class="btn btn-red" id="skip" onclick="skipStep()"  <% if (!currentStep.canBeSkipped) { %> style="display: none;" <% } %>>
+        <%= __("Skip") %>
+    </button>
+</div>
+
+<!-- Include JavaScript for AJAX -->
+<script>
+    async function updateProgressBar() {
+        try {
+            const response = await fetch('<%- sails.config.adminpanel.routePrefix %>/install/<%=stepperId%>/finalize');
+            const data = await response.json();
+
+            const { status, finalizeList } = data;
+            const fulfilledCount = finalizeList.filter(item => item.status === 'fulfilled').length;
+            const pendingCount = finalizeList.filter(item => item.status === 'pending').length;
+            const totalCount = finalizeList.length;
+
+            const progress = Math.floor((fulfilledCount / totalCount) * 100);
+
+            // Update progress bar
+            const progressBarFill = document.getElementById('progress-bar-fill');
+            progressBarFill.textContent = `${progress}%`;
+            progressBarFill.style.width = `${progress}%`;
+
+            // Update status text
+            const statusText = document.getElementById('status-text');
+            statusText.textContent = `<%=__('Status')%>: ${status === "fulfilled" ? "<%=__('Done')%>" : (status === "pending" ? "<%=__('In progress')%>" : "<%=__('Error')%>")}`;
+
+            // Render finalize list
+            const finalizeListContainer = document.getElementById('finalize-list');
+            finalizeListContainer.innerHTML = ''; // Clear existing list
+
+            finalizeList.forEach(item => {
+                if(item.info) {
+                    if(item.status === "rejected"){
+                        console.error(item.info)
+                    } else {
+                        console.warn(item.info)
+                    }
+                }
+                const listItem = document.createElement('li');
+                listItem.innerHTML = `
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <span class="text-gray-600">${item.description}:</span>
+                                <span class="ml-2 text-sm text-gray-500">${item.status === "fulfilled" ? "<%=__('Done')%>" : (status === "pending" ? "<%=__('In progress')%>" : "<%=__('Error')%>")}</span>
+                            </div>
+                            <div class="text-gray-300">${item.id}</div>
+                        </div>
+                    `;
+                finalizeListContainer.appendChild(listItem);
+            });
+
+            // Process finalize step if all promises are fulfilled
+            if (progress === 100) {
+
+                fetch(`<%- sails.config.adminpanel.routePrefix %>/install/<%=stepperId%>`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        inputData: JSON.stringify({}),
+                        action: "next",
+                        currentStepId: "finalize"
+                    })
+                })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Network response was not ok');
+                        } else {
+                            location.reload();
+                            console.log('Data sent successfully:', data);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error sending data:', error);
+                    });
+            }
+        } catch (error) {
+            console.error('Error fetching progress:', error);
+        }
+    }
+
+    // Update progress bar every 3 seconds
+    setInterval(updateProgressBar, 3000);
+
+    // Initial call to update progress bar
+    updateProgressBar();
+
+    $("#skipButton").on('click', function () {
+			console.log("Skip Button was clicked");
+
+			$.post(`<%- sails.config.adminpanel.routePrefix %>/install/<%=stepperId%>`, {
+				action: "skip",
+				currentStepId: currentStepData.id
+			})
+				.done(function () {
+					console.log("Step successfully skipped");
+					location.reload();
+				})
+				.fail(function () {
+					console.log("Step was not skipped");
+				});
+    });
+
+</script>

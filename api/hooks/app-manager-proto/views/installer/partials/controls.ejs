@@ -1,0 +1,205 @@
+<div class="p-6 flex justify-between items-center" id="controls">
+    <div>
+        <button class="btn btn-green" id="submit" onclick="processStep()">
+            <%= __("Next") %>
+        </button>
+        <button class="btn btn-grey" id="skip" onclick="skipStep()">
+            <%= __("Skip") %>
+        </button>
+    </div>
+</div>
+
+<script>
+    let skipButton = document.getElementById("skip");
+    if (!currentStepData.canBeSkipped) {
+        skipButton.setAttribute("hidden", true);
+    } else {
+        skipButton.removeAttribute("hidden");
+    }
+
+
+    function processStep() {
+        let data = {};
+
+        if (currentStepData.renderer === "jsonforms") {
+            let installStepOutput = document.getElementById("installStepOutput").value;
+            let dataToSend = JSON.parse(installStepOutput);
+
+            let inputData = {}
+            if (currentStepData.payload.type === "single") {
+                inputData[currentStepData.payload.data.key] = dataToSend;
+            }
+
+            if (currentStepData.payload.type === "multi") {
+                for (let key in dataToSend) {
+                    inputData[key] = dataToSend[key];
+                }
+            }
+
+            data.inputData = inputData;
+            data.action = 'next';
+            data.currentStepId = currentStepData.id;
+
+        } else {
+            const form = document.getElementsByTagName('form')[0];
+            const formElements = form.elements;
+            let inputData = {}; // object to collect form fields
+            let filesCounter = 0;
+
+            let hasFiles = false;
+            
+            for (let i = 0; i < formElements.length; i++) {
+                const element = formElements[i];
+
+                if (element.tagName === 'INPUT' && element.type === 'file') {
+                    const files = element.files;
+
+                    if (files.length > 0) {
+                        hasFiles = true;
+                        filesCounter += files.length;
+                    }
+
+                } else {
+                    if (element.name) {
+                        inputData[element.name] = element.value;
+                    }
+                }
+            }
+
+            if (hasFiles) {
+                // Use FormData for file uploads
+                console.log('Files detected, using FormData instead of JSON');
+                
+                data = new FormData();
+                data.append('inputData', JSON.stringify(inputData));
+                data.append('action', 'next');
+                data.append('currentStepId', currentStepData.id);
+                data.append('filesCounter', filesCounter);
+
+                // Add files to FormData
+                let fileIndex = 0;
+                for (let i = 0; i < formElements.length; i++) {
+                    const element = formElements[i];
+                    if (element.tagName === 'INPUT' && element.type === 'file' && element.files.length > 0) {
+                        for (let j = 0; j < element.files.length; j++) {
+                            const file = element.files[j];
+                            data.append(`files_${fileIndex}`, file, `${element.name}_${fileIndex}_${file.name.replace(/\s+/g, '')}`);
+                            fileIndex++;
+                        }
+                    }
+                }
+            } else {
+                // No files, use JSON
+                data.inputData = inputData;
+                data.action = 'next';
+                data.currentStepId = currentStepData.id;
+                data.filesCounter = 0;
+            }
+
+            console.log('Data to send:', hasFiles ? 'FormData with files' : data);
+        }
+
+        // Get CSRF token from cookie
+        const csrfToken = document.cookie
+            .split('; ')
+            .find(row => row.startsWith('XSRF-TOKEN='))
+            ?.split('=')[1];
+
+        const headers = {};
+        
+        // Determine if we have files
+        const isFormData = data instanceof FormData;
+        
+        if (!isFormData) {
+            headers['Content-Type'] = 'application/json';
+        }
+        // Note: For FormData, don't set Content-Type header - browser will set it automatically with boundary
+        
+        if (csrfToken) {
+            headers['x-xsrf-token'] = csrfToken;
+        }
+
+        fetch(`/admin/install/<%=stepperId%>`, {
+            method: 'POST',
+            headers: headers,
+            body: isFormData ? data : JSON.stringify(data)
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                } else {
+                    location.reload();
+                    console.log('Data sent successfully:', data);
+                }
+            })
+            .catch(error => {
+                console.error('Error sending data:', error);
+            });
+    }
+
+    function skipStep() {
+        // currentStepData.canBeSkipped
+        const data = {
+            action: "skip",
+            currentStepId: currentStepData.id
+        };
+
+        // Get CSRF token from cookie
+        const csrfToken = document.cookie
+            .split('; ')
+            .find(row => row.startsWith('XSRF-TOKEN='))
+            ?.split('=')[1];
+
+        const headers = {
+            'Content-Type': 'application/json'
+        };
+        
+        if (csrfToken) {
+            headers['x-xsrf-token'] = csrfToken;
+        }
+
+        fetch(`/admin/install/<%=stepperId%>`, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(data)
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                } else {
+                    location.reload();
+                    console.log('Data sent successfully');
+                }
+            })
+            .catch(error => {
+                console.error('Error sending data:', error);
+            });
+
+    }
+
+    let submitButton = document.getElementById("submit");
+    if (currentStepData.renderer === "ejs") {
+        let inputs = document.querySelectorAll('input[required], textarea[required], select[required]');
+        if (inputs.length) {
+            submitButton.setAttribute("disabled", true);
+            document.addEventListener("input", checkRequiredInputs);
+        }
+    } else {
+        submitButton.setAttribute("disabled", true);
+    }
+
+    function checkRequiredInputs() {
+        let submitButton = document.getElementById("submit");
+        let inputs = document.querySelectorAll('input[required], textarea[required], select[required]');
+
+        for (let input of inputs) {
+            if (!input.value.trim()) {
+                submitButton.setAttribute("disabled", true);
+                return;
+            }
+        }
+
+        submitButton.removeAttribute("disabled");
+    }
+
+</script>

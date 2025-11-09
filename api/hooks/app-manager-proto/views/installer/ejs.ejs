@@ -1,0 +1,14 @@
+<%- include("./partials/header") %>
+
+<div class="max-w-4xl mx-auto">
+    <div class="p-12 items-center">
+        <% 
+        // Pass step payload to the template
+        const stepPayload = currentStep.payload || {};
+        %>
+        <%- include(currentStep.ejsPath, stepPayload) %>
+    </div>
+</div>
+
+<%- include("./partials/controls") %>
+<%- include("./partials/footer") %>

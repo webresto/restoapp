@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loading Page</title>
+    <!-- Include Tailwind CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        /* Add your custom styles here */
+    </style>
+</head>
+
+<body class="flex justify-center items-center h-screen bg-gray-100">
+    <div class="text-center">
+        <h1 class="text-3xl font-bold mb-4"><%= __("Server is loading...")%></h1>
+        <p class="text-gray-600 mb-8"><%= __("Please wait...")%></p>
+    </div>
+
+    <script>
+        // Function to perform asynchronous request
+        async function fetchData() {
+            try {
+                const response = await fetch('/admin'); // Replace '/your/route' with the actual URL of your server
+
+                if (!response.ok) {
+                    throw new Error('Network error');
+                }
+
+                // If request is successful, redirect user to the /admin page
+                window.location.href = '/admin';
+            } catch (error) {
+                console.error('<%= __("An error occurred")%>:', error);
+                // Retry the request after 1 second in case of error
+                setTimeout(fetchData, 1000);
+            }
+        }
+
+        // Execute the function to make request after a delay of 5 seconds
+        setTimeout(fetchData, 5000);
+    </script>
+</body>
+
+</html>

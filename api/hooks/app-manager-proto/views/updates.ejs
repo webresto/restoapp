@@ -1,0 +1,14 @@
+<%- include('./head.ejs') %>
+<%- include(sails.config.adminpanel.templateRootPath + "/ejs/mixin/sections") %>
+<div class="grid md:block md:flex-grow grid-cols-[252px_8px_1fr] h-[calc(100%_-_96px)] md:h-auto content-resize">
+    <%- include('./partials/navbar.ejs') %>
+    <div class="h-full bg-transparent w-2 relative left-[-4px]  md:hidden cursor-col-resize left-resize"></div>
+    <div class="content w-full overflow-auto md:pt-[158px] h-full">
+        <div class="content__body">
+            <%- include('./partials/updateItem.ejs') %>
+        </div>
+    </div>
+</div>
+
+<%- include(sails.config.adminpanel.templateRootPath + "/ejs/footer.ejs") %>
+<%- include('./footer.ejs') %>
