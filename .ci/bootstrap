@@ -285,7 +285,14 @@ else
 fi
 
 log_info "Main action dispatcher - action='$1'"
-if [ "$1" = 'start' ]; then    
+# Default to 'start' if no action or unrecognized action is provided
+ACTION="${1:-start}"
+if [ "$ACTION" != 'start' ] && [ "$ACTION" != 'test' ]; then
+    log_info "Unrecognized action '$ACTION' - defaulting to 'start'"
+    ACTION='start'
+fi
+
+if [ "$ACTION" = 'start' ]; then    
     log_info "Action 'start' - preparing to start app"
     cd /app
     : ${PM2_MODE:=FORK}
@@ -307,11 +314,8 @@ if [ "$1" = 'start' ]; then
     # Run the app via chosen interpreter so TSX/TypeScript files can be executed if available.
     log_info "Starting pm2-runtime with interpreter: $INTERPRETER (PM2_MODE=$PM2_MODE)"
     pm2-runtime start restoapp.js --interpreter "$INTERPRETER" -i $( [ "$PM2_MODE" = "CLUSTER" ] && echo "max" || echo "1" )
-elif [ "$1" = 'test' ]; then
+elif [ "$ACTION" = 'test' ]; then
     log_info "Action 'test' - running db migrations and tests"
     npx db-migrate up:all --env dev
     npm run test
-else
-    log_info "No recognized action provided (action='$1') - action not selected"
-    echo 'action not selected'
 fi
