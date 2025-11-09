@@ -1,6 +1,7 @@
 FROM node:22-alpine AS base
 
 LABEL maintainer="WebResto"
+LABEL org.opencontainers.image.description="Food E-Commerce backend core repository. This project is a backend system for a food delivery service, designed to provide quick deployment and setup of an online platform for ordering and delivering food."
 
 RUN apk add --no-cache \
     python3 \
