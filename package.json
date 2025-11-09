@@ -20,7 +20,7 @@
     "node-schedule": "^2.1.1",
     "patch-package": "^6.5.1",
     "rc": "^1.2.8",
-    "sails": "^1.5.12",
+    "sails": "^1.5.15",
     "sails-adminpanel": "alpha",
     "sails-build-dictionary": "^0.10.1",
     "sails-disk": "^2.1.2",
@@ -39,7 +39,7 @@
   "scripts": {
     "dev": "npx tsx ./restoapp",
     "db:dev": "db-migrate up:all --env dev",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "npx mocha -r ts-node/register/transpile-only \"tests/**/*.test.ts\" --exit",
     "migrate": "db-migrate up:all --env prod",
     "postinstall": "patch-package --patch-dir=node_modules/muddy-water",
     "tslint": "npx eslint .",
