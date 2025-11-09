@@ -58,3 +58,17 @@ parse_boolean() {
     # Default to false if not recognized
     echo "false"
 }
+
+# Exit helper that respects EXIT_BEHAVIOR environment variable
+# If EXIT_BEHAVIOR is set to "sleep", performs infinite sleep instead of exit
+# Default behavior is exit
+exit_or_sleep() {
+    local code="$1"
+    if [[ "${EXIT_BEHAVIOR:-exit}" == "sleep" ]]; then
+        log_info "EXIT_BEHAVIOR is 'sleep' - entering infinite sleep instead of exit"
+        sleep infinity
+    else
+        log_info "EXIT_BEHAVIOR is 'exit' (default) - exiting with code $code"
+        exit "$code"
+    fi
+}

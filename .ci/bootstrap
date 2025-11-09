@@ -275,7 +275,7 @@ EOSQL
             log_info "Migrations completed successfully"
         else
             log_error "Migrations failed, exiting to prevent container startup"
-            exit 1
+            exit_or_sleep 1
         fi
     else
         log_info "AUTO_MIGRATION not enabled - skipping automatic migration"
