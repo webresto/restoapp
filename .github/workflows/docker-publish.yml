@@ -5,7 +5,7 @@ on:
     branches:  
       # - main
       # - staging
-      # - next
+      - next
       - dev
   workflow_dispatch: {}
 
