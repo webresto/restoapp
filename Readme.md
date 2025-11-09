@@ -85,23 +85,6 @@ We currently only support installation via docker. Look at this image [webresto/
 
 ## Usage
 
-### Image Structure
-
-The image is managed by a supervisor program, serving for restarts. In earlier versions, the supervisor will likely be built into the container itself (or even within the Sails application).
-
-### Seeds
-
-The container supports loading initial data from the `seeds` folder, where `*.json` files with data arrays are located. When started with `process.env.DB_MIGRATE = "drop"` or `process.env.FORCE_SEED = "TRUE"` enabled, the data import process will be automatically launched.
-
-All content from the `seeds/assets` folder is copied to `.tmp/public` with replacement. You can also specify the loading order of JS files in the `seeds/queue` file, with each file on a new line (extensions should not be specified).
-
-Example:
-
-```
-group
-# comment
-dish
-```
 
 ### Environment Variables
 
