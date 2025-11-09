@@ -49,7 +49,7 @@ for moduleDir in "$OUT_DIR"/*/; do
         # Fetch the latest version from the WebResto API
         log_info "Checking for updates for module $appId..."
         CHANNEL=main
-        if [[ "$STAGING" == "1" ]]; then
+        if [[ "$(parse_boolean "$STAGING")" == "true" ]]; then
           CHANNEL="staging"
         fi
         response=$(curl -s "https://marketplace.restoapp.org/getModuleDetails?appId=$appId&license=$WEBRESTO_LICENSE&channel=$CHANNEL")
@@ -84,7 +84,7 @@ for moduleDir in "$OUT_DIR"/*/; do
         # Install module
         log_info "Installing module $appId..."
 
-        if [[ "$STAGING" == "1" ]]; then
+        if [[ "$(parse_boolean "$STAGING")" == "true" ]]; then
           webresto install "$appId" -c "staging"
         else
           webresto install "$appId" 

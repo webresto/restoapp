@@ -54,13 +54,13 @@ if [[ -f "$WR_MODULES_LIST_FILE" ]]; then
             fi
 
             # Remove existing module directory if WR_FORCE_MODULE_REINSTALL is set and directory is not empty
-            if [[ ! -z "${WR_FORCE_MODULE_REINSTALL}" && -d "$OUT_DIR/$module" ]]; then
+            if [[ "$(parse_boolean "$WR_FORCE_MODULE_REINSTALL")" == "true" && -d "$OUT_DIR/$module" ]]; then
                 log_info "WR_FORCE_MODULE_REINSTALL set - removing existing module directory for $module"
                 rm -rf "$OUT_DIR/$module"
             fi
 
 
-            if [[ -d "$OUT_DIR/$module" && ( ( ! -z "${WR_AUTOUPDATE_MODULES}" && "${WR_AUTOUPDATE_MODULES}" != "0" ) || "$NODE_ENV" != "production" ) ]]; then
+            if [[ -d "$OUT_DIR/$module" && ( "$(parse_boolean "$WR_AUTOUPDATE_MODULES")" == "true" || "$NODE_ENV" != "production" ) ]]; then
                 log_info "Module $module exists - checking marketplace for updates"
                 latestVersion=$(curl -s "https://marketplace.restoapp.org/getModuleDetails?appId=$module&license=$WEBRESTO_LICENSE" | jq -r '.latestVersion')
                 currentVersion=$(jq -r '.version' "$OUT_DIR/$module/package.json")
@@ -74,9 +74,9 @@ if [[ -f "$WR_MODULES_LIST_FILE" ]]; then
                 fi
             fi
             
-            if [[ ! -d "$OUT_DIR/$module" || (! -z "${WR_DISABLE_MODULE_EXIST_CHECK}" && -z "$(ls -A "$OUT_DIR/$module")") ]]; then
+            if [[ ! -d "$OUT_DIR/$module" || ("$(parse_boolean "$WR_DISABLE_MODULE_EXIST_CHECK")" == "true" && -z "$(ls -A "$OUT_DIR/$module")") ]]; then
                 log_info "Installing module: $module"
-                if [[ "$STAGING" == "1" ]]; then
+        if [[ "$(parse_boolean "$STAGING")" == "true" ]]; then
                     webresto install "$module" -c "staging"
                 else
                     webresto install "$module"

@@ -247,17 +247,17 @@ let Model = {
         }
         // convert some values for boolean type
         if (settingType === "boolean") {
-            if (["yes", "YES", "Yes", "1", "true", "TRUE", "True"].includes(`${settingsSetInput.value}`)) {
-                settingsSetInput.value = true;
+            if (settingsSetInput.value !== undefined) {
+                const parsedValue = settingsHelper_1.default.parseBoolean(`${settingsSetInput.value}`);
+                if (parsedValue !== undefined) {
+                    settingsSetInput.value = parsedValue;
+                }
             }
-            else if (["no", "NO", "No", "0", "false", "FALSE", "False"].includes(`${settingsSetInput.value}`)) {
-                settingsSetInput.value = false;
-            }
-            if (["yes", "YES", "Yes", "1", "true", "TRUE", "True"].includes(`${settingsSetInput.defaultValue}`)) {
-                settingsSetInput.defaultValue = true;
-            }
-            else if (["no", "NO", "No", "0", "false", "FALSE", "False"].includes(`${settingsSetInput.defaultValue}`)) {
-                settingsSetInput.defaultValue = false;
+            if (settingsSetInput.defaultValue !== undefined) {
+                const parsedDefaultValue = settingsHelper_1.default.parseBoolean(`${settingsSetInput.defaultValue}`);
+                if (parsedDefaultValue !== undefined) {
+                    settingsSetInput.defaultValue = parsedDefaultValue;
+                }
             }
         }
         // check that value and defaultValue match the schema for json type (if !ALLOW_UNSAFE_SETTINGS)
@@ -336,7 +336,8 @@ let Model = {
         }
         // For ALLOW_UNSAFE_SETTINGS, we know it's boolean
         if (key === "ALLOW_UNSAFE_SETTINGS") {
-            return ["yes", "YES", "Yes", "1", "true", "TRUE", "True"].includes(envValue);
+            const parsed = settingsHelper_1.default.parseBoolean(envValue);
+            return parsed !== undefined ? parsed : false;
         }
         // For other keys, try to parse as JSON, fallback to string
         try {

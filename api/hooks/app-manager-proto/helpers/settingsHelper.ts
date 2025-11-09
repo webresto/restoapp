@@ -113,4 +113,20 @@ export default class SettingsHelper {
 
 		return settingsProcessedInCustomSteps;
 	}
+
+	public static parseBoolean(value: string | undefined): boolean | undefined {
+		if (value === undefined || value === null || value === '') {
+			return undefined;
+		}
+		const trueValues = ["yes", "YES", "Yes", "1", "true", "TRUE", "True"];
+		const falseValues = ["no", "NO", "No", "0", "false", "FALSE", "False"];
+		if (trueValues.includes(value)) {
+			return true;
+		}
+		if (falseValues.includes(value)) {
+			return false;
+		}
+		// по умолчанию false, если не пустое но не соответствует
+		return false;
+	}
 }

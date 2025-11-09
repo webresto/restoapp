@@ -31,3 +31,30 @@ log_debug() { _helper_log DEBUG "$*"; }
 log_info()  { _helper_log INFO "$*"; }
 log_warn()  { _helper_log WARN "$*"; }
 log_error() { _helper_log ERROR "$*"; }
+
+# Parse boolean value from string
+# Returns "true" or "false"
+# Empty values are treated as false
+parse_boolean() {
+    local value="$1"
+    if [[ -z "$value" ]]; then
+        echo "false"
+        return
+    fi
+    local true_values=("yes" "YES" "Yes" "1" "true" "TRUE" "True")
+    local false_values=("no" "NO" "No" "0" "false" "FALSE" "False")
+    for tv in "${true_values[@]}"; do
+        if [[ "$value" == "$tv" ]]; then
+            echo "true"
+            return
+        fi
+    done
+    for fv in "${false_values[@]}"; do
+        if [[ "$value" == "$fv" ]]; then
+            echo "false"
+            return
+        fi
+    done
+    # Default to false if not recognized
+    echo "false"
+}

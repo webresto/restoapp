@@ -20,7 +20,7 @@ if [ "$1" = 'start' ]; then
     export DOCKER_REGISTRY=${DOCKER_REGISTRY:-webresto}
     # update DOCKER_IMAGE env
     /app/.ci/utils/set_env DOCKER_IMAGE "${DOCKER_REGISTRY}/restoapp:commit-${COMMIT_HASH}" "/app/.env"
-    if [ "$SKIP_NGINX" != "true" ]; then
+    if [[ "$(parse_boolean "$SKIP_NGINX")" != "true" ]]; then
         log_info "SKIP_NGINX is '$SKIP_NGINX' - will attempt to start nginx"
         if [ -x "$(command -v nginx)" ]; then
             # Start Nginx in the background
@@ -123,7 +123,7 @@ fi
 
 # Update webresto modules
 log_info "Checking MODULES_AUTO_UPDATE ('$MODULES_AUTO_UPDATE')"
-if [[ ! -z "$MODULES_AUTO_UPDATE" ]]; then
+if [[ "$(parse_boolean "$MODULES_AUTO_UPDATE")" == "true" ]]; then
     log_info "MODULES_AUTO_UPDATE set - updating webresto modules"
     /app/.ci/utils/update_webresto_dependencies /app/modules $WEBRESTO_LICENSE
 else
@@ -135,7 +135,7 @@ fi
 cd /app
 
 log_info "Checking DROPFILE_INIT ('$DROPFILE_INIT')"
-if [[ ! -z "$DROPFILE_INIT" ]]; then
+if [[ "$(parse_boolean "$DROPFILE_INIT")" == "true" ]]; then
     log_info "DROPFILE_INIT set - creating ./.tmp/dropfile"
     mkdir -p ./.tmp && touch ./.tmp/dropfile
 else
@@ -165,6 +165,7 @@ if [[ "${DATASTORE}" == "postgres" ]]; then
     export PG_USER=${PG_USER:-postgres}
     export PG_DATABASE=${PG_DATABASE:-postgres}
     export PG_PASSWORD=${PG_PASSWORD:-postgres}
+    export PGOPTIONS='-c search_path=public'
 
     # install client
     log_info "Checking for 'pg_dump' availability"
@@ -198,7 +199,7 @@ if [[ "${DATASTORE}" == "postgres" ]]; then
     }
 
     log_info "Checking POSTGRES_BACKUP ('$POSTGRES_BACKUP')"
-    if [[ "$POSTGRES_BACKUP" != "FALSE" ]]; then
+    if [[ "$(parse_boolean "$POSTGRES_BACKUP")" == "true" ]]; then
         log_info "POSTGRES_BACKUP enabled - will attempt backup/restore operations"
         wait_for_database
 
@@ -235,7 +236,7 @@ if [[ "${DATASTORE}" == "postgres" ]]; then
 
 
     log_info "Checking MIGRATIONS_PATH ('$MIGRATIONS_PATH')"
-    if [[ "$MIGRATIONS_PATH" != "FALSE" ]]; then
+    if [[ "$(parse_boolean "$MIGRATIONS_PATH")" == "true" ]]; then
         log_info "MIGRATIONS_PATH enabled - collecting migration files"
         # Migrations
         export MIGRATIONS_PATH="/app/@webresto/**/migrations:/app/modules/**/migrations:$MIGRATIONS_PATH"
@@ -260,9 +261,10 @@ if [[ "${DATASTORE}" == "postgres" ]]; then
     fi
     
     log_info "Checking AUTO_MIGRATION ('$AUTO_MIGRATION')"
-    if [[ "$AUTO_MIGRATION" == "TRUE" ]]; then
+    if [[ "$(parse_boolean "$AUTO_MIGRATION")" == "true" ]]; then
         log_info "AUTO_MIGRATION is TRUE - waiting for DB and running migrations"
         wait_for_database
+        
         npm run migrate
     else
         log_info "AUTO_MIGRATION not enabled - skipping automatic migration"
