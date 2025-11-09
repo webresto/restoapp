@@ -165,7 +165,6 @@ if [[ "${DATASTORE}" == "postgres" ]]; then
     export PG_USER=${PG_USER:-postgres}
     export PG_DATABASE=${PG_DATABASE:-postgres}
     export PG_PASSWORD=${PG_PASSWORD:-postgres}
-    export PGOPTIONS='-c search_path=public'
 
     # install client
     log_info "Checking for 'pg_dump' availability"
@@ -271,6 +270,7 @@ if [[ "${DATASTORE}" == "postgres" ]]; then
           ALTER DATABASE "$PG_DATABASE" SET search_path TO public;
 EOSQL
         
+        log_info "Running database migrations"
         if npm run migrate; then
             log_info "Migrations completed successfully"
         else
