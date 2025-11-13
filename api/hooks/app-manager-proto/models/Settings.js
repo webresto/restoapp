@@ -59,11 +59,9 @@ let Model = {
         // if (setting.readOnly && setting.value !== null) {
         // 	cb(`Settings error: Setting [${record.key}] cannot be changed (read only)`);
         // }
-        delete record.key;
-        /// ??? for what need this code?
-        // if (record.module) {
-        // 	cb("Settings error: Can not change record.module. Delete and create new setting instead");
-        // }
+        if (record.key) {
+            record.key = record.key.replace(/ /g, '_');
+        }
         cb();
     },
     afterUpdate: async function (record, cb) {

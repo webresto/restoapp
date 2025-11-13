@@ -20,10 +20,6 @@ let attributes = {
     isDeleted: "boolean",
     directoryName: "string",
     repository: "string", // repository id where module was downloaded
-    settings: {
-        collection: "settings",
-        via: "module"
-    },
     dependents: {
         collection: "module",
         via: "dependencies"
