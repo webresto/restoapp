@@ -40,9 +40,6 @@ let attributes = {
         type: "boolean",
         allowNull: true
     },
-    module: {
-        model: "module"
-    },
     isRequired: {
         type: "boolean",
         allowNull: true
@@ -83,10 +80,10 @@ let Model = {
         }
         settings[record.key] = cleanValue(record.value ?? record.defaultValue ?? undefined);
         // enable/disable flag hasUnfilledSettings
-        if (record.module) {
-            let moduleId = record.module;
-            await moduleHelper_1.default.checkSettings(moduleId);
-        }
+        // if (record.module) {
+        //     let moduleId = record.module;
+        //     await moduleHelper_1.default.checkSettings(moduleId);
+        // }
         cb();
     },
     afterCreate: async function (record, cb) {
@@ -103,10 +100,10 @@ let Model = {
         }
         settings[record.key] = cleanValue(record.value ?? record.defaultValue ?? undefined);
         // enable/disable flag hasUnfilledSettings
-        if (record.module) {
-            let moduleId = record.module;
-            await moduleHelper_1.default.checkSettings(moduleId);
-        }
+        // if (record.module) {
+        //     let moduleId = record.module;
+        //     await moduleHelper_1.default.checkSettings(moduleId);
+        // }
         cb();
     },
     /** return setting value by unique key */
@@ -149,13 +146,13 @@ let Model = {
             return cleanValue(value);
         }
         /** Variable present in sails config */
-        if (setting && setting.module) {
-            let appId = setting.module;
-            if (sails.config[appId] && sails.config[appId][key]) {
-                value = sails.config[appId][key];
-                return cleanValue(value);
-            }
-        }
+        // if (setting && setting.module) {
+        //     let appId = setting.module;
+        //     if (sails.config[appId] && sails.config[appId][key]) {
+        //         value = sails.config[appId][key];
+        //         return cleanValue(value);
+        //     }
+        // }
         sails.log.silly(`Settings: [${key}] not found`);
         return undefined;
     },
@@ -297,7 +294,6 @@ let Model = {
                 return await Settings.create({
                     key: key,
                     type: settingType,
-                    module: settingsSetInput.appId || null,
                     jsonSchema: settingsSetInput.jsonSchema,
                     name: settingsSetInput.name,
                     value: inputValue,
