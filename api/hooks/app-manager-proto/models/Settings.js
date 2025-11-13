@@ -40,9 +40,10 @@ let attributes = {
         type: "boolean",
         allowNull: true
     },
-    module: {
-        model: "module"
-    },
+    // Deprecated for next app-manager-proto compatibility with adminizer
+    // module: {
+    //     model: "module"
+    // },
     isRequired: {
         type: "boolean",
         allowNull: true
