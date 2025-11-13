@@ -18,7 +18,6 @@ let models = {
       jsonSchema: "JSON Schema",
       readOnly: "Read only",
       uiSchema: "UI Schema",
-      module: "Module",
       createdAt: false,
       updatedAt: false,
       isRequired: "Is required"
