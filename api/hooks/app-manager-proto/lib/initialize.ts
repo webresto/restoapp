@@ -9,7 +9,6 @@ import ModuleHelper from "../helpers/moduleHelper";
 import bindAccessRights from "./bindAccessRights";
 import MigrationsHelper from "../helpers/migrationsHelper";
 import SettingsStepGenerator from "./settingsInstallStepper/settingsStepGenerator";
-import Module from "../models/Module";
 import SettingsHelper from "../helpers/settingsHelper";
 import Ajv from "ajv";
 import bindAdminpanelConfig from "./bindAdminpanelConfig";
@@ -113,11 +112,19 @@ export default function ToInitialize(sails: any) {
 				 * 	2. Corrupted settings (failed JSON schema validation) - applicable only to system modules and enabled modules.
 				 * */
 				//@ts-ignore
-				let allSettings = await Settings.find({ module: { '!=': null }, key: { 'nin': settingsProcessedInCustomSteps } }).populate("module");
+				let allSettings = await Settings.find({ module: { '!=': null }, key: { 'nin': settingsProcessedInCustomSteps } });
 				if (allSettings && allSettings.length) {
 					let settingsToBeFilled = [];
 					for await (const item of allSettings) {
-						let itemModule = item.module as Module;
+						// item.module is now a string (appId), not a Module object
+						let moduleAppId = item.module as string;
+						if (!moduleAppId) {
+							continue;
+						}
+
+						// Find the module by appId
+						//@ts-ignore - Module is a global Sails model
+						let itemModule = await Module.findOne({ appId: moduleAppId });
 						if (!itemModule) {
 							continue;
 						}

@@ -22,10 +22,15 @@ module.exports.adminpanel = {
     autoloadWidgetsPath1: "api/dashboard",
     defaultWidgets: [
       // TODO: after mogration to adminizer need update these widgets
-      // 'dish-count', 
+      // 'dish-count',
       // 'order-count'
     ]
   },
   mediamanager: false,
-  policies: []
+  policies: [],
+  aiAssistant: {
+    enabled: (process.env.ENABLE_AI_ASSISTANT ?? "true") === 'true' && Boolean(process.env.OPENAI_API_KEY || process.env.ADMINIZER_OPENAI_KEY),
+    defaultModel: 'openai-data',
+    models: ['openai-data'],
+  },
 };

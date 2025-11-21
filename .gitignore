@@ -51,3 +51,5 @@ adminizer
 .pnp.cjs
 .gitignore
 .pnp.loader.mjs
+adminizer_code
+.env
