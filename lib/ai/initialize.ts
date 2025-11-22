@@ -29,7 +29,7 @@ export async function initializeAiAgent(): Promise<void> {
       return;
     }
 
-    sails.log.info('[AI Agent] Initializing OpenAI Data Agent...');
+    sails.log.debug('[AI Agent] Initializing OpenAI Data Agent...');
 
     // Create AI agent instance
     aiAgent = new OpenAiDataAgentService(sails.hooks.adminpanel.adminizer);
@@ -43,7 +43,7 @@ export async function initializeAiAgent(): Promise<void> {
     // @ts-ignore
     global.aiAgent = aiAgent;
 
-    sails.log.info('[AI Agent] Successfully initialized and ready');
+    sails.log.debug('[AI Agent] Successfully initialized and ready');
 
   } catch (error) {
     sails.log.error('[AI Agent] Initialization error:', error);

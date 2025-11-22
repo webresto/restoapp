@@ -74,6 +74,7 @@ module.exports.bootstrap = async function (cb) {
     }
   }
   
+  initializeAiAgent()
   ////////////////////////////////////////////////////////////////////////////
 
   /**
@@ -238,7 +239,6 @@ module.exports.bootstrap = async function (cb) {
   }
 
   process.env.TZ = (await Settings.use("timezone")) ? await Settings.use("timezone") : process.env.TZ;
-  initializeAiAgent()
   cb();
 };
 
