@@ -41,8 +41,8 @@ modules/*
 patches
 config/locales/*
 
-api/bootstrap/*
-!api/bootstrap/.gitkeep
+# api/bootstrap/*
+# !api/bootstrap/.gitkeep
 .sailsrc
 config/locales/en.json
 installStepper/uploadedImages
