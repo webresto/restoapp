@@ -5,7 +5,10 @@ import {
     tool,
     setDefaultOpenAIKey,
     RunContext,
+    setDefaultOpenAIClient,
 } from '@openai/agents';
+import OpenAI from 'openai';
+import { HttpsProxyAgent } from 'https-proxy-agent';
 import {AbstractAiModelService} from 'adminizer';
 import {AiAssistantMessage, Entity} from 'adminizer';
 import {ModelConfig} from 'adminizer';
@@ -32,7 +35,17 @@ export class OpenAiDataAgentService extends AbstractAiModelService {
         this.model = process.env.OPENAI_AGENT_MODEL ?? 'gpt-4.1-mini';
 
         if (this.apiKey) {
-            setDefaultOpenAIKey(this.apiKey);
+            const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
+            const openaiUrl = process.env.OPENAI_URL;
+            const clientConfig: any = { apiKey: this.apiKey };
+            if (openaiUrl) {
+                clientConfig.baseURL = openaiUrl;
+            }
+            if (proxyUrl) {
+                clientConfig.httpAgent = new HttpsProxyAgent(proxyUrl);
+            }
+            const client = new OpenAI(clientConfig);
+            setDefaultOpenAIClient(client);
         } else {
             Adminizer.log.warn('[OpenAiDataAgentService] OPENAI_API_KEY is not configured; the agent will remain inactive.');
         }
