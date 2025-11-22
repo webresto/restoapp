@@ -25,7 +25,6 @@ const paymentMethodSeed = [
 
 const fs = require("fs");
 const path = require("path");
-const { initializeAiAgent } = require("../lib/ai/initialize");
 
 module.exports.bootstrap = async function (cb) {
   sails.config.paths.app = process.cwd();
@@ -74,7 +73,6 @@ module.exports.bootstrap = async function (cb) {
     }
   }
   
-  initializeAiAgent()
   ////////////////////////////////////////////////////////////////////////////
 
   /**
