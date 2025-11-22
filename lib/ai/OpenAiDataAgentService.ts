@@ -11,7 +11,7 @@ import {AbstractAiModelService} from 'adminizer';
 import {AiAssistantMessage, Entity} from 'adminizer';
 import {ModelConfig} from 'adminizer';
 import {Adminizer} from 'adminizer';
-import {DataAccessor} from 'adminizer/lib/DataAccessor.js';
+import {DataAccessor} from 'adminizer';
 import {UserAP} from 'adminizer';
 
 interface AgentContext {
