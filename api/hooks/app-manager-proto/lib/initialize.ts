@@ -112,7 +112,7 @@ export default function ToInitialize(sails: any) {
 				 * 	2. Corrupted settings (failed JSON schema validation) - applicable only to system modules and enabled modules.
 				 * */
 				//@ts-ignore
-				let allSettings = await Settings.find({ module: { '!=': null }, key: { 'nin': settingsProcessedInCustomSteps } });
+				let allSettings = await Settings.find({ key: { 'nin': settingsProcessedInCustomSteps } });
 				if (allSettings && allSettings.length) {
 					let settingsToBeFilled = [];
 					for await (const item of allSettings) {

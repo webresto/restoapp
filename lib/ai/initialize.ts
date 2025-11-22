@@ -23,6 +23,12 @@ export async function initializeAiAgent(): Promise<void> {
       return;
     }
 
+    // Check if adminpanel is loaded
+    if (!sails.hooks.adminpanel?.adminizer) {
+      sails.log.info('[AI Agent] Skipped: Adminpanel not loaded yet');
+      return;
+    }
+
     sails.log.info('[AI Agent] Initializing OpenAI Data Agent...');
 
     // Create AI agent instance

@@ -192,7 +192,7 @@ export async function loadModule(modulePath: string, repository?: string): Promi
   validModule["isSystemModule"] = systemModuleList.includes(appId);
 
   // write data in Module model
-  let moduleFromDB = await Module.findOne({appId: appId}).populate("settings");
+  let moduleFromDB = await Module.findOne({appId: appId});
   if (!moduleFromDB) {
     // creating record for installed module or database drop
     let modulesToEnable = process.env.INIT_MODULES_TO_ENABLE ? process.env.INIT_MODULES_TO_ENABLE.split(";") : [];
@@ -208,11 +208,11 @@ export async function loadModule(modulePath: string, repository?: string): Promi
       directoryName: path.basename(modulePath), dependencies: Object.keys(mmDependencies), hookName: hookName,
       ...systemModuleList.includes(appId) && {enable: true}
     }).fetch();
-    moduleFromDB = await Module.findOne({appId: appId}).populate("settings");
+    moduleFromDB = await Module.findOne({appId: appId});
   }
 
-  let moduleSettings = moduleFromDB.settings as Settings[];
-  let hasUnfilledSettings = moduleSettings && moduleSettings.find(item => item.value === null && item.defaultValue === null && item.isRequired === true);
+  let moduleSettings: Settings[] = [];
+  let hasUnfilledSettings = false;
   if (hasUnfilledSettings) {
     validModule["hasUnfilledSettings"] = true;
   }
@@ -224,7 +224,7 @@ export async function loadModule(modulePath: string, repository?: string): Promi
     if (moduleFromDB.enable && !systemModuleList.includes(appId) && moduleFromDB.migrationsCount !== migrationsCount) {
       sails.log.warn(`Module ${appId} was disabled due to unprocessed migrations`)
       await Module.update({appId: appId}, {enable: false}).fetch();
-			moduleFromDB = await Module.findOne({appId: appId}).populate("settings");
+			moduleFromDB = await Module.findOne({appId: appId});
     }
   }
 
