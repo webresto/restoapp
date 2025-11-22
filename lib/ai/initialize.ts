@@ -16,7 +16,7 @@ let aiAgent: OpenAiDataAgentService | null = null;
 export async function initializeAiAgent(): Promise<void> {
   try {
     // Check if AI is enabled
-    const aiEnabled = process.env.AI_ENABLED === 'true' || process.env.OPENAI_API_KEY;
+    const aiEnabled = process.env.AI_ENABLED === 'true' || process.env.OPENAI_API_KEY !== undefined;
 
     if (!aiEnabled) {
       sails.log.info('[AI Agent] Skipped: AI_ENABLED is not true or OPENAI_API_KEY is missing');
