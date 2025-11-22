@@ -116,49 +116,31 @@ export default function ToInitialize(sails: any) {
 				if (allSettings && allSettings.length) {
 					let settingsToBeFilled = [];
 					for await (const item of allSettings) {
-						// item.module is now a string (appId), not a Module object
-						let moduleAppId = item.module as string;
-						if (!moduleAppId) {
+						// Check for settings that need to be filled
+						if (item.value === null && item.defaultValue === null && item.isRequired === true) {
+							sails.log.debug("Setting to be filled in initialize", item.key);
+							settingsToBeFilled.push(item);
 							continue;
 						}
 
-						// Find the module by appId
-						//@ts-ignore - Module is a global Sails model
-						let itemModule = await Module.findOne({ appId: moduleAppId });
-						if (!itemModule) {
-							continue;
-						}
+						// Check for corrupted settings
+						if (false && item.jsonSchema !== null && !Settings.env("ALLOW_UNSAFE_SETTINGS")) {
+							const ajv = new Ajv();
+							const validate = ajv.compile(item.jsonSchema);
 
-						// Check if the setting belongs to a system module or is enabled
-						let systemModuleList = ModuleHelper.getSystemModuleList();
-						if (systemModuleList.includes(itemModule.appId) || itemModule.enable === true) {
+							if (!validate(item.value) && item.isRequired && !item.defaultValue) {
+								if (item.value !== null) {
+									sails.log.warn(`Settings value is corrupted for key [${item.key}]`);
 
-							// Check for settings that need to be filled
-							if (item.value === null && item.defaultValue === null && item.isRequired === true) {
-								sails.log.debug("Setting to be filled in initialize", item.key);
-								settingsToBeFilled.push(item);
-								continue;
-							}
+									settingsToBeFilled.push(item);
 
-							// Check for corrupted settings
-							if (false && item.jsonSchema !== null && !Settings.env("ALLOW_UNSAFE_SETTINGS")) {
-								const ajv = new Ajv();
-								const validate = ajv.compile(item.jsonSchema);
-
-								if (!validate(item.value) && item.isRequired && !item.defaultValue) {
-									if (item.value !== null) {
-										sails.log.warn(`Settings value is corrupted for key [${item.key}]`);
-
-										settingsToBeFilled.push(item);
-
-									} else {
-										sails.log.warn(`111 222 AJV Validation Error for setting ${item.key}: Value or defaultValue does not match the schema`);
-										settingsToBeFilled.push(item);
-									}
-									sails.log.debug(`Setting`, item, "\nErrors", JSON.stringify(validate.errors, null, 2));
-								} else if (!validate(item.value)) {
-									sails.log.silly(`Settings value is corrupted for key [${item.key}]. Skipped creating install step because setting is not required`);
+								} else {
+									sails.log.warn(`111 222 AJV Validation Error for setting ${item.key}: Value or defaultValue does not match the schema`);
+									settingsToBeFilled.push(item);
 								}
+								sails.log.debug(`Setting`, item, "\nErrors", JSON.stringify(validate.errors, null, 2));
+							} else if (!validate(item.value)) {
+								sails.log.silly(`Settings value is corrupted for key [${item.key}]. Skipped creating install step because setting is not required`);
 							}
 						}
 					}

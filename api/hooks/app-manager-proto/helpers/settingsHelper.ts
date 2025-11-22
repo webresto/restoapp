@@ -75,9 +75,9 @@ export default class SettingsHelper {
 			}
 
 			// create runtime hasUnfilledSettings for all modules if needed
-			let moduleFromDB = await Module.findOne({appId: appId}).populate("settings");
-			let moduleSettings = moduleFromDB.settings as Settings[];
-			let hasUnfilledSettings = moduleSettings && moduleSettings.find(item => item.value === null && item.defaultValue === null && item.isRequired === true);
+			let moduleFromDB = await Module.findOne({appId: appId});
+			let moduleSettings: Settings[] = [];
+			let hasUnfilledSettings = false;
 			if (hasUnfilledSettings) {
 				let updatedModule = {...module, hasUnfilledSettings: true};
 				ModuleHelper.addModule(appId, updatedModule)
