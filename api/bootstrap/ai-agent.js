@@ -21,7 +21,7 @@ module.exports.default = async function (sails) {
       sails.log.info('Bootstrap > Registering OpenAI Data Agent...');
 
       // Dynamic import to avoid loading OpenAI dependencies when AI assistant is disabled
-      const {OpenAiDataAgentService} = await import('../../lib/ai/OpenAiDataAgentService.ts');
+      const {OpenAiDataAgentService} = require('../../lib/ai/OpenAiDataAgentService');
       const openAiAgent = new OpenAiDataAgentService(adminizer);
 
       if (openAiAgent.isEnabled()) {
