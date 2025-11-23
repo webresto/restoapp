@@ -28,10 +28,19 @@ WORKDIR /app
 FROM base AS cacher_modules
 RUN apk add git python3 build-base
 WORKDIR /app
+
+# Copy dependency files first for better layer caching
+COPY package.json yarn.lock .yarnrc.yml* ./
+COPY local_modules/core/package.json ./local_modules/core/
+COPY local_modules/graphql/package.json ./local_modules/graphql/
+
+# Configure Yarn and install dependencies using lock file
+RUN echo "nodeLinker: node-modules" > .yarnrc.yml
+RUN yarn set version berry || true
+RUN yarn install --immutable --production
+
+# Copy the rest of the application
 COPY . .
- RUN echo "nodeLinker: node-modules" > .yarnrc.yml
- RUN yarn set version berry || true
- RUN yarn workspaces focus --production
 
 ###################################
 #### BASE MODULES PREPARE 
