@@ -1,0 +1,27 @@
+#!/bin/bash
+
+# Utility to update maintenance.html with current bootstrap status
+# Usage: update_maintenance_status "status_message"
+
+MAINTENANCE_FILE="${MAINTENANCE_FILE:-/var/lib/html/maintenance.html}"
+STATUS_MESSAGE="${1:-Loading application...}"
+
+# Function to update the status message in maintenance.html
+update_status() {
+    local message="$1"
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    
+    if [ -f "$MAINTENANCE_FILE" ]; then
+        # Escape special characters for sed
+        local escaped_message=$(echo "$message" | sed 's/[&/\]/\\&/g')
+        
+        # Update the loading text in the HTML file
+        sed -i "s/<p class=\"info\" id=\"loadingText\">.*<\/p>/<p class=\"info\" id=\"loadingText\">${escaped_message}<\/p>/" "$MAINTENANCE_FILE"
+        
+        echo "$(date '+%Y-%m-%d %H:%M:%S') INFO: Updated maintenance status: ${message}" >&2
+    else
+        echo "$(date '+%Y-%m-%d %H:%M:%S') WARN: Maintenance file not found at ${MAINTENANCE_FILE}" >&2
+    fi
+}
+
+update_status "$STATUS_MESSAGE"

@@ -98,7 +98,6 @@ RUN npm i -g pm2 tsx typescript
 COPY .ci/config/nginx.conf /etc/nginx/nginx.conf
 COPY .ci/config/maintenance.html /var/lib/html/maintenance.html
 
-
 ENV WEBRESTO_MODULES_PATH=/app/modules
 
 WORKDIR /app
