@@ -15,8 +15,8 @@ update_status() {
         # Escape special characters for sed
         local escaped_message=$(echo "$message" | sed 's/[&/\]/\\&/g')
         
-        # Update the loading text in the HTML file
-        sed -i "s/<p class=\"info\" id=\"loadingText\">.*<\/p>/<p class=\"info\" id=\"loadingText\">${escaped_message}<\/p>/" "$MAINTENANCE_FILE"
+        # Update the loading text in the HTML file (span element inside p tag)
+        sed -i "s/<span id=\"loadingText\">[^<]*<\/span>/<span id=\"loadingText\">${escaped_message}<\/span>/" "$MAINTENANCE_FILE"
         
         echo "$(date '+%Y-%m-%d %H:%M:%S') INFO: Updated maintenance status: ${message}" >&2
     else
