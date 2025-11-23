@@ -91,19 +91,19 @@
   
   
   <div class="company-logo-container">
-    <p class="info" id="loadingText">Loading</p>
+    <p class="info"><span id="loadingText">Loading</span><span id="loadingDots"></span></p>
   </div>
   
   <script>
     var dotsCount = 0;
   
     function addDot() {
-      var loadingText = document.getElementById("loadingText");
+      var dotsElement = document.getElementById("loadingDots");
       if (dotsCount < 3) {
-        loadingText.innerHTML += ".";
+        dotsElement.innerHTML = ".".repeat(dotsCount + 1);
         dotsCount++;
       } else {
-        loadingText.innerHTML = "Loading";
+        dotsElement.innerHTML = "";
         dotsCount = 0;
       }
     }
