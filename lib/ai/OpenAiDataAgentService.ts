@@ -6,9 +6,10 @@ import {
     setDefaultOpenAIKey,
     RunContext,
     setDefaultOpenAIClient,
+    setTracingExportApiKey,
+    setOpenAIAPI,
 } from '@openai/agents';
 import OpenAI from 'openai';
-import { HttpsProxyAgent } from 'https-proxy-agent';
 import {AbstractAiModelService} from 'adminizer';
 import {AiAssistantMessage, Entity} from 'adminizer';
 import {ModelConfig} from 'adminizer';
@@ -23,6 +24,7 @@ interface AgentContext {
 export class OpenAiDataAgentService extends AbstractAiModelService {
     private readonly apiKey?: string;
     private readonly model: string;
+    private readonly client?: OpenAI;
 
     constructor(adminizer: Adminizer) {
         super(adminizer, {
@@ -35,17 +37,18 @@ export class OpenAiDataAgentService extends AbstractAiModelService {
         this.model = process.env.OPENAI_AGENT_MODEL ?? 'gpt-4.1-mini';
 
         if (this.apiKey) {
-            const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
             const openaiUrl = process.env.OPENAI_URL;
             const clientConfig: any = { apiKey: this.apiKey };
             if (openaiUrl) {
                 clientConfig.baseURL = openaiUrl;
+                Adminizer.log.info(`[OpenAiDataAgentService] Using custom OpenAI URL: ${openaiUrl}`);
             }
-            if (proxyUrl) {
-                clientConfig.httpAgent = new HttpsProxyAgent(proxyUrl);
-            }
-            const client = new OpenAI(clientConfig);
-            setDefaultOpenAIClient(client);
+            this.client = new OpenAI(clientConfig);
+            setDefaultOpenAIClient(this.client);
+            // Используем Chat Completions API вместо Responses API
+            setOpenAIAPI('chat_completions');
+            // Отключаем трейсинг, устанавливая пустой ключ
+            setTracingExportApiKey('');
         } else {
             Adminizer.log.warn('[OpenAiDataAgentService] OPENAI_API_KEY is not configured; the agent will remain inactive.');
         }
@@ -67,6 +70,7 @@ export class OpenAiDataAgentService extends AbstractAiModelService {
         try {
             const agent = this.createAgent(user);
             const conversation = this.toAgentInput(history);
+            
             const result = await run(agent, conversation.length > 0 ? conversation : prompt, {
                 context: {user},
                 maxTurns: 6,
@@ -75,8 +79,11 @@ export class OpenAiDataAgentService extends AbstractAiModelService {
             return typeof result.finalOutput === 'string'
                 ? result.finalOutput
                 : 'The agent finished without returning a message.';
-        } catch (error) {
-            Adminizer.log.error('[OpenAiDataAgentService] Failed to generate reply', error);
+        } catch (error: any) {
+            Adminizer.log.error('[OpenAiDataAgentService] Failed to generate reply', error?.message || error);
+            if (error?.stack) {
+                Adminizer.log.debug('[OpenAiDataAgentService] Error stack:', error.stack);
+            }
             return 'I encountered an error while generating a response. Please try again later.';
         }
     }
