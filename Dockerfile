@@ -108,6 +108,8 @@ RUN rm -rf ./.sailsrc && cp ./.sailsrc.default .sailsrc
 ADD ./assets ./.tmp/public/
 RUN yarn set version berry
 
+
+RUN rm -rf index.ejs && mv /app/views/maintenance.ejs /app/views/index.ejs
 RUN sed -i 's/\r$//' /app/.ci/bootstrap
 RUN sed -i 's/\r$//' /app/.ci/utils/set_env
 ENTRYPOINT ["/bin/bash","/app/.ci/bootstrap"]
