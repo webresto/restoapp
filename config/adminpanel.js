@@ -19,12 +19,8 @@ module.exports.adminpanel = {
     defaultLocale: 'en'
   },
   dashboard: {
-    autoloadWidgetsPath1: "api/dashboard",
-    defaultWidgets: [
-      // TODO: after mogration to adminizer need update these widgets
-      // 'dish-count',
-      // 'order-count'
-    ]
+    // Widgets are initialized and configured in local_modules/core/lib/adminpanel/widgets
+    // defaultWidgets will be populated by core module
   },
   mediamanager: false,
   policies: [],
