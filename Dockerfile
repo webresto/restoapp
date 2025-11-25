@@ -57,8 +57,8 @@ RUN apk add --no-cache git build-base && update-ca-certificates
 WORKDIR /app
 COPY --from=cacher_modules /app/ .
 
-# Build adminizer
-RUN cd /app/local_modules/core && yarn build:adminizer
+# Build adminizer from workspace root
+RUN yarn workspace @webresto/core run build:adminizer
 
 ###################################
 #### POSTGRES TEST
