@@ -36,6 +36,7 @@ COPY . .
 RUN echo "nodeLinker: node-modules" > .yarnrc.yml
 RUN yarn set version berry || true
 RUN yarn workspaces focus --production
+RUN rm -rf ./local_modules
 
 ###################################
 #### BASE MODULES PREPARE 
@@ -116,7 +117,7 @@ ENV WEBRESTO_MODULES_PATH=/app/modules
 WORKDIR /app
 COPY --from=cacher_modules /app/ .
 COPY --from=cacher_base_modules /app/modules ./seeds/modules
-COPY --from=cacher_core_build /app/local_modules/core/assets ./local_modules/core/assets
+COPY --from=cacher_core_build /app/local_modules/core/assets ./node_modules/@webresto/core/assets
 
 RUN rm -rf ./.sailsrc && cp ./.sailsrc.default .sailsrc
 ADD ./assets ./.tmp/public/
