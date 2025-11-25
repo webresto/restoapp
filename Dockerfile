@@ -51,6 +51,16 @@ RUN sed -i 's/\r$//' /app/.ci/utils/bake_admin_frontend
 RUN /app/.ci/utils/bake_admin_frontend
 
 ###################################
+#### WEBRESTO CORE BUILD
+FROM base AS cacher_core_build
+RUN apk add --no-cache git build-base && update-ca-certificates
+WORKDIR /app
+COPY --from=cacher_modules /app/ .
+
+# Build adminizer
+RUN cd /app/local_modules/core && yarn build:adminizer
+
+###################################
 #### POSTGRES TEST
 # FROM postgres:16-alpine AS test
 
@@ -103,6 +113,7 @@ ENV WEBRESTO_MODULES_PATH=/app/modules
 WORKDIR /app
 COPY --from=cacher_modules /app/ .
 COPY --from=cacher_base_modules /app/modules ./seeds/modules
+COPY --from=cacher_core_build /app/local_modules/core/assets ./local_modules/core/assets
 
 RUN rm -rf ./.sailsrc && cp ./.sailsrc.default .sailsrc
 ADD ./assets ./.tmp/public/
