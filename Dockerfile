@@ -56,39 +56,13 @@ RUN /app/.ci/utils/bake_admin_frontend
 FROM base AS cacher_core_build
 RUN apk add --no-cache git build-base && update-ca-certificates
 WORKDIR /app
-COPY --from=cacher_modules /app/ .
-
+COPY . .
 # Install dev dependencies for core module and build adminizer
 WORKDIR /app/local_modules/core
 RUN npm install --include=dev
 RUN npm run build:adminizer
 WORKDIR /app
 
-###################################
-#### POSTGRES TEST
-# FROM postgres:16-alpine AS test
-
-# ENV POSTGRES_PASSWORD postgres
-# ENV POSTGRES_USER postgres
-# ENV POSTGRES_DB postgres
-# ENV DATASTORE postgres
-# ENV PG_HOST localhost
-# ENV POSTGRES_BACKUP FALSE
-
-# RUN apk add --no-cache curl bash zip jq nodejs npm
-
-# # RUN npm i -g mocha
-
-# RUN mkdir -p /tmp/test && cd /tmp/test && npm i chai@4.3.6 chai-http@4.4.0 mocha
-
-# WORKDIR /app
-# COPY --from=cacher_modules /app/ .
-# COPY --from=cacher_base_modules /app/modules ./seeds/modules
-# RUN cp -r /tmp/test/node_modules/* /app/node_modules/
-# RUN sed -i 's/\r$//' /app/.ci/bootstrap
-
-# RUN bash -c "nohup docker-entrypoint.sh postgres &" && sleep 10 && bash ./.ci/bootstrap test
-# RUN rm -rf ./migrations/* .gitmodules .git
 
 ###################################
 #### RELEASE
