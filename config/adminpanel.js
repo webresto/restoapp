@@ -24,6 +24,15 @@ module.exports.adminpanel = {
   },
   mediamanager: false,
   policies: [],
+  brand: {
+    link: {
+        id: "0",
+        type: 'blank',
+        title: 'RestoApp',
+        link: 'https://restoapp.org',
+    }
+  },
+  sections: [],
   aiAssistant: {
     enabled: (process.env.ENABLE_AI_ASSISTANT ?? "true") === 'true' && Boolean(process.env.OPENAI_API_KEY || process.env.ADMINIZER_OPENAI_KEY),
     defaultModel: 'openai-data',
