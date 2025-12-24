@@ -56,7 +56,7 @@ process.env.WEB3_CONFIG_CHAIN = process.env.WEB3_CONFIG_CHAIN ?? 'mainnet';
  * if we don’t know, then we assume that this is main
  */
 const mainBranches = ['main', 'production', 'master', 'latest']
-if(process.env.BRANCH === undefined || mainBranches.includes(process.env.BRANCH)) process.env.BRANCH = 'main'
+if(mainBranches.includes(process.env.BRANCH)) process.env.BRANCH = 'main'
 
 
 
