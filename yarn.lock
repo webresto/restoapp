@@ -3178,7 +3178,7 @@ __metadata:
 
 "@webresto/core@file:./local_modules/core::locator=restoapp%40workspace%3A.":
   version: 2.4.0
-  resolution: "@webresto/core@file:./local_modules/core#./local_modules/core::hash=f86ad4&locator=restoapp%40workspace%3A."
+  resolution: "@webresto/core@file:./local_modules/core#./local_modules/core::hash=2b4b03&locator=restoapp%40workspace%3A."
   dependencies:
     "@radix-ui/react-checkbox": "npm:^1.3.3"
     "@radix-ui/react-label": "npm:^2.1.8"
@@ -3203,13 +3203,13 @@ __metadata:
     uuid: "npm:10.0.0"
   peerDependencies:
     sails-adminpanel: "*"
-  checksum: 10c0/1d5f85a520549372bb0fc58cbeedc4a88883803ec7b2d26545b74d024b74079ace13baa04be5cad4d8db21ec7fee95b45186771e87ba5678e37307a3296e1c94
+  checksum: 10c0/7e9a1f0f2eff6c1d156f05f284ab52379494d9c60b3bef6534565f90c9ed4fdddc2aafd940407414c800f39af3b105bd815f2edab0bec0103c8fafa192ea85f3
   languageName: node
   linkType: hard
 
 "@webresto/graphql@file:./local_modules/graphql::locator=restoapp%40workspace%3A.":
   version: 2.4.0
-  resolution: "@webresto/graphql@file:./local_modules/graphql#./local_modules/graphql::hash=9e5000&locator=restoapp%40workspace%3A."
+  resolution: "@webresto/graphql@file:./local_modules/graphql#./local_modules/graphql::hash=99bc13&locator=restoapp%40workspace%3A."
   dependencies:
     "@webresto/worktime": "npm:^2.2.0"
     accept-language-parser: "npm:^1.5.0"
@@ -3220,7 +3220,7 @@ __metadata:
     graphql: "npm:^15.5.0"
     jsonwebtoken: "npm:^9.0.2"
     waterline-criteria: "npm:^2.0.0"
-  checksum: 10c0/141492e0baa227a3a72f826eddcbf2fc7318fd40d7a2e60bc74a7c7dac9a64b9aab80a812fe47920a12950902b321675b2e4fbecd569d454af8d57824f654d7a
+  checksum: 10c0/2b2ba143c0484d687a574f0ddea0190fd7f07b2cd840c061e56a95c3b5534970b3ebfaac013c9ff2b397a658ec7acf6a5b05dc8845a27d3cc8876a1be4556fa0
   languageName: node
   linkType: hard
 
@@ -3327,8 +3327,8 @@ __metadata:
   linkType: hard
 
 "adminizer@npm:next":
-  version: 4.5.0-build.185
-  resolution: "adminizer@npm:4.5.0-build.185"
+  version: 4.5.0-build.186
+  resolution: "adminizer@npm:4.5.0-build.186"
   dependencies:
     "@minoru/react-dnd-treeview": "npm:^3.5.2"
     "@radix-ui/react-context-menu": "npm:^2.2.15"
