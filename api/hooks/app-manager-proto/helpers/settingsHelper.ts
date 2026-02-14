@@ -4,18 +4,13 @@ import type Settings from "../models/Settings";
 import { InstallStepper } from "../lib/installStepper/installStepper";
 
 export default class SettingsHelper {
-	private static declaredSettings: string[] = ["MODULE_STORAGE_LICENSE", "ALLOW_UNSAFE_SETTINGS"];
-
+	// Delegate to core Settings model which holds the declared settings list
 	public static setDeclaredSetting(key: string): void {
-		this.declaredSettings.push(key);
-	}
-
-	public static getDeclaredSettings(): string[] {
-		return this.declaredSettings;
+		Settings.setDeclaredSetting(key);
 	}
 
 	public static isInDeclaredSettings(key: string): boolean {
-		return this.declaredSettings.includes(key);
+		return Settings.isInDeclaredSettings(key);
 	}
 
 	public static async processSettings(appId: string) {
@@ -115,18 +110,6 @@ export default class SettingsHelper {
 	}
 
 	public static parseBoolean(value: string | undefined): boolean | undefined {
-		if (value === undefined || value === null || value === '') {
-			return undefined;
-		}
-		const trueValues = ["yes", "YES", "Yes", "1", "true", "TRUE", "True"];
-		const falseValues = ["no", "NO", "No", "0", "false", "FALSE", "False"];
-		if (trueValues.includes(value)) {
-			return true;
-		}
-		if (falseValues.includes(value)) {
-			return false;
-		}
-		// по умолчанию false, если не пустое но не соответствует
-		return false;
+		return Settings.parseBoolean(value);
 	}
 }

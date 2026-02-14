@@ -18,7 +18,8 @@ import HookTools from "./hookTools";
 
 let path = require("path");
 
-process.env.CORE_MODELS_TO_SKIP = "settings";
+// Core Settings model is used instead of MM Settings model
+// process.env.CORE_MODELS_TO_SKIP = "settings";
 
 export default function ToInitialize(sails: any) {
 	/**
@@ -56,6 +57,8 @@ export default function ToInitialize(sails: any) {
 
 			// Load models
 			let modelsToSkip = process.env.MM_MODELS_TO_SKIP !== undefined ? process.env.MM_MODELS_TO_SKIP.split(";") : [];
+			// Skip Settings model - use core Settings model instead
+			modelsToSkip.push("Settings");
 			await HookTools.bindModels(resolve(__dirname, "../models"), modelsToSkip);
 
 			// add custom views path
