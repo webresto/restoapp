@@ -1,0 +1,13 @@
+diff --git a/node_modules/sails-postgresql/helpers/register-data-store.js b/node_modules/sails-postgresql/helpers/register-data-store.js
+index c88da94..f0f9b10 100644
+--- a/node_modules/sails-postgresql/helpers/register-data-store.js
++++ b/node_modules/sails-postgresql/helpers/register-data-store.js
+@@ -110,7 +110,7 @@ module.exports = require('machine').build({
+         var primaryKeyAttr = modelDef.definition[modelDef.primaryKey];
+ 
+         // Ensure that the model's primary key has either `autoIncrement` or `required`
+-        if (primaryKeyAttr.required !== true && (!primaryKeyAttr.autoMigrations || primaryKeyAttr.autoMigrations.autoIncrement !== true)) {
++        if (false) {
+           throw flaverr('E_INVALID_PK', new Error('In model `' + modelIdentity + '`, primary key `' + modelDef.primaryKey + '` must have either `required` or `autoIncrement` set.'));
+         }
+ 

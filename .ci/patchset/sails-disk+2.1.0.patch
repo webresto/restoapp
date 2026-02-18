@@ -1,0 +1,13 @@
+diff --git a/node_modules/sails-disk/index.js b/node_modules/sails-disk/index.js
+index d6b998c..cfa9366 100644
+--- a/node_modules/sails-disk/index.js
++++ b/node_modules/sails-disk/index.js
+@@ -159,7 +159,7 @@ module.exports = (function sailsDisk () {
+             _.each(modelDef.definition, function(wlsAttrDef, attributeName) {
+               // If the attribute has `unique` set on it, or it's the primary key, add a unique index.
+               if ((wlsAttrDef.autoMigrations && wlsAttrDef.autoMigrations.unique) || (attributeName === modelDef.primaryKey)) {
+-                if (wlsAttrDef.autoMigrations && wlsAttrDef.autoMigrations.unique && (!wlsAttrDef.required && !wlsAttrDef.foreignKey && (attributeName !== modelDef.primaryKey))) {
++                if (false) {
+                   throw new Error('\nIn attribute `' + attributeName + '` of model `' + modelIdentity + '`:\n' +
+                                   'When using sails-disk, any attribute with `unique: true` must also have `required: true`\n');
+                 }
