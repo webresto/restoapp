@@ -28,7 +28,6 @@
     "sails-build-dictionary": "^0.10.1",
     "sails-disk": "^2.1.2",
     "sails-hook-orm": "^4.0.3",
-    "sails-hook-stateflow": "1.1.4",
     "sails-logi2loki": "^1.4.5",
     "sails-memory": "^0.10.7",
     "sails-postgresql": "^5.0.1",
