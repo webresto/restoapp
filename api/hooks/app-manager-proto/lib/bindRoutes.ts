@@ -77,7 +77,6 @@ export default function bindRoutes(sails: any) {
                 id: 'app-manager-proto-modules-versions',
                 title: 'Extensions',
                 link: `${routePrefix}/modules/versions`,
-                type: 'blank',
                 icon: 'extension',
                 section: 'Store'
             });
