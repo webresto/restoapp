@@ -22,7 +22,7 @@
     "openai": "^6.9.1",
     "patch-package": "^6.5.1",
     "rc": "^1.2.8",
-    "sails": "=1.5.0",
+    "sails": "1.5.11",
     "sails-adminpanel": "alpha",
     "sails-build-dictionary": "^0.10.1",
     "sails-disk": "^2.1.2",
