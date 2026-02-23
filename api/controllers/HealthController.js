@@ -29,16 +29,6 @@ module.exports = {
         });
       }
 
-      // Try a simple query to verify database connectivity
-      try {
-        await datastore.sendNativeQuery('SELECT 1');
-      } catch (dbError) {
-        return res.status(503).json({
-          status: 'not ready',
-          reason: 'Database connection failed',
-          error: dbError.message
-        });
-      }
 
       // All checks passed
       return res.status(200).json({

@@ -14,6 +14,7 @@
 
 import _processInstallStep from '../actions/processInstallStep';
 import _processInstallFinalize from '../actions/processInstallFinalize';
+import _modulesVersions from '../actions/modulesVersions';
 const _upgrade = require('../actions/upgrade');
 const _exit = require('../actions/exit');
 import multer from 'multer';
@@ -56,6 +57,30 @@ export default function bindRoutes(sails: any) {
             `${routePrefix}/modules/exit`,
             adminizer.policyManager.bindPolicies(policies, _exit)
         );
+
+        // Managed extensions versions page
+        adminizer.app.get(
+            `${routePrefix}/modules/versions`,
+            adminizer.policyManager.bindPolicies(policies, _modulesVersions)
+        );
+
+        if (!adminizer.config.navbar) {
+            adminizer.config.navbar = {};
+        }
+
+        if (!Array.isArray(adminizer.config.navbar.additionalLinks)) {
+            adminizer.config.navbar.additionalLinks = [];
+        }
+
+        if (!adminizer.config.navbar.additionalLinks.some((item: any) => item.id === 'app-manager-proto-modules-versions')) {
+            adminizer.config.navbar.additionalLinks.push({
+                id: 'app-manager-proto-modules-versions',
+                title: 'Extensions',
+                link: `${routePrefix}/modules/versions`,
+                icon: 'extension',
+                section: 'Store'
+            });
+        }
       });
   // Disable other routes due upgrade to latest sails-adminpanel  
   return

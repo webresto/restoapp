@@ -21,7 +21,18 @@ const fs = require('fs');
 
 Error.stackTraceLimit = 50;
 
-process.env.MM_SYSTEM_MODULES = `${process.cwd()}/\@webresto/core;${process.cwd()}/\@webresto/graphql`; // path from load system module outside modules folder
+const localSystemModules = [
+  `${process.cwd()}/local_modules/core`,
+  `${process.cwd()}/local_modules/graphql`,
+].filter((modulePath) => fs.existsSync(modulePath));
+
+const legacySystemModules = [
+  `${process.cwd()}/@webresto/core`,
+  `${process.cwd()}/@webresto/graphql`,
+].filter((modulePath) => fs.existsSync(modulePath));
+
+// Prefer workspace-local modules while developing; fallback to legacy @webresto/* paths.
+process.env.MM_SYSTEM_MODULES = [...localSystemModules, ...legacySystemModules].join(";");
 
 process.env.ADMINPANEL_LAZY_GEN_ADMIN_DISABLE="1"
 
@@ -52,7 +63,7 @@ process.env.WEB3_CONFIG_CHAIN = process.env.WEB3_CONFIG_CHAIN ?? 'mainnet';
  * if we don’t know, then we assume that this is main
  */
 const mainBranches = ['main', 'production', 'master', 'latest']
-if(process.env.BRANCH === undefined || mainBranches.includes(process.env.BRANCH)) process.env.BRANCH = 'main'
+if(mainBranches.includes(process.env.BRANCH)) process.env.BRANCH = 'main'
 
 
 
