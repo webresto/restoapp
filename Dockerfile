@@ -78,7 +78,8 @@ RUN npm install --ignore-scripts \
     @types/mocha \
     @types/chai \
     @types/node
-RUN TS_NODE_SKIP_IGNORE=true \
+RUN NODE_ENV=test \
+    TS_NODE_SKIP_IGNORE=true \
     TS_NODE_COMPILER_OPTIONS='{"module":"commonjs","esModuleInterop":true}' \
     ./node_modules/.bin/mocha \
     -r ts-node/register/transpile-only \
