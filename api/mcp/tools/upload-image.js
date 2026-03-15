@@ -39,7 +39,7 @@ module.exports = function register(mcp) {
       const ALLOWED_EXT  = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
       const MAX_SIZE     = 10 * 1024 * 1024; // 10 MB
 
-      const uploadDir = path.join(process.cwd(), 'assets', 'uploads');
+      const uploadDir = path.join(process.cwd(), '.tmp', 'public', 'uploads');
       if (!fs.existsSync(uploadDir)) {
         fs.mkdirSync(uploadDir, { recursive: true });
       }
