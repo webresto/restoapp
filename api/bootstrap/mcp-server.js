@@ -38,15 +38,6 @@ module.exports.default = async function (sails) {
     }
   }
 
-  // Inject middleware into Sails before 'router'
-  sails.config.http.middleware.mcpServer = mcp.middleware();
-
-  const order = sails.config.http.middleware.order;
-  const routerIdx = order.indexOf('router');
-  if (routerIdx !== -1 && !order.includes('mcpServer')) {
-    order.splice(routerIdx, 0, 'mcpServer');
-  }
-
   sails.log.info(`Bootstrap > MCP Server ready. Tools: ${mcp.tools.size}. Endpoint: GET /mcp`);
 
   if (!process.env.MCP_ADMIN_KEY) {

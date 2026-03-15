@@ -23,6 +23,7 @@ module.exports.http = {
             'cookieParser',
             'session',
             'poweredBy',
+            'mcpServer',
             'router',
             'www',
             'frontendRoutes'
@@ -36,6 +37,12 @@ module.exports.http = {
             });
             return middlewareFn;
         })(),
+        // MCP Server middleware — lazy: only active when MCP_ENABLED=true
+        // Tools are registered by api/bootstrap/mcp-server.js at startup
+        mcpServer: process.env.MCP_ENABLED === 'true'
+            ? require('../api/mcp/McpServer').middleware()
+            : function mcpDisabled(req, res, next) { return next(); },
+
         poweredBy: function (req, res, next) {
             res.set('X-Powered-By', "WebResto");
             return next();
