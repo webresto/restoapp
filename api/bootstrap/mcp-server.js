@@ -21,7 +21,7 @@ module.exports.default = async function (sails) {
 
   sails.log.info('Bootstrap > MCP Server starting...');
 
-  const mcp = require('../mcp/McpServer');
+  // global.mcp is set by api/mcp/McpServer.js which is always loaded via config/http.js
   const toolsDir = path.join(sails.config.paths.app, 'api/mcp/tools');
 
   // Auto-load all tools from api/mcp/tools/*.js

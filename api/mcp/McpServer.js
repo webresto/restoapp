@@ -153,6 +153,8 @@ function toolList(req) {
  */
 function middleware() {
   return async function mcpMiddleware(req, res, next) {
+    if (process.env.MCP_ENABLED !== 'true') return next();
+
     const url = req.url.split('?')[0];
 
     // GET /mcp — server info + tool catalogue
@@ -229,3 +231,7 @@ function middleware() {
 }
 
 module.exports = { registerTool, middleware, tools };
+
+// Expose as a global so any module can call mcp.registerTool(...)
+// without needing a require() path — same pattern as the sails global.
+global.mcp = module.exports;

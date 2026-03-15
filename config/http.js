@@ -37,11 +37,10 @@ module.exports.http = {
             });
             return middlewareFn;
         })(),
-        // MCP Server middleware — lazy: only active when MCP_ENABLED=true
-        // Tools are registered by api/bootstrap/mcp-server.js at startup
-        mcpServer: process.env.MCP_ENABLED === 'true'
-            ? require('../api/mcp/McpServer').middleware()
-            : function mcpDisabled(req, res, next) { return next(); },
+        // MCP Server middleware — always loaded so global.mcp is available everywhere.
+        // HTTP routes are only active when MCP_ENABLED=true.
+        // Tools are registered by api/bootstrap/mcp-server.js at startup.
+        mcpServer: require('../api/mcp/McpServer').middleware(),
 
         poweredBy: function (req, res, next) {
             res.set('X-Powered-By', "WebResto");

@@ -3,19 +3,21 @@
 [← Back](./index.md)
 
 RestoApp modules (installed under `modules/`) can register their own MCP tools
-at startup. Tools are registered through the `McpServer` JS API — the same
-handler that built-in tools use.
+at startup. The `mcp` object is a **global** — available everywhere without any
+`require()`, just like `sails` or `_`.
 
 ---
 
 ## How it works
 
-1. The MCP server bootstrap (`api/bootstrap/mcp-server.js`) runs during Sails lift
-   and mounts the MCP middleware.
-2. Each module has a `config/bootstrap.js` that is executed automatically by
+1. `api/mcp/McpServer.js` is loaded by `config/http.js` at Sails start and sets
+   `global.mcp` — this happens before any bootstrap runs.
+2. The MCP bootstrap (`api/bootstrap/mcp-server.js`) runs during Sails lift and
+   auto-loads built-in tools from `api/mcp/tools/`.
+3. Each module has a `config/bootstrap.js` that is executed automatically by
    `config/bootstrap.js` of the host app.
-3. Inside that file a module calls `mcp.registerTool(...)` to add its tools.
-4. From that point the tool is live at `POST /mcp/call/<name>`.
+4. Inside that file a module calls `mcp.registerTool(...)` using the global.
+5. From that point the tool is live at `POST /mcp/call/<name>`.
 
 No changes to core files are needed — just add a `config/bootstrap.js` to
 your module.
@@ -43,8 +45,7 @@ module.exports.default = async function (sails) {
   // Guard: only run when MCP is enabled
   if (process.env.MCP_ENABLED !== 'true') return;
 
-  const mcp = require('../../api/mcp/McpServer');
-
+  // mcp is a global — no require() needed
   mcp.registerTool({
     name: 'my-module-hello',
     description: 'Says hello from my-module.',
@@ -157,8 +158,6 @@ module.exports.default = async function (sails) {
 
   // Wait until restocore models are available
   sails.on('hook:restocore:loaded', () => {
-    const mcp = require('../../api/mcp/McpServer');
-
     mcp.registerTool({
       name: 'my-module-dishes',
       description: 'Returns dishes from my module context.',
@@ -186,11 +185,10 @@ If your module is written in TypeScript, use the same approach in
 
 ```ts
 // config/bootstrap.ts
+declare const mcp: any; // global — set by api/mcp/McpServer.js
+
 export default async function (sails: any): Promise<void> {
   if (process.env.MCP_ENABLED !== 'true') return;
-
-  // Path is resolved at runtime from the installed app root
-  const mcp = require('../../api/mcp/McpServer');
 
   mcp.registerTool({
     name: 'my-ts-tool',
@@ -223,8 +221,6 @@ modules/
 
 module.exports.default = async function (sails) {
   if (process.env.MCP_ENABLED !== 'true') return;
-
-  const mcp = require('../../api/mcp/McpServer');
 
   // Public: check bonus balance for a phone number
   mcp.registerTool({
