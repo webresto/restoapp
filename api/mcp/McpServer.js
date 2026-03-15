@@ -153,7 +153,7 @@ function toolList(req) {
  */
 function middleware() {
   return async function mcpMiddleware(req, res, next) {
-    if (process.env.MCP_ENABLED !== 'true') return next();
+    if (process.env.NODE_ENV !== 'test' && process.env.MCP_ENABLED !== 'true') return next();
 
     const url = req.url.split('?')[0];
 
