@@ -230,7 +230,42 @@ function middleware() {
   };
 }
 
-module.exports = { registerTool, middleware, tools };
+/**
+ * Call a tool internally (in-process), bypassing HTTP and admin-key checks.
+ * Intended for trusted server-side callers (e.g. AI agent for admin users).
+ * @param {string} toolName
+ * @param {Object} [params={}]
+ * @param {Object} [ctx={}]  optional context ({ req, res } or empty)
+ * @returns {Promise<any>}
+ */
+async function callTool(toolName, params = {}, ctx = {}) {
+  const tool = tools.get(toolName);
+  if (!tool) {
+    throw new Error(`MCP: tool '${toolName}' not found`);
+  }
+  return tool.handler(params, ctx);
+}
+
+/**
+ * List tools visible at a given access level.
+ * @param {'public'|'all'} level
+ * @returns {Array<{name: string, description: string, mode: string, schema: Object}>}
+ */
+function listTools(level = 'all') {
+  const result = [];
+  for (const [, tool] of tools) {
+    if (level !== 'all' && tool.mode !== 'public') continue;
+    result.push({
+      name: tool.name,
+      description: tool.description,
+      mode: tool.mode,
+      schema: tool.schema || { type: 'object', properties: {} },
+    });
+  }
+  return result;
+}
+
+module.exports = { registerTool, middleware, tools, callTool, listTools };
 
 // Expose as a global so any module can call mcp.registerTool(...)
 // without needing a require() path — same pattern as the sails global.
