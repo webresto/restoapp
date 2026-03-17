@@ -4,9 +4,10 @@ import {
     AgentInputItem,
     run,
     tool,
-    setDefaultOpenAIKey,
+    setDefaultModelProvider,
     RunContext,
 } from '@openai/agents';
+import {OpenAIProvider} from '@openai/agents-openai';
 import {AbstractAiModelService, AiAssistantMessage, Entity, ModelConfig, Adminizer, DataAccessor, UserAP} from 'adminizer';
 
 interface AgentContext {
@@ -28,7 +29,12 @@ export class OpenAiDataAgentService extends AbstractAiModelService {
         this.model = process.env.OPENAI_AGENT_MODEL ?? 'gpt-4.1-mini';
 
         if (this.apiKey) {
-            setDefaultOpenAIKey(this.apiKey);
+            const baseURL = process.env.OPENAI_URL ?? process.env.OPENAI_BASE_URL;
+            setDefaultModelProvider(new OpenAIProvider({
+                apiKey: this.apiKey,
+                ...(baseURL ? {baseURL} : {}),
+                useResponses: false,
+            }));
         } else {
             Adminizer.log.warn('[OpenAiDataAgentService] OPENAI_API_KEY is not configured; the agent will remain inactive.');
         }
