@@ -5,6 +5,7 @@ import {
     run,
     tool,
     setDefaultModelProvider,
+    setTracingDisabled,
     RunContext,
 } from '@openai/agents';
 import {OpenAIProvider} from '@openai/agents-openai';
@@ -30,6 +31,7 @@ export class OpenAiDataAgentService extends AbstractAiModelService {
 
         if (this.apiKey) {
             const baseURL = process.env.OPENAI_URL ?? process.env.OPENAI_BASE_URL;
+            setTracingDisabled(true);
             setDefaultModelProvider(new OpenAIProvider({
                 apiKey: this.apiKey,
                 ...(baseURL ? {baseURL} : {}),
@@ -165,7 +167,7 @@ export class OpenAiDataAgentService extends AbstractAiModelService {
                         default: '{}',
                     },
                 },
-                required: ['tool_name'],
+                required: ['tool_name', 'params'],
                 additionalProperties: false,
             },
             execute: async (input: any, runContext?: RunContext<AgentContext>) => {
