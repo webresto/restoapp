@@ -7,12 +7,7 @@ import {
     setDefaultOpenAIKey,
     RunContext,
 } from '@openai/agents';
-import {AbstractAiModelService} from 'adminizer';
-import {AiAssistantMessage, Entity} from 'adminizer';
-import {ModelConfig} from 'adminizer';
-import {Adminizer} from 'adminizer';
-import {DataAccessor} from 'adminizer/lib/DataAccessor.js';
-import {UserAP} from 'adminizer';
+import {AbstractAiModelService, AiAssistantMessage, Entity, ModelConfig, Adminizer, DataAccessor, UserAP} from 'adminizer';
 
 interface AgentContext {
     user: UserAP;
