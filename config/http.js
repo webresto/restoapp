@@ -19,7 +19,6 @@ module.exports.http = {
             'handleBodyParserError',
             'compress',
             'methodOverride',
-            'favicon',
             'cookieParser',
             'session',
             'poweredBy',
