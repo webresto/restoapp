@@ -25,7 +25,6 @@ modules/*
 !modules/.gitkeep
 
 !seeds/.gitkeep
-docs
 orders.log
 models/ts
 yarn-error.log
@@ -52,3 +51,4 @@ adminizer
 .gitignore
 .pnp.loader.mjs
 .env
+.ai-notes

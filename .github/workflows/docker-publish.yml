@@ -90,6 +90,7 @@ jobs:
           build-args: |
             BRANCH=${{ env.BRANCH }}
             COMMIT_HASH=${{ env.SHORT_SHA }}
+            CONTAINER_VERSION=${{ env.VERSION }}-${{ env.SHORT_SHA }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false
