@@ -15,9 +15,6 @@ RUN npm i -g @webresto/cli tsx
 ARG BRANCH=main
 ENV BRANCH=$BRANCH
 
-# TODO: delete after release
-ENV STAGING=1
-
 # Corepack/yarn workaround
 RUN corepack enable || true
 
@@ -65,8 +62,36 @@ WORKDIR /app
 
 
 ###################################
+#### TEST
+FROM base AS test
+RUN apk add --no-cache git build-base
+WORKDIR /app
+COPY --from=cacher_modules /app/ .
+# Dev dependencies (mocha, ts-node, typescript, chai) are not in --production install
+# so we install them on top with npm
+RUN npm install --ignore-scripts \
+    mocha \
+    ts-node \
+    typescript \
+    chai \
+    dotenv \
+    @types/mocha \
+    @types/chai \
+    @types/node
+RUN NODE_ENV=test \
+    TS_NODE_SKIP_IGNORE=true \
+    TS_NODE_COMPILER_OPTIONS='{"module":"commonjs","esModuleInterop":true}' \
+    ./node_modules/.bin/mocha \
+    -r ts-node/register/transpile-only \
+    "tests/mcp.test.ts" \
+    --exit
+
+
+###################################
 #### RELEASE
 FROM base AS release
+# Ensure tests passed before building release image
+COPY --from=test /app/tests ./tests
 WORKDIR /app
 
 
@@ -80,6 +105,9 @@ ENV STAGING=$STAGING
 
 ARG COMMIT_HASH
 ENV COMMIT_HASH=$COMMIT_HASH
+
+ARG CONTAINER_VERSION=
+ENV CONTAINER_VERSION=$CONTAINER_VERSION
 
 RUN apk add --no-cache nginx
 RUN npm i -g pm2 tsx typescript
