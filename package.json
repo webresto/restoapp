@@ -8,6 +8,7 @@
     "@openai/agents": "^0.7.2",
     "@webresto/core": "file:./local_modules/core",
     "@webresto/graphql": "file:./local_modules/graphql",
+    "adminizer": "4.5.0-build.197",
     "ajv": "^8.17.1",
     "async": "3.2.6",
     "axios": "^1.7.7",
