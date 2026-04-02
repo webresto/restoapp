@@ -106,6 +106,9 @@ ENV STAGING=$STAGING
 ARG COMMIT_HASH
 ENV COMMIT_HASH=$COMMIT_HASH
 
+ARG CONTAINER_VERSION=
+ENV CONTAINER_VERSION=$CONTAINER_VERSION
+
 RUN apk add --no-cache nginx
 RUN npm i -g pm2 tsx typescript
 COPY .ci/config/nginx.conf /etc/nginx/nginx.conf
