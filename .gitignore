@@ -51,3 +51,4 @@ adminizer
 .gitignore
 .pnp.loader.mjs
 .env
+.ai-notes
