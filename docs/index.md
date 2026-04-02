@@ -1,5 +1,5 @@
 
-# [Install](./install.md) | [Features](./features.md) | [Modules](./modules.md)
+# [Install](./install.md) | [Features](./features.md) | [Modules](./modules.md) | [Custom Module](./custom-module/index.md) | [MCP](./custom-module/mcp-tools.md)
 
 # RestoApp: Open-Source Backend for Food Delivery and Local Commerce
 

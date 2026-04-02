@@ -12,6 +12,15 @@ source "$SCRIPT_DIR/utils/helpers"
 export PROJECT_NAME=${PROJECT_NAME:-restoapp}
 export DEPLOY_TIME=$(date '+%d_%m_%Y_%H_%M')
 
+if [[ -z "${CONTAINER_VERSION}" ]]; then
+    CORE_VERSION=$(node -p "require('/app/local_modules/core/package.json').version" 2>/dev/null || node -p "require('/app/package.json').version" 2>/dev/null || echo "0.0.0")
+    SHORT_COMMIT_HASH="${COMMIT_HASH:0:7}"
+    if [[ -z "${SHORT_COMMIT_HASH}" ]]; then
+        SHORT_COMMIT_HASH="unknown"
+    fi
+    export CONTAINER_VERSION="${CORE_VERSION}-${SHORT_COMMIT_HASH}"
+fi
+
 # Update maintenance page status
 "$SCRIPT_DIR/utils/update_maintenance_status" "Initializing RestoApp"
 
@@ -24,6 +33,9 @@ if [ "$1" = 'start' ]; then
     export DOCKER_REGISTRY=${DOCKER_REGISTRY:-webresto}
     # update DOCKER_IMAGE env
     /app/.ci/utils/set_env DOCKER_IMAGE "${DOCKER_REGISTRY}/restoapp:commit-${COMMIT_HASH}" "/app/.env"
+    if [[ ! -z "${CONTAINER_VERSION}" ]]; then
+        /app/.ci/utils/set_env CONTAINER_VERSION "${CONTAINER_VERSION}" "/app/.env"
+    fi
     if [[ "$(parse_boolean "$SKIP_NGINX")" != "true" ]]; then
         log_info "SKIP_NGINX is '$SKIP_NGINX' - will attempt to start nginx"
         if [ -x "$(command -v nginx)" ]; then
