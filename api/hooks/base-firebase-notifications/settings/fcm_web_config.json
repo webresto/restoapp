@@ -1,0 +1,8 @@
+{
+  "key": "FCM_WEB_CONFIG",
+  "type": "json",
+  "name": "FCM Web Config",
+  "description": "Public Firebase config for the web frontend (apiKey, projectId, messagingSenderId, appId, vapidKey). Safe to expose to the client.",
+  "defaultValue": null,
+  "isRequired": false
+}
