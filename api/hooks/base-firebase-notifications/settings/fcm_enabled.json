@@ -1,0 +1,8 @@
+{
+  "key": "FCM_ENABLED",
+  "type": "boolean",
+  "name": "FCM Enabled",
+  "description": "Enable Firebase Cloud Messaging push notifications",
+  "defaultValue": false,
+  "isRequired": false
+}

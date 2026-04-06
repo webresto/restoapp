@@ -1,0 +1,9 @@
+{
+  "name": "base-firebase-notifications",
+  "version": "1.0.0",
+  "description": "FCM push notification channels for restoapp",
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^12.0.0"
+  }
+}
