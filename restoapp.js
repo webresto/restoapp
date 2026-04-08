@@ -17,6 +17,12 @@
  * The same command-line arguments are supported, e.g.:
  * `node app.js --silent --port=80 --prod`
  */
+try {
+  require("dotenv").config();
+} catch (error) {
+  console.error("Failed to load .env via dotenv", error);
+}
+
 const fs = require('fs');
 
 Error.stackTraceLimit = 50;
