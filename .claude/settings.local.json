@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(grep -v \"^$\")",
+      "Bash(netstat -ano)",
+      "Bash(taskkill /PID 33356 /F)",
+      "Bash(cmd /c \"taskkill /PID 33356 /F\")",
+      "Bash(cmd /c \"taskkill /F /PID 33356\")",
+      "Bash(cmd /c \"wmic process where ProcessId=33356 get Name,CommandLine 2>&1\")",
+      "Bash(powershell -Command \"Stop-Process -Id 33356 -Force -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 500; \\(Get-NetTCPConnection -LocalPort 42880 -ErrorAction SilentlyContinue\\).OwningProcess\")",
+      "Bash(powershell -Command \"Get-Process -Id 13008 | Select-Object Name,Id,CPU\")"
+    ]
+  }
+}
