@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>restoCore | webResto</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      height: 100vh;
+      font-family: Arial, sans-serif;
+      background: linear-gradient(-45deg, #ee7752, #f13c3c, #6364ba, #23d5ab);
+      background-size: 400% 400%;
+      animation: gradient 15s ease infinite;
+    }
+
+    @keyframes gradient {
+      0% {
+        background-position: 0% 50%;
+      }
+      50% {
+        background-position: 100% 50%;
+      }
+      100% {
+        background-position: 0% 50%;
+      }
+    }
+
+    .product-logo-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-grow: 1;
+      padding: 20px;
+    }
+
+    .product-logo {
+      width: 60%;
+      max-width: 280px;
+      height: auto;
+    }
+
+    .company-logo-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      padding: 10px;
+    }
+
+    .company-logo {
+      width: 70px;
+      height: auto;
+      margin-bottom: 10px;
+    }
+
+    .company-info {
+      color: #fbfbfb;
+      text-align: center;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+
+    .company-link {
+      color: #fbfbfb;
+      text-decoration: none;
+    }
+
+    .go-to-admin-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-top: 15px;
+    }
+
+    .go-to-admin-container a {
+      color: #fafafa;
+      font-weight: 700;
+      font-size: 16px;
+    }
+
+    @media (max-width: 768px) {
+      .product-logo {
+        width: 80%;
+      }
+
+      .company-logo {
+        width: 50px;
+      }
+
+      .company-info {
+        font-size: 12px;
+      }
+
+      .go-to-admin-container a {
+        font-size: 14px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .product-logo {
+        width: 90%;
+      }
+
+      .company-logo {
+        width: 40px;
+      }
+
+      .company-info {
+        font-size: 10px;
+      }
+
+      .go-to-admin-container a {
+        font-size: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="product-logo-container">
+    <img class="product-logo" src="/webresto/restocore_logo.svg" alt="Product Logo">
+  </div>
+  
+  <div class="company-logo-container">
+    <img class="company-logo" src="/webresto/webresto_logo.svg" alt="Company Logo">
+    <div class="go-to-admin-container">
+      <a href="/admin">[Adminpanel]</a>
+    </div>
+    <div class="company-info">
+      <p>© 2017-2025 <a class="company-link" href="http://www.restoapp.org" target="_blank">restoapp.org</a></p>
+    </div>
+  </div>
+</body>
+<script>
+  (async () => {
+  const urlToCheck = `${window.location.origin}/admin`;
+  const targetPath = new URL(urlToCheck).pathname;
+
+  try {
+      const response = await fetch(urlToCheck, {
+          method: 'GET',
+          redirect: 'follow',
+      });
+
+      console.log(response.url);
+      const finalUrl = response.url;
+      const finalPath = new URL(finalUrl).pathname;
+
+      if (finalPath !== targetPath) {
+          console.log(`Redirect detected: redirected to ${finalPath}. Redirecting back to ${targetPath}...`);
+          window.location.href = finalPath;
+      } else {
+          console.log('No unexpected redirect detected.');
+      }
+  } catch (error) {
+      console.error('Error during request:', error);
+  }
+})();
+</script>
+</html>

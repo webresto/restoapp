@@ -1,0 +1,56 @@
+diff --git a/node_modules/sails-hook-orm/lib/validate-model-def.js b/node_modules/sails-hook-orm/lib/validate-model-def.js
+index f473d6d..ba6cc20 100644
+--- a/node_modules/sails-hook-orm/lib/validate-model-def.js
++++ b/node_modules/sails-hook-orm/lib/validate-model-def.js
+@@ -189,6 +189,10 @@ module.exports = function validateModelDef (originalModelDef, modelIdentity, hoo
+       suggestType: 'string',
+       suggestColumnType: 'datetime'
+     },
++    time: {
++      suggestType: 'string',
++      suggestColumnType: 'time'
++    },
+     binary: {
+       suggestType: 'ref',
+       suggestColumnType: 'binary'
+@@ -250,7 +254,7 @@ module.exports = function validateModelDef (originalModelDef, modelIdentity, hoo
+     //  ┴ ┴┴ ┴┘└┘─┴┘┴─┘└─┘  ─┴┘└─┘└  ┴ ┴└─┘┴─┘┴ └─┘ ╩ └─┘  └  ┘└┘└─┘
+ 
+     // Throw an error if a "defaultsTo" function is detected.
+-    if (_.isFunction(val.defaultsTo)) {
++    if (false) {
+       throw flaverr({ name: 'userError', code: 'E_INVALID_MODEL_DEF' }, new Error(
+                       '\n-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-\n'+
+                       'In the `' + attributeName + '` attribute of model `' + modelIdentity + '`:\n'+
+@@ -456,14 +460,23 @@ module.exports = function validateModelDef (originalModelDef, modelIdentity, hoo
+     //  ├┴┐├─┤││    │ ││││  │ ││││└─┐│ │├─┘├─┘│ │├┬┘ │ ├┤  ││   │ └┬┘├─┘├┤ └─┐
+     //  └─┘┴ ┴┴┴─┘  └─┘┘└┘  └─┘┘└┘└─┘└─┘┴  ┴  └─┘┴└─ ┴ └─┘─┴┘   ┴  ┴ ┴  └─┘└─┘
+     if (noLongerSupportedTypes[val.type]) {
+-      throw flaverr({ name: 'userError', code: 'E_INVALID_MODEL_DEF' }, new Error(
+-                      '\n-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-\n'+
+-                      'In the `' + attributeName + '` attribute of model `' + modelIdentity + '`:\n'+
+-                      'The type "' + val.type + '" is no longer supported.  To use this type in your model, change\n'+
+-                      '`type` to one of the supported types and set the `columnType` property to a column \n'+
+-                      'type supported by the model\'s adapter, e.g. { type: \'' + noLongerSupportedTypes[val.type].suggestType + '\', columnType: \'' + noLongerSupportedTypes[val.type].suggestColumnType + '\' }\n'+
+-                      '-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-\n'));
+-
++      // Compatibility shim for legacy models coming from external modules.
++      // We preserve intent by keeping the original SQL-ish type in `columnType`.
++      if (_.contains(['date', 'datetime', 'time'], val.type)) {
++        sails.log.warn('In model `' + modelIdentity + '`, the `' + attributeName + '` attribute uses legacy type `' + val.type + '`.');
++        sails.log.warn('Normalizing to `{ type: "string", columnType: "' + val.type + '" }` for compatibility.');
++        val.columnType = val.columnType || val.type;
++        val.type = 'string';
++      }
++      else {
++        throw flaverr({ name: 'userError', code: 'E_INVALID_MODEL_DEF' }, new Error(
++                        '\n-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-\n'+
++                        'In the `' + attributeName + '` attribute of model `' + modelIdentity + '`:\n'+
++                        'The type "' + val.type + '" is no longer supported.  To use this type in your model, change\n'+
++                        '`type` to one of the supported types and set the `columnType` property to a column \n'+
++                        'type supported by the model\'s adapter, e.g. { type: \'' + noLongerSupportedTypes[val.type].suggestType + '\', columnType: \'' + noLongerSupportedTypes[val.type].suggestColumnType + '\' }\n'+
++                        '-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-\n'));
++      }
+     }
+ 
+     //  ┌┬┐┌─┐┌─┐  ┌┬┐┌─┐┌─┐┬─┐┌─┐┌─┐┌─┐┌┬┐┌─┐┌┬┐  ┌┬┐┬ ┬┌─┐┌─┐┌─┐

@@ -18,7 +18,7 @@ After starting the container, open your browser and go to http://localhost:8080 
 ### Build Image from Source
 
 ```bash
-docker build -t webresto/restoapp:latest .
+docker build --build-arg CONTAINER_VERSION=latest -t webresto/restoapp:latest .
 docker run --name restoapp -p 8080:8080 webresto/restoapp:latest
 ```
 
@@ -33,9 +33,14 @@ services:
   restoapp:
     image: "${DOCKER_IMAGE:-webresto/restoapp:next}"
     restart: always
+    build:
+      context: .
+      args:
+        CONTAINER_VERSION: "${CONTAINER_VERSION:-next}"
     ports:
       - "8080:8080"
     environment:
+      CONTAINER_VERSION: "${CONTAINER_VERSION:-next}"
       DB_MIGRATE: safe
       NODE_ENV: production
       DATASTORE: postgres

@@ -29,9 +29,26 @@ export default async function(sails: any) {
 
     // Serve module assets
     const assetsPath = path.join(__dirname, '../assets');
-    app.use('/admin/modules/assets', serveStatic(assetsPath));
+    const routePrefix = normalizeRoutePrefix(sails?.config?.adminpanel?.routePrefix || '/admin');
+    const prefixedAssetsRoute = `${routePrefix}/modules/assets`;
+
+    app.use(prefixedAssetsRoute, serveStatic(assetsPath));
+    if (prefixedAssetsRoute !== '/admin/modules/assets') {
+        app.use('/admin/modules/assets', serveStatic(assetsPath));
+    }
 
     // Adjust router stack ordering - move the last added layer to position 1
     let layer = sails.hooks.http.app._router.stack.slice(-1)[0];
     sails.hooks.http.app._router.stack.splice(1, 0, layer);
 };
+
+function normalizeRoutePrefix(routePrefix: string): string {
+    let normalized = String(routePrefix || '/admin').trim();
+    if (!normalized.startsWith('/')) {
+        normalized = `/${normalized}`;
+    }
+    if (normalized.length > 1 && normalized.endsWith('/')) {
+        normalized = normalized.slice(0, -1);
+    }
+    return normalized || '/admin';
+}
