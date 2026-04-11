@@ -1,9 +1,13 @@
-import { NotificationManager } from "@webresto/core/libs/NotificationManager";
-import { initFirebaseAdmin } from "./firebaseAdmin";
-import { FCMMobileChannel } from "./channels/FCMMobileChannel";
-import { FCMWebChannel } from "./channels/FCMWebChannel";
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.tryInitFCM = tryInitFCM;
 
-export async function tryInitFCM(): Promise<void> {
+const { NotificationManager } = require("@webresto/core/libs/NotificationManager");
+const { initFirebaseAdmin } = require("./firebaseAdmin");
+const { FCMMobileChannel } = require("./channels/FCMMobileChannel");
+const { FCMWebChannel } = require("./channels/FCMWebChannel");
+
+async function tryInitFCM() {
   const enabled = await Settings.get("FCM_ENABLED");
   if (!enabled) return;
 
@@ -14,12 +18,11 @@ export async function tryInitFCM(): Promise<void> {
   }
 
   try {
-    initFirebaseAdmin(key as object);
+    initFirebaseAdmin(key);
     NotificationManager.registerChannel(new FCMMobileChannel());
     NotificationManager.registerChannel(new FCMWebChannel());
     sails.log.info("[FCM] Channels registered (mobile + web)");
   } catch (e) {
     sails.log.error("[FCM] Init failed:", e);
-    // Не крашим — уведомления останутся pending, retry-loop доставит при следующем цикле
   }
 }

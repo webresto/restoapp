@@ -1,38 +1,36 @@
-import { Channel } from "@webresto/core/libs/NotificationManager";
-import { UserRecord } from "@webresto/core/models/User";
-import { UserDeviceRecord, NotificationToken } from "@webresto/core/models/UserDevice";
-import { getFirebaseAdmin, isFirebaseAdminInitialized } from "../firebaseAdmin";
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.FCMWebChannel = void 0;
 
-export class FCMWebChannel extends Channel {
-  type = "fcm-web";
-  forceSend = false;
-  forGroupTo = ["user"];
-  sortOrder = 11;
-  cost = 0; // FCM бесплатный
+const { Channel } = require("@webresto/core/libs/NotificationManager");
+const { getFirebaseAdmin, isFirebaseAdminInitialized } = require("../firebaseAdmin");
 
-  public async isReady(): Promise<boolean> {
+class FCMWebChannel extends Channel {
+  constructor() {
+    super(...arguments);
+    this.type = "fcm-web";
+    this.forceSend = false;
+    this.forGroupTo = ["user"];
+    this.sortOrder = 11;
+    this.cost = 0;
+  }
+
+  async isReady() {
     return isFirebaseAdminInitialized();
   }
 
-  protected async send(
-    badge: "info" | "error",
-    message: string,
-    user: UserRecord,
-    subject?: string,
-    data?: object,
-    priorityDevice?: UserDeviceRecord
-  ): Promise<string | void> {
+  async send(badge, message, user, subject, data, priorityDevice) {
     if (!user?.id) {
       throw new Error("[FCMWebChannel] No user provided");
     }
 
-    const devices: UserDeviceRecord[] = await UserDevice.find({
+    const devices = await UserDevice.find({
       user: user.id,
       notificationToken: { "!=": null },
     });
 
     const webDevices = devices.filter((d) => {
-      const token = d.notificationToken as NotificationToken | null;
+      const token = d.notificationToken;
       return token && token.platform === "web" && token.token;
     });
 
@@ -40,7 +38,6 @@ export class FCMWebChannel extends Channel {
       throw new Error("[FCMWebChannel] No web devices with notification tokens");
     }
 
-    // Если передан priorityDevice — ставим его первым
     let orderedDevices = webDevices;
     if (priorityDevice?.id) {
       const priorityIdx = webDevices.findIndex((d) => d.id === priorityDevice.id);
@@ -52,7 +49,7 @@ export class FCMWebChannel extends Channel {
       }
     }
 
-    const tokens = orderedDevices.map((d) => (d.notificationToken as NotificationToken).token);
+    const tokens = orderedDevices.map((d) => d.notificationToken.token);
 
     const admin = getFirebaseAdmin();
     const response = await admin.messaging().sendEachForMulticast({
@@ -74,7 +71,7 @@ export class FCMWebChannel extends Channel {
       "messaging/invalid-registration-token",
       "messaging/registration-token-not-registered",
     ]);
-    const invalidTokens: string[] = [];
+    const invalidTokens = [];
     response.responses.forEach((r, idx) => {
       if (!r.success && r.error && invalidCodes.has(r.error.code)) {
         invalidTokens.push(tokens[idx]);
@@ -84,7 +81,7 @@ export class FCMWebChannel extends Channel {
     if (invalidTokens.length > 0) {
       Promise.all(
         orderedDevices
-          .filter((d) => invalidTokens.includes((d.notificationToken as NotificationToken).token))
+          .filter((d) => invalidTokens.includes(d.notificationToken.token))
           .map((d) => UserDevice.updateOne({ id: d.id }).set({ notificationToken: null }))
       ).catch((e) => sails.log.error("[FCMWebChannel] Failed to clear invalid tokens:", e));
     }
@@ -97,3 +94,4 @@ export class FCMWebChannel extends Channel {
     return firstSuccess?.messageId;
   }
 }
+exports.FCMWebChannel = FCMWebChannel;

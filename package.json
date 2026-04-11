@@ -14,6 +14,7 @@
     "bcryptjs": "^2.4.3",
     "db-migrate": "=0.11.13",
     "db-migrate-pg": "=1.3.2",
+    "firebase-admin": "^13.8.0",
     "fix-esm": "^1.0.1",
     "multer": "^2.0.2",
     "node-red": "^4.0.5",
