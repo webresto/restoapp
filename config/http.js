@@ -19,10 +19,10 @@ module.exports.http = {
             'handleBodyParserError',
             'compress',
             'methodOverride',
-            'favicon',
             'cookieParser',
             'session',
             'poweredBy',
+            'mcpServer',
             'router',
             'www',
             'frontendRoutes'
@@ -36,6 +36,11 @@ module.exports.http = {
             });
             return middlewareFn;
         })(),
+        // MCP Server middleware — always loaded so global.mcp is available everywhere.
+        // HTTP routes are only active when MCP_ENABLED=true.
+        // Tools are registered by api/bootstrap/mcp-server.js at startup.
+        mcpServer: require('../api/mcp/McpServer').middleware(),
+
         poweredBy: function (req, res, next) {
             res.set('X-Powered-By', "WebResto");
             return next();

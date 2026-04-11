@@ -1,0 +1,128 @@
+diff --git a/node_modules/waterline/lib/waterline/utils/query/forge-stage-two-query.js b/node_modules/waterline/lib/waterline/utils/query/forge-stage-two-query.js
+index db2faae..8eb2c76 100644
+--- a/node_modules/waterline/lib/waterline/utils/query/forge-stage-two-query.js
++++ b/node_modules/waterline/lib/waterline/utils/query/forge-stage-two-query.js
+@@ -687,7 +687,7 @@ module.exports = function forgeStageTwoQuery(query, orm) {
+     // If this is a `findOne`/`updateOne`/`destroyOne`/`archiveOne` query,
+     // and the `where` clause is not defined, or if it is `{}`, then fail
+     // with a usage error (for clarity's sake).
+-    if (_.contains(['findOne','updateOne','destroyOne','archiveOne'], query.method) && _.isEqual(query.criteria.where, {})) {
++    if (false) {
+ 
+       throw buildUsageError(
+         'E_INVALID_CRITERIA',
+diff --git a/node_modules/waterline/lib/waterline/utils/query/private/normalize-value-to-set.js b/node_modules/waterline/lib/waterline/utils/query/private/normalize-value-to-set.js
+index 667f8ae..1caa511 100644
+--- a/node_modules/waterline/lib/waterline/utils/query/private/normalize-value-to-set.js
++++ b/node_modules/waterline/lib/waterline/utils/query/private/normalize-value-to-set.js
+@@ -473,7 +473,7 @@ module.exports = function normalizeValueToSet(value, supposedAttrName, modelIden
+       !correspondingAttrDef.allowNull &&
+       !correspondingAttrDef.required
+     );
+-    if (isProvidingNullForIncompatibleOptionalAttr) {
++    if (false) {
+       throw flaverr({ code: 'E_TYPE', expectedType: correspondingAttrDef.type }, new Error(
+         'Specified value (`null`) is not a valid `'+supposedAttrName+'`.  '+
+         'Even though this attribute is optional, it still does not allow `null` to '+
+diff --git a/node_modules/waterline/lib/waterline/utils/query/process-all-records.js b/node_modules/waterline/lib/waterline/utils/query/process-all-records.js
+index a70e0c1..94fab58 100644
+--- a/node_modules/waterline/lib/waterline/utils/query/process-all-records.js
++++ b/node_modules/waterline/lib/waterline/utils/query/process-all-records.js
+@@ -13,7 +13,15 @@ var eachRecordDeep = require('waterline-utils').eachRecordDeep;
+ /**
+  * Module constants
+  */
+-
++const crypto = require('crypto');
++const uniq_warn = new Map();
++function console_warn(msg) {
++  const key = crypto.createHash('sha256').update(msg).digest('hex');
++  if(!uniq_warn.has(key)) {
++    console.warn("⚠️", msg)
++    uniq_warn.set(key, true);
++  }
++}
+ var WARNING_SUFFIXES = {
+ 
+   MIGHT_BE_YOUR_FAULT:
+@@ -147,7 +155,7 @@ module.exports = function processAllRecords(records, meta, modelIdentity, orm) {
+           // So if we made it here, we can safely assume that this is due
+           // to an issue in the _adapter_ -- not some problem with unmigrated
+           // data.
+-          console.warn('\n'+
++          console_warn('\n'+
+             'Warning: A record in this result set has extraneous properties ('+nonAttrKeys+')\n'+
+             'that, after adjusting for any custom columnNames, still do not correspond\n'+
+             'any recognized attributes of this model (`'+WLModel.identity+'`).\n'+
+@@ -189,7 +197,7 @@ module.exports = function processAllRecords(records, meta, modelIdentity, orm) {
+         // (but if it was, log a warning.  Note that we don't strip it out like
+         // we would normally, because we're careful not to munge data in this utility.)
+         if(_.isUndefined(record[key])){
+-          console.warn('\n'+
++          console_warn('\n'+
+             'Warning: A database adapter should never send back records that have `undefined`\n'+
+             'on the RHS of any property (e.g. `foo: undefined`).  But after transforming\n'+
+             'columnNames back to attribute names for the model `' + modelIdentity + '`, one\n'+
+@@ -228,7 +236,7 @@ module.exports = function processAllRecords(records, meta, modelIdentity, orm) {
+           );
+ 
+           if (!isProbablyValidPkValue) {
+-            console.warn('\n'+
++            console_warn('\n'+
+               'Warning: Records sent back from a database adapter should always have a valid property\n'+
+               'that corresponds with the primary key attribute (`'+WLModel.primaryKey+'`).  But in this result set,\n'+
+               'after transforming columnNames back to attribute names for model `' + modelIdentity + '`,\n'+
+@@ -277,7 +285,7 @@ module.exports = function processAllRecords(records, meta, modelIdentity, orm) {
+           }
+           // Otherwise, the value is invalid.
+           else {
+-            console.warn('\n'+
++            console_warn('\n'+
+               'An association in a result record has an unexpected data type.  Since `'+attrName+'` is\n'+
+               'a singular (association), it should come back from Waterline as either:\n'+
+               '• `null` (if not populated and set to null explicitly, or populated but orphaned)\n'+
+@@ -318,7 +326,7 @@ module.exports = function processAllRecords(records, meta, modelIdentity, orm) {
+           }
+           // Otherwise, the value is invalid.
+           else {
+-            console.warn('\n'+
++            console_warn('\n'+
+               'An association in a result record has an unexpected data type.  Since `'+attrName+'` is\n'+
+               'a plural (association), it should come back from Waterline as either:\n'+
+               '• `undefined` (if not populated), or\n'+
+@@ -370,7 +378,7 @@ module.exports = function processAllRecords(records, meta, modelIdentity, orm) {
+             );
+ 
+             if (!isProbablyValidTimestamp) {
+-              console.warn('\n'+
++              console_warn('\n'+
+                 'Warning: After transforming columnNames back to attribute names for model `' + modelIdentity + '`,\n'+
+                 ' a record in the result has a value with an unexpected data type for property `'+attrName+'`.\n'+
+                 'The model\'s `'+attrName+'` attribute declares itself an auto timestamp with\n'+
+@@ -426,7 +434,7 @@ module.exports = function processAllRecords(records, meta, modelIdentity, orm) {
+                 case 'E_INVALID':
+ 
+                   if (_.isNull(record[attrName])) {
+-                    console.warn('\n'+
++                    console_warn('\n'+
+                       'Warning: After transforming columnNames back to attribute names for model `' + modelIdentity + '`,\n'+
+                       ' a record in the result has a value of `null` for property `'+attrName+'`.\n'+
+                       'Since the `'+attrName+'` attribute declares `type: \''+attrDef.type+'\'`,\n'+
+@@ -437,7 +445,7 @@ module.exports = function processAllRecords(records, meta, modelIdentity, orm) {
+                     );
+                   }
+                   else {
+-                    console.warn('\n'+
++                    console_warn('\n'+
+                       'Warning: After transforming columnNames back to attribute names for model `' + modelIdentity + '`,\n'+
+                       ' a record in the result has a value with an unexpected data type for property `'+attrName+'`.\n'+
+                       'The corresponding attribute declares `type: \''+attrDef.type+'\'` but instead\n'+
+@@ -487,7 +495,7 @@ module.exports = function processAllRecords(records, meta, modelIdentity, orm) {
+           // if (_.isUndefined(record[attrName]) || _.isNull(record[attrName]) || record[attrName] === '') {
+           //   // (We'd also need to make sure this wasn't deliberately exluded by custom projections
+           //   //  before logging this warning.)
+-          //   console.warn('\n'+
++          //   console_warn('\n'+
+           //     'Warning: After transforming columnNames back to attribute names for model `' + modelIdentity + '`,\n'+
+           //     'a record in the result contains an unexpected value (`'+util.inspect(record[attrName],{depth:1})+'`)`\n'+
+           //     'for its `'+attrName+'` property.  Since `'+attrName+'` is a required attribute,\n'+

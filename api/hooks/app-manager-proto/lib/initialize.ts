@@ -19,7 +19,8 @@ import HookTools from "./hookTools";
 
 let path = require("path");
 
-process.env.CORE_MODELS_TO_SKIP = "settings";
+// Core Settings model is used instead of MM Settings model
+// process.env.CORE_MODELS_TO_SKIP = "settings";
 
 export default function ToInitialize(sails: any) {
 	/**
@@ -57,6 +58,8 @@ export default function ToInitialize(sails: any) {
 
 			// Load models
 			let modelsToSkip = process.env.MM_MODELS_TO_SKIP !== undefined ? process.env.MM_MODELS_TO_SKIP.split(";") : [];
+			// Skip Settings model - use core Settings model instead
+			modelsToSkip.push("Settings");
 			await HookTools.bindModels(resolve(__dirname, "../models"), modelsToSkip);
 
 			// add custom views path
@@ -113,45 +116,35 @@ export default function ToInitialize(sails: any) {
 				 * 	2. Corrupted settings (failed JSON schema validation) - applicable only to system modules and enabled modules.
 				 * */
 				//@ts-ignore
-				let allSettings = await Settings.find({ module: { '!=': null }, key: { 'nin': settingsProcessedInCustomSteps } }).populate("module");
+				let allSettings = await Settings.find({ key: { 'nin': settingsProcessedInCustomSteps } });
 				if (allSettings && allSettings.length) {
 					let settingsToBeFilled = [];
 					for await (const item of allSettings) {
-						let itemModule = item.module as Module;
-						if (!itemModule) {
+						// Check for settings that need to be filled
+						if (item.value === null && item.defaultValue === null && item.isRequired === true) {
+							sails.log.debug("Setting to be filled in initialize", item.key);
+							settingsToBeFilled.push(item);
 							continue;
 						}
 
-						// Check if the setting belongs to a system module or is enabled
-						let systemModuleList = ModuleHelper.getSystemModuleList();
-						if (systemModuleList.includes(itemModule.appId) || itemModule.enable === true) {
+						// Check for corrupted settings
+						if (false && item.jsonSchema !== null && !Settings.env("ALLOW_UNSAFE_SETTINGS")) {
+							const ajv = new Ajv();
+							const validate = ajv.compile(item.jsonSchema);
 
-							// Check for settings that need to be filled
-							if (item.value === null && item.defaultValue === null && item.isRequired === true) {
-								sails.log.debug("Setting to be filled in initialize", item.key);
-								settingsToBeFilled.push(item);
-								continue;
-							}
+							if (!validate(item.value) && item.isRequired && !item.defaultValue) {
+								if (item.value !== null) {
+									sails.log.warn(`Settings value is corrupted for key [${item.key}]`);
 
-							// Check for corrupted settings
-							if (false && item.jsonSchema !== null && !Settings.env("ALLOW_UNSAFE_SETTINGS")) {
-								const ajv = new Ajv();
-								const validate = ajv.compile(item.jsonSchema);
+									settingsToBeFilled.push(item);
 
-								if (!validate(item.value) && item.isRequired && !item.defaultValue) {
-									if (item.value !== null) {
-										sails.log.warn(`Settings value is corrupted for key [${item.key}]`);
-
-										settingsToBeFilled.push(item);
-
-									} else {
-										sails.log.warn(`111 222 AJV Validation Error for setting ${item.key}: Value or defaultValue does not match the schema`);
-										settingsToBeFilled.push(item);
-									}
-									sails.log.debug(`Setting`, item, "\nErrors", JSON.stringify(validate.errors, null, 2));
-								} else if (!validate(item.value)) {
-									sails.log.silly(`Settings value is corrupted for key [${item.key}]. Skipped creating install step because setting is not required`);
+								} else {
+									sails.log.warn(`111 222 AJV Validation Error for setting ${item.key}: Value or defaultValue does not match the schema`);
+									settingsToBeFilled.push(item);
 								}
+								sails.log.debug(`Setting`, item, "\nErrors", JSON.stringify(validate.errors, null, 2));
+							} else if (!validate(item.value)) {
+								sails.log.silly(`Settings value is corrupted for key [${item.key}]. Skipped creating install step because setting is not required`);
 							}
 						}
 					}

@@ -119,7 +119,28 @@ let Model = {
             }
             else {
                 try {
-                    value = JSON.parse(process.env[key]);
+                    // Check if jsonSchema expects a primitive type (string, number, boolean)
+                    const schemaType = setting.jsonSchema?.type;
+
+                    if (schemaType === "string") {
+                        // For string type, use the value directly without JSON.parse
+                        value = process.env[key];
+                    } else if (schemaType === "number" || schemaType === "integer") {
+                        // For number/integer type, parse as number
+                        value = parseInt(process.env[key], 10);
+                        if (isNaN(value)) {
+                            sails.log.error(`Error: Value [${process.env[key]}] for [${key}] cannot be converted to number`);
+                            return undefined;
+                        }
+                    } else if (schemaType === "boolean") {
+                        // For boolean type, parse as boolean
+                        const envValue = process.env[key].toLowerCase();
+                        value = envValue === "true" || envValue === "1";
+                    } else {
+                        // For complex types (object, array, etc.), use JSON.parse
+                        value = JSON.parse(process.env[key]);
+                    }
+
                     // if value was parsed, check that given json matches the schema (if !ALLOW_UNSAFE_SETTINGS)
                     if (!(Settings.env("ALLOW_UNSAFE_SETTINGS") ?? false)) {
                         const ajv = new ajv_1.default();

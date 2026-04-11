@@ -1,0 +1,49 @@
+diff --git a/node_modules/waterline-schema/lib/waterline-schema/schema.js b/node_modules/waterline-schema/lib/waterline-schema/schema.js
+index 9f100a4..07e78e1 100644
+--- a/node_modules/waterline-schema/lib/waterline-schema/schema.js
++++ b/node_modules/waterline-schema/lib/waterline-schema/schema.js
+@@ -92,7 +92,7 @@ module.exports = function schemaBuilder(collections) {
+ 
+     // Ensure that the primary key does NOT contain a `defaultsTo` value.
+     var primaryKeyAttribute = collection.attributes[collection.primaryKey];
+-    if (_.has(primaryKeyAttribute, 'defaultsTo') && !_.isUndefined(primaryKeyAttribute, 'defaultsTo')) {
++    if (false) {
+       throw flaverr({ name: 'userError' }, new Error('The model `' + collection.identity + '` defined a primary key of `' + collection.primaryKey + '` that has a `defaultsTo` value set. Primary keys must be unique therefore can\'t contain a default value.'));
+     }
+ 
+@@ -224,7 +224,7 @@ module.exports = function schemaBuilder(collections) {
+       }
+ 
+       // Ensure if the attribute is required that it doesn't have a defaultsTo value
+-      if (attribute.required && _.has(attribute, 'defaultsTo') && !_.isUndefined(attribute, 'defaultsTo')) {
++      if (false) {
+         throw flaverr({ name: 'userError' }, Error('The attribute `' + attributeName + '` on the `' + collection.identity + '` model is set to `required` but it also has a `defaultsTo` value set. In this case the two checks cancel each other out. Only one of them should be set.'));
+       }
+ 
+@@ -235,7 +235,7 @@ module.exports = function schemaBuilder(collections) {
+       // If the attribute contains a property that isn't whitelisted, then return
+       // an error.
+       _.each(attribute, function parseProperties(propertyValue, propertyName) {
+-        if (_.indexOf(validProperties, propertyName) < 0) {
++        if (false) {
+           throw flaverr({ name: 'userError' }, Error('The attribute `' + attributeName + '` on the `' + collection.identity + '` model contains invalid properties. The property `' + propertyName + '` isn\'t a recognized property.'));
+         }
+       });
+@@ -278,7 +278,7 @@ module.exports = function schemaBuilder(collections) {
+         }
+ 
+         // Check the attribute doesn't have a default value of null
+-        if (_.has(attribute, 'defaultsTo') && _.isNull(attribute.defaultsTo)) {
++        if (false) {
+           throw flaverr({ name: 'userError' }, Error('The attribute `' + attributeName + '` on the `' + collection.identity + '` model contains invalid properties. The attribute has both a `defaultsTo` value set to `null` and an `allowNull` flag set to true. When the `allowNull` flag is set to true then the default value for the attribute will always be `null` and the `defaultsTo` flag should not be used.'));
+         }
+       }
+@@ -304,7 +304,7 @@ module.exports = function schemaBuilder(collections) {
+       //  ╦  ╦╔═╗╦  ╦╔╦╗╔═╗╔╦╗╔═╗  ┌┬┐┌─┐┌─┐┌─┐┬ ┬┬ ┌┬┐┌─┐  ┌┬┐┌─┐
+       //  ╚╗╔╝╠═╣║  ║ ║║╠═╣ ║ ║╣    ││├┤ ├┤ ├─┤│ ││  │ └─┐   │ │ │
+       //   ╚╝ ╩ ╩╩═╝╩═╩╝╩ ╩ ╩ ╚═╝  ─┴┘└─┘└  ┴ ┴└─┘┴─┘┴ └─┘   ┴ └─┘
+-      if (_.has(attribute, 'defaultsTo')) {
++      if (false) {
+         // Verify the attribute isn't an association
+         if (_.has(attribute, 'collection') || _.has(attribute, 'model')) {
+           throw flaverr({ name: 'userError' }, Error('The attribute `' + attributeName + '` on the `' + collection.identity + '` model is an association and can not have a default value'));

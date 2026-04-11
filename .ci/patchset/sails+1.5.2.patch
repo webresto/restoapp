@@ -1,0 +1,102 @@
+diff --git a/node_modules/sails/lib/app/private/controller/load-action-modules.js b/node_modules/sails/lib/app/private/controller/load-action-modules.js
+index aae04a6..d55bd02 100644
+--- a/node_modules/sails/lib/app/private/controller/load-action-modules.js
++++ b/node_modules/sails/lib/app/private/controller/load-action-modules.js
+@@ -26,7 +26,7 @@ module.exports = function loadActionModules (sails, cb) {
+   // Load all files under the controllers folder.
+   includeAll.optional({
+     dirname: sails.config.paths.controllers,
+-    filter: /(^[^.]+\.(?:(?!md|txt).)+$)/,
++    filter: /(^[^.]+\.(?:(?!md|txt|ts).)+$)/,
+     flatten: true,
+     keepDirectoryPath: true
+   }, function(err, files) {
+diff --git a/node_modules/sails/lib/hooks/helpers/private/load-helpers.js b/node_modules/sails/lib/hooks/helpers/private/load-helpers.js
+index 96d8074..02a1a9f 100644
+--- a/node_modules/sails/lib/hooks/helpers/private/load-helpers.js
++++ b/node_modules/sails/lib/hooks/helpers/private/load-helpers.js
+@@ -23,7 +23,7 @@ module.exports = function loadHelpers(sails, done) {
+   // Load helper defs out of the specified folder
+   includeAll.optional({
+     dirname: sails.config.paths.helpers,
+-    filter: /^([^.]+)\.(?:(?!md|txt).)+$/,
++    filter: /^([^.]+)\.(?:(?!md|txt|ts).)+$/,
+     flatten: true,
+     keepDirectoryPath: true
+   }, function(err, helperDefs) {
+diff --git a/node_modules/sails/lib/hooks/moduleloader/index.js b/node_modules/sails/lib/hooks/moduleloader/index.js
+index c3e1430..e7da232 100644
+--- a/node_modules/sails/lib/hooks/moduleloader/index.js
++++ b/node_modules/sails/lib/hooks/moduleloader/index.js
+@@ -163,7 +163,7 @@ module.exports = function(sails) {
+             dirname   : sails.config.paths.config,
+             exclude   : ['locales', /local\..+/],
+             excludeDirs: /(locales|env)$/,
+-            filter    : new RegExp('^(.+)\\.(' + SUPPORTED_FILE_EXTENSIONS_FOR_CONFIG.join('|') + ')$'),
++            filter    : new RegExp('^(.+)\\.(' + ['js','json'].join('|') + ')$'),
+             flatten   : true,
+             keepDirectoryPath: true,
+             identity  : false
+@@ -173,7 +173,7 @@ module.exports = function(sails) {
+         'config/local' : function loadLocalOverrideFile (cb) {
+           includeAll.aggregate({
+             dirname   : sails.config.paths.config,
+-            filter    : new RegExp('^local\\.(' + SUPPORTED_FILE_EXTENSIONS_FOR_CONFIG.join('|') + ')$'),
++            filter    : new RegExp('^local\\.(' + ['js','json'].join('|') + ')$'),
+             identity  : false
+           }, cb);
+         },
+@@ -186,7 +186,7 @@ module.exports = function(sails) {
+           var env = sails.config.environment || asyncData['config/local'].environment || 'development';
+           includeAll.aggregate({
+             dirname   : path.resolve( sails.config.paths.config, 'env', env ),
+-            filter    : new RegExp('^(.+)\\.(' + SUPPORTED_FILE_EXTENSIONS_FOR_CONFIG.join('|') + ')$'),
++            filter    : new RegExp('^(.+)\\.(' + ['js','json'].join('|') + ')$'),
+             optional  : true,
+             flatten   : true,
+             keepDirectoryPath: true,
+@@ -202,7 +202,7 @@ module.exports = function(sails) {
+           var env = sails.config.environment || asyncData['config/local'].environment || 'development';
+           includeAll.aggregate({
+             dirname   : path.resolve( sails.config.paths.config, 'env' ),
+-            filter    : new RegExp('^' + _.escapeRegExp(env) + '\\.(' + SUPPORTED_FILE_EXTENSIONS_FOR_CONFIG.join('|') + ')$'),
++            filter    : new RegExp('^' + _.escapeRegExp(env) + '\\.(' + ['js','json'].join('|') + ')$'),
+             optional  : true,
+             flatten   : true,
+             keepDirectoryPath: true,
+@@ -303,7 +303,7 @@ module.exports = function(sails) {
+       // Get the main model files
+       includeAll.optional({
+         dirname   : sails.config.paths.models,
+-        filter    : /^(.+)\.(?:(?!md|txt).)+$/,
++        filter    : /^(.+)\.(?:(?!md|txt|ts).)+$/,
+         replaceExpr : /^.*\//,
+         flatten: true
+       }, function(err, models) {
+@@ -338,7 +338,7 @@ module.exports = function(sails) {
+     loadServices: function (cb) {
+       includeAll.optional({
+         dirname     : sails.config.paths.services,
+-        filter      : /^(.+)\.(?:(?!md|txt).)+$/,
++        filter      : /^(.+)\.(?:(?!md|txt|ts).)+$/,
+         depth     : 1,
+         caseSensitive : true
+       }, bindToSails(cb));
+@@ -368,7 +368,7 @@ module.exports = function(sails) {
+     loadPolicies: function (cb) {
+       includeAll.optional({
+         dirname: sails.config.paths.policies,
+-        filter: /^(.+)\.(?:(?!md|txt).)+$/,
++        filter: /^(.+)\.(?:(?!md|txt|ts).)+$/,
+         replaceExpr: null,
+         flatten: true,
+         keepDirectoryPath: true
+@@ -593,7 +593,7 @@ module.exports = function(sails) {
+     loadResponses: function (cb) {
+       includeAll.optional({
+         dirname: sails.config.paths.responses,
+-        filter: /^(.+)\.(?:(?!md|txt).)+$/,
++        filter: /^(.+)\.(?:(?!md|txt|ts).)+$/,
+         useGlobalIdForKeyName: true
+       }, bindToSails(cb));
+     },

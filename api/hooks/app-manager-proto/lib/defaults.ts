@@ -23,6 +23,12 @@ module.exports = {
                 link: `/${getAdminPrefix()}/modules/my`,
                 icon: "home"
             },
+            {
+                id: "2",
+                name: "Extensions",
+                link: `/${getAdminPrefix()}/modules/versions`,
+                icon: "extension"
+            },
             // {
             //     id: "2",
             //     name: "Updates",

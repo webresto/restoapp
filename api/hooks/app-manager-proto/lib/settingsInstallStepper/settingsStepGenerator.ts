@@ -85,7 +85,7 @@ export default class SettingsStepGenerator {
 
 		let systemModuleList = ModuleHelper.getSystemModuleList();
 		for (let setting of uncoveredSettings) {
-			let settingModule = setting.module as Module;
+			let settingModule = null; // setting.module as Module;
 
 			if (setting.jsonSchema) {
 				if (!setting.uiSchema) {
@@ -94,12 +94,12 @@ export default class SettingsStepGenerator {
 
 				// add step using UI schema
 				let settingsStepInit: SettingsStepInit = {
-					canBeSkipped: !systemModuleList.includes(settingModule.appId),
+					canBeSkipped: true, // !systemModuleList.includes(settingModule?.appId),
 					description: setting.description,
 					sortOrder: 0,
-					groupSortOrder: systemModuleList.includes(settingModule.appId) ? 0 : 1,
+					groupSortOrder: 1, // systemModuleList.includes(settingModule?.appId) ? 0 : 1,
 					title: setting.name ?? setting.key,
-					badge: settingModule.appId,
+					badge: null, // settingModule?.appId,
 					payload: {type: "single", data: setting} as SinglePayload,
 					settingsKeys: [setting.key]
 				};
@@ -110,11 +110,11 @@ export default class SettingsStepGenerator {
 
 			} else {
 				// presence in systemModuleList means that setting is unskippable
-				if (systemModuleList.includes(settingModule?.appId)) {
+				// if (systemModuleList.includes(settingModule?.appId)) {
 					nonSkippablePlainSettings.push(setting)
-				} else {
-					skippablePlainSettings.push(setting)
-				}
+				// } else {
+				// 	skippablePlainSettings.push(setting)
+				// }
 			}
 		}
 
@@ -144,11 +144,9 @@ function generateStepFromSettings(settingsList: Settings[], groupSortOrder: numb
 	// group settings by its moduleAppId
 	let specificModuleSettings: { [key: string]: Settings[] } = {};
 	settingsList.forEach(setting => {
-		const module = setting.module as Module;
-		if (module) {
-			specificModuleSettings[module.appId] = specificModuleSettings[module.appId] || [];
-			specificModuleSettings[module.appId].push(setting);
-		}
+		const moduleAppId = "global"; // const module = setting.module as Module; if (module) { module.appId } else "global"
+		specificModuleSettings[moduleAppId] = specificModuleSettings[moduleAppId] || [];
+		specificModuleSettings[moduleAppId].push(setting);
 	});
 
 	// create particular step for every module, but every step should contain not more than 15 settings
@@ -171,10 +169,10 @@ function generateStepFromSettings(settingsList: Settings[], groupSortOrder: numb
 
 			let settingsStepInit: SettingsStepInit = {
 				canBeSkipped: canBeSkipped,
-				description: `Set of ${canBeSkipped === true ? "skippable" : "unskippable"} settings for ${canBeSkipped === true ? "" : "system"} module '${moduleAppId}'`,
+				description: `Set of ${canBeSkipped === true ? "skippable" : "unskippable"} settings`,
 				sortOrder: 0,
 				groupSortOrder: groupSortOrder,
-				title: `Settings for module '${moduleAppId}'${canBeSkipped !== true ? " (can not be skipped, this is a system module)" : ""}:`,
+				title: `Settings${canBeSkipped !== true ? " (can not be skipped)" : ""}:`,
 				badge: null,
 				payload: {type: "multi", data: currentChunk, uiSchema: uiSchema, jsonSchema: jsonSchema} as MultiPayload,
 				settingsKeys: currentChunk.map((item) => item.key)

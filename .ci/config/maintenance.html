@@ -12,7 +12,7 @@
       justify-content: space-between;
       height: 100vh;
       font-family: Arial, sans-serif;
-      background: linear-gradient(-45deg, #ee7752, #f13c3c, #6364ba, #23d5ab);
+      background: linear-gradient(-45deg, #4a4a4a, #6b6b6b, #5a5a5a, #7a7a7a);
       background-size: 400% 400%;
       animation: gradient 15s ease infinite;
     }
@@ -91,19 +91,19 @@
   
   
   <div class="company-logo-container">
-    <p class="info" id="loadingText">Loading</p>
+    <p class="info"><span id="loadingText">Loading</span><span id="loadingDots"></span></p>
   </div>
   
   <script>
     var dotsCount = 0;
   
     function addDot() {
-      var loadingText = document.getElementById("loadingText");
+      var dotsElement = document.getElementById("loadingDots");
       if (dotsCount < 3) {
-        loadingText.innerHTML += ".";
+        dotsElement.innerHTML = ".".repeat(dotsCount + 1);
         dotsCount++;
       } else {
-        loadingText.innerHTML = "Loading";
+        dotsElement.innerHTML = "";
         dotsCount = 0;
       }
     }

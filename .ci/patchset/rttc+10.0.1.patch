@@ -1,0 +1,17 @@
+diff --git a/node_modules/rttc/lib/helpers/types.js b/node_modules/rttc/lib/helpers/types.js
+index a11279d..1181562 100644
+--- a/node_modules/rttc/lib/helpers/types.js
++++ b/node_modules/rttc/lib/helpers/types.js
+@@ -460,9 +460,11 @@ var TYPES = {
+       }
+       // Reject RttcRefPlaceholders
+       // (this is a special case so there is a placeholder value that ONLY validates against the "ref" type)
+-      if (_.isObject(v) && v.constructor.name === 'RttcRefPlaceholder') {
++
++      if (_.isObject(v) &&  v.constructor  &&  v.constructor.name === 'RttcRefPlaceholder') {
+         return false;
+       }
++
+       if (_.isString(v) || _.isNumber(v) || _.isBoolean(v) || _.isPlainObject(v) || _.isArray(v) || _.isNull(v)) {
+         return true;
+       }

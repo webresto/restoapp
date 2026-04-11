@@ -75,11 +75,10 @@ jobs:
             ${{ github.ref_name != 'dev' && 'webresto/restoapp' || '' }}
           tags: |
             type=raw,value=${{ env.BRANCH }}
-            type=raw,value=${{ env.VERSION }}-${{ env.BRANCH }},enable=${{ env.BRANCH != 'main' }}
+            type=raw,value=${{ env.VERSION }}-${{ env.BRANCH }}
             type=raw,value=${{ env.VERSION }}-${{ env.BRANCH }}-commit-${{ env.SHORT_SHA }},enable=${{ env.BRANCH != 'main' }}
             type=raw,value=commit-${{ env.SHORT_SHA }},enable=${{ env.BRANCH != 'main' }}
             type=raw,value=latest,enable=${{ env.BRANCH == 'main' }}
-            type=raw,value=${{ env.VERSION }},enable=${{ env.BRANCH == 'main' }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -91,6 +90,7 @@ jobs:
           build-args: |
             BRANCH=${{ env.BRANCH }}
             COMMIT_HASH=${{ env.SHORT_SHA }}
+            CONTAINER_VERSION=${{ env.VERSION }}-${{ env.SHORT_SHA }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false

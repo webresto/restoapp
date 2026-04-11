@@ -52,7 +52,10 @@ for moduleDir in "$OUT_DIR"/*/; do
         if [[ "$(parse_boolean "$STAGING")" == "true" ]]; then
           CHANNEL="staging"
         fi
-        response=$(curl -s "https://marketplace.restoapp.org/getModuleDetails?appId=$appId&license=$WEBRESTO_LICENSE&channel=$CHANNEL")
+        response=$(curl -sf --retry 3 --retry-delay 3 "https://marketplace.restoapp.org/getModuleDetails?appId=$appId&license=$WEBRESTO_LICENSE&channel=$CHANNEL" 2>/dev/null) || {
+            log_warn "Failed to reach marketplace API for $appId (network error). Skipping module."
+            continue
+        }
         log_info "API response for $appId: ${response:0:400}"
 
         latestVersion=$(echo "$response" | jq -r '.latestVersion')

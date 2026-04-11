@@ -15,9 +15,6 @@ RUN npm i -g @webresto/cli tsx
 ARG BRANCH=main
 ENV BRANCH=$BRANCH
 
-# TODO: delete after release
-ENV STAGING=1
-
 # Corepack/yarn workaround
 RUN corepack enable || true
 
@@ -28,10 +25,15 @@ WORKDIR /app
 FROM base AS cacher_modules
 RUN apk add git python3 build-base
 WORKDIR /app
+
+# Copy all files needed for workspace resolution
 COPY . .
- RUN echo "nodeLinker: node-modules" > .yarnrc.yml
- RUN yarn set version berry || true
- RUN yarn workspaces focus --production
+
+# Configure Yarn and install dependencies using lock file
+RUN echo "nodeLinker: node-modules" > .yarnrc.yml
+RUN yarn set version berry || true
+RUN yarn workspaces focus --production
+RUN rm -rf ./local_modules
 
 ###################################
 #### BASE MODULES PREPARE 
@@ -47,34 +49,49 @@ RUN sed -i 's/\r$//' /app/.ci/utils/bake_admin_frontend
 RUN /app/.ci/utils/bake_admin_frontend
 
 ###################################
-#### POSTGRES TEST
-# FROM postgres:16-alpine AS test
+#### WEBRESTO CORE BUILD
+FROM base AS cacher_core_build
+RUN apk add --no-cache git build-base && update-ca-certificates
+WORKDIR /app
+COPY . .
+# Install dev dependencies for core module and build adminizer
+WORKDIR /app/local_modules/core
+RUN npm install --include=dev
+RUN npm run build:adminizer
+WORKDIR /app
 
-# ENV POSTGRES_PASSWORD postgres
-# ENV POSTGRES_USER postgres
-# ENV POSTGRES_DB postgres
-# ENV DATASTORE postgres
-# ENV PG_HOST localhost
-# ENV POSTGRES_BACKUP FALSE
 
-# RUN apk add --no-cache curl bash zip jq nodejs npm
+###################################
+#### TEST
+FROM base AS test
+RUN apk add --no-cache git build-base
+WORKDIR /app
+COPY --from=cacher_modules /app/ .
+# Dev dependencies (mocha, ts-node, typescript, chai) are not in --production install
+# so we install them on top with npm
+RUN npm install --ignore-scripts \
+    mocha \
+    ts-node \
+    typescript \
+    chai \
+    dotenv \
+    @types/mocha \
+    @types/chai \
+    @types/node
+RUN NODE_ENV=test \
+    TS_NODE_SKIP_IGNORE=true \
+    TS_NODE_COMPILER_OPTIONS='{"module":"commonjs","esModuleInterop":true}' \
+    ./node_modules/.bin/mocha \
+    -r ts-node/register/transpile-only \
+    "tests/mcp.test.ts" \
+    --exit
 
-# # RUN npm i -g mocha
-
-# RUN mkdir -p /tmp/test && cd /tmp/test && npm i chai@4.3.6 chai-http@4.4.0 mocha
-
-# WORKDIR /app
-# COPY --from=cacher_modules /app/ .
-# COPY --from=cacher_base_modules /app/modules ./seeds/modules
-# RUN cp -r /tmp/test/node_modules/* /app/node_modules/
-# RUN sed -i 's/\r$//' /app/.ci/bootstrap
-
-# RUN bash -c "nohup docker-entrypoint.sh postgres &" && sleep 10 && bash ./.ci/bootstrap test
-# RUN rm -rf ./migrations/* .gitmodules .git
 
 ###################################
 #### RELEASE
 FROM base AS release
+# Ensure tests passed before building release image
+COPY --from=test /app/tests ./tests
 WORKDIR /app
 
 
@@ -89,22 +106,27 @@ ENV STAGING=$STAGING
 ARG COMMIT_HASH
 ENV COMMIT_HASH=$COMMIT_HASH
 
+ARG CONTAINER_VERSION=
+ENV CONTAINER_VERSION=$CONTAINER_VERSION
+
 RUN apk add --no-cache nginx
 RUN npm i -g pm2 tsx typescript
 COPY .ci/config/nginx.conf /etc/nginx/nginx.conf
 COPY .ci/config/maintenance.html /var/lib/html/maintenance.html
-
 
 ENV WEBRESTO_MODULES_PATH=/app/modules
 
 WORKDIR /app
 COPY --from=cacher_modules /app/ .
 COPY --from=cacher_base_modules /app/modules ./seeds/modules
+COPY --from=cacher_core_build /app/local_modules/core/assets ./node_modules/@webresto/core/assets
 
 RUN rm -rf ./.sailsrc && cp ./.sailsrc.default .sailsrc
 ADD ./assets ./.tmp/public/
 RUN yarn set version berry
 
+
+RUN rm -rf index.ejs && mv /app/views/maintenance.ejs /app/views/index.ejs
 RUN sed -i 's/\r$//' /app/.ci/bootstrap
 RUN sed -i 's/\r$//' /app/.ci/utils/set_env
 ENTRYPOINT ["/bin/bash","/app/.ci/bootstrap"]

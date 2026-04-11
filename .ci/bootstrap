@@ -12,14 +12,30 @@ source "$SCRIPT_DIR/utils/helpers"
 export PROJECT_NAME=${PROJECT_NAME:-restoapp}
 export DEPLOY_TIME=$(date '+%d_%m_%Y_%H_%M')
 
+if [[ -z "${CONTAINER_VERSION}" ]]; then
+    CORE_VERSION=$(node -p "require('/app/local_modules/core/package.json').version" 2>/dev/null || node -p "require('/app/package.json').version" 2>/dev/null || echo "0.0.0")
+    SHORT_COMMIT_HASH="${COMMIT_HASH:0:7}"
+    if [[ -z "${SHORT_COMMIT_HASH}" ]]; then
+        SHORT_COMMIT_HASH="unknown"
+    fi
+    export CONTAINER_VERSION="${CORE_VERSION}-${SHORT_COMMIT_HASH}"
+fi
+
+# Update maintenance page status
+"$SCRIPT_DIR/utils/update_maintenance_status" "Initializing RestoApp"
+
 # run nginx
 log_info "Checking if action is 'start' to run nginx (action='$1')"
 if [ "$1" = 'start' ]; then
     log_info "Action is 'start' - entering nginx start block"
+    "$SCRIPT_DIR/utils/update_maintenance_status" "Starting web server"
     # set default registry if not provided
     export DOCKER_REGISTRY=${DOCKER_REGISTRY:-webresto}
     # update DOCKER_IMAGE env
     /app/.ci/utils/set_env DOCKER_IMAGE "${DOCKER_REGISTRY}/restoapp:commit-${COMMIT_HASH}" "/app/.env"
+    if [[ ! -z "${CONTAINER_VERSION}" ]]; then
+        /app/.ci/utils/set_env CONTAINER_VERSION "${CONTAINER_VERSION}" "/app/.env"
+    fi
     if [[ "$(parse_boolean "$SKIP_NGINX")" != "true" ]]; then
         log_info "SKIP_NGINX is '$SKIP_NGINX' - will attempt to start nginx"
         if [ -x "$(command -v nginx)" ]; then
@@ -74,6 +90,7 @@ cat /app/package.json | grep version
 
 # Install and update modules
 # copy assets from seed
+"$SCRIPT_DIR/utils/update_maintenance_status" "Preparing application assets"
 log_info "Checking for seed assets in /app/seeds/assets"
 if [ -d /app/seeds/assets ]; then
     log_info "Seed assets directory found - copying to /app/.tmp/public"
@@ -96,6 +113,7 @@ fi
 # Install node_modules
 log_info "Checking for NPM_MODULES_LISTFILE ('$NPM_MODULES_LISTFILE')"
 if [[ ! -z "$NPM_MODULES_LISTFILE" && -f $NPM_MODULES_LISTFILE ]]; then
+    "$SCRIPT_DIR/utils/update_maintenance_status" "Installing NPM dependencies"
     log_info "NPM modules list file found - installing NPM dependencies"
     /app/.ci/utils/install_npm_dependencies $NPM_MODULES_LISTFILE /app/node_modules
 else
@@ -106,6 +124,7 @@ fi
 # Install webresto modules
 log_info "Checking for WEBRESTO_MODULES_LISTFILE ('$WEBRESTO_MODULES_LISTFILE')"
 if [[ ! -z "$WEBRESTO_MODULES_LISTFILE" && -f $WEBRESTO_MODULES_LISTFILE ]]; then
+    "$SCRIPT_DIR/utils/update_maintenance_status" "Installing WebResto modules"
     log_info "Webresto modules list file found - installing modules"
     /app/.ci/utils/install_webresto_dependencies $WEBRESTO_MODULES_LISTFILE /app/modules $WEBRESTO_LICENSE
     export MODULES_TO_ENABLE="${MODULES_TO_ENABLE};$(paste -sd ";" $WEBRESTO_MODULES_LISTFILE)";
@@ -124,6 +143,7 @@ fi
 # Update webresto modules
 log_info "Checking MODULES_AUTO_UPDATE ('$MODULES_AUTO_UPDATE')"
 if [[ "$(parse_boolean "$MODULES_AUTO_UPDATE")" == "true" ]]; then
+    "$SCRIPT_DIR/utils/update_maintenance_status" "Updating WebResto modules"
     log_info "MODULES_AUTO_UPDATE set - updating webresto modules"
     /app/.ci/utils/update_webresto_dependencies /app/modules $WEBRESTO_LICENSE
 else
@@ -180,14 +200,14 @@ if [[ "${DATASTORE}" == "postgres" ]]; then
         local attempt=1
         local timeout=5
 
-        echo "Waiting for the database to be available..."
+        echo "Waiting for the database to be available"
 
         while [[ $attempt -le $max_attempts ]]; do
             if PGPASSWORD="$PG_PASSWORD" psql -h "$PG_HOST" -U "$PG_USER" -d "$PG_DATABASE" -c "SELECT 1;" &>/dev/null; then
                 echo "Database is available."
                 return 0
             else
-                echo "Attempt $attempt: Database not yet available. Retrying in $timeout seconds..."
+                echo "Attempt $attempt: Database not yet available. Retrying in $timeout seconds"
                 sleep "$timeout"
                 ((attempt++))
             fi
@@ -225,6 +245,7 @@ if [[ "${DATASTORE}" == "postgres" ]]; then
         # PGPASSWORD=postgres psql -h localhost -U postgres -d postgres -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
         # PGPASSWORD=postgres pg_restore -h localhost -U postgres -d postgres -Fc /backup/restoapp_.dump.sql
         if [ "$create_backup" = true ]; then
+            "$SCRIPT_DIR/utils/update_maintenance_status" "Creating database backup"
             log_info "Creating new backup to $POSTGRES_BACKUP_PATH/${PROJECT_NAME}_${DEPLOY_TIME}.dump.sql"
             PGPASSWORD=$PG_PASSWORD pg_dump -h ${PG_HOST} -Fc -U ${PG_USER} ${PG_DATABASE} > $POSTGRES_BACKUP_PATH/${PROJECT_NAME}_${DEPLOY_TIME}.dump.sql
         else
@@ -236,9 +257,10 @@ if [[ "${DATASTORE}" == "postgres" ]]; then
 
     log_info "Checking COLLECT_MIGRATIONS ('$COLLECT_MIGRATIONS')"
     if [[ "$(parse_boolean "$COLLECT_MIGRATIONS" "true")" == "true" ]]; then
+        "$SCRIPT_DIR/utils/update_maintenance_status" "Collecting database migrations"
         log_info "COLLECT_MIGRATIONS enabled - collecting migration files"
         # Migrations
-        export MIGRATIONS_PATH="/app/node_modules/sails-adminpanel/migrations:/app/local_modules/**/migrations:/app/modules/**/migrations:/app/api/hooks/**/migrations:$MIGRATIONS_PATH"
+        export MIGRATIONS_PATH="/app/node_modules/sails-adminpanel/migrations:/app/local_modules/**/migrations:/app/modules/**/migrations:/app/api/hooks/**/migrations:./node_modules/@webresto/**/migrations:$MIGRATIONS_PATH"
         destination_folder="/app/migrations"
         IFS=':' read -ra path_array <<< "$MIGRATIONS_PATH"
 
@@ -251,7 +273,7 @@ if [[ "${DATASTORE}" == "postgres" ]]; then
                     log_info "Copying migration file $file -> $destination_folder/$base_file"
                     cp -n "$file" "$destination_folder/$base_file"
                 else
-                    log_warn "Migration file '$file' not found. Skipping..."
+                    log_warn "Migration file '$file' not found. Skipping"
                 fi
             done
         done
@@ -261,6 +283,7 @@ if [[ "${DATASTORE}" == "postgres" ]]; then
     
     log_info "Checking AUTO_MIGRATION ('$AUTO_MIGRATION')"
     if [[ "$(parse_boolean "$AUTO_MIGRATION" "true")" == "true" ]]; then
+        "$SCRIPT_DIR/utils/update_maintenance_status" "Running database migrations"
         log_info "AUTO_MIGRATION is TRUE - waiting for DB and running migrations"
         wait_for_database
         
@@ -293,6 +316,7 @@ if [ "$ACTION" != 'start' ] && [ "$ACTION" != 'test' ]; then
 fi
 
 if [ "$ACTION" = 'start' ]; then    
+    "$SCRIPT_DIR/utils/update_maintenance_status" "Starting RestoApp application"
     log_info "Action 'start' - preparing to start app"
     cd /app
     : ${PM2_MODE:=FORK}
@@ -313,6 +337,7 @@ if [ "$ACTION" = 'start' ]; then
     fi
     # Run the app via chosen interpreter so TSX/TypeScript files can be executed if available.
     log_info "Starting pm2-runtime with interpreter: $INTERPRETER (PM2_MODE=$PM2_MODE)"
+    "$SCRIPT_DIR/utils/update_maintenance_status" "Running RestoApp application"
     pm2-runtime start restoapp.js --interpreter "$INTERPRETER" -i $( [ "$PM2_MODE" = "CLUSTER" ] && echo "max" || echo "1" )
 elif [ "$ACTION" = 'test' ]; then
     log_info "Action 'test' - running db migrations and tests"

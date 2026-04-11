@@ -1,0 +1,15 @@
+diff --git a/node_modules/include-all/lib/help-include-all-sync.js b/node_modules/include-all/lib/help-include-all-sync.js
+index b6d0f8b..c9505f7 100644
+--- a/node_modules/include-all/lib/help-include-all-sync.js
++++ b/node_modules/include-all/lib/help-include-all-sync.js
+@@ -290,7 +290,9 @@ module.exports = function includeAll(options) {
+ 
+           // Require the module.
+           try {
+-            _modules[keyName] = require(filepath);
++            if(filepath.endsWith("js")){
++              _modules[keyName] = require(filepath);
++            }
+           } catch (e) {
+             // Skip this module silently if `ignoreRequireFailures` is enabled.
+             if (options.ignoreRequireFailures) { return; }
