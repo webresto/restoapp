@@ -62,7 +62,11 @@ if [[ -f "$WR_MODULES_LIST_FILE" ]]; then
 
             if [[ -d "$OUT_DIR/$module" && ( "$(parse_boolean "$WR_AUTOUPDATE_MODULES")" == "true" || "$NODE_ENV" != "production" ) ]]; then
                 log_info "Module $module exists - checking marketplace for updates"
-                latestVersion=$(curl -s "https://marketplace.restoapp.org/getModuleDetails?appId=$module&license=$WEBRESTO_LICENSE" | jq -r '.latestVersion')
+                CHANNEL=main
+                if [[ "$(parse_boolean "$STAGING")" == "true" ]]; then
+                    CHANNEL="staging"
+                fi
+                latestVersion=$(curl -sf --retry 3 --retry-delay 3 "https://marketplace.restoapp.org/getModuleDetails?appId=$module&license=$WEBRESTO_LICENSE&channel=$CHANNEL" 2>/dev/null | jq -r '.latestVersion' 2>/dev/null) || latestVersion=""
                 currentVersion=$(jq -r '.version' "$OUT_DIR/$module/package.json")
                 log_info "Latest: '$latestVersion' Current: '$currentVersion'"
                 if [[ "$latestVersion" != "$currentVersion" && ! -z "$latestVersion" ]]; then

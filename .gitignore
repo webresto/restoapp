@@ -25,7 +25,6 @@ modules/*
 !modules/.gitkeep
 
 !seeds/.gitkeep
-docs
 orders.log
 models/ts
 yarn-error.log
@@ -41,8 +40,8 @@ modules/*
 patches
 config/locales/*
 
-api/bootstrap/*
-!api/bootstrap/.gitkeep
+# api/bootstrap/*
+# !api/bootstrap/.gitkeep
 .sailsrc
 config/locales/en.json
 installStepper/uploadedImages
@@ -51,3 +50,5 @@ adminizer
 .pnp.cjs
 .gitignore
 .pnp.loader.mjs
+.env
+.ai-notes
