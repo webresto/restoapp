@@ -51,4 +51,6 @@ adminizer
 .gitignore
 .pnp.loader.mjs
 .env
-.ai-notes
+.ai-notes/*
+!.ai-notes/*.plan.md
+.claude1
