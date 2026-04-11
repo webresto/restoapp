@@ -53,4 +53,4 @@ adminizer
 .env
 .ai-notes/*
 !.ai-notes/*.plan.md
-.claude1
+.claude
