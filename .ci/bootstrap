@@ -33,9 +33,6 @@ if [ "$1" = 'start' ]; then
     export DOCKER_REGISTRY=${DOCKER_REGISTRY:-webresto}
     # update DOCKER_IMAGE env
     /app/.ci/utils/set_env DOCKER_IMAGE "${DOCKER_REGISTRY}/restoapp:commit-${COMMIT_HASH}" "/app/.env"
-    if [[ ! -z "${CONTAINER_VERSION}" ]]; then
-        /app/.ci/utils/set_env CONTAINER_VERSION "${CONTAINER_VERSION}" "/app/.env"
-    fi
     if [[ "$(parse_boolean "$SKIP_NGINX")" != "true" ]]; then
         log_info "SKIP_NGINX is '$SKIP_NGINX' - will attempt to start nginx"
         if [ -x "$(command -v nginx)" ]; then
