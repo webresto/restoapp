@@ -118,4 +118,3 @@ You can find more modules or even upload your own modules from [https://marketpl
 ## License
 
 [MIT License](https://opensource.org/licenses/MIT)  Copyright © 2018-2026
-
