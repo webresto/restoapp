@@ -7,17 +7,19 @@ module.exports.adminpanel = {
   translation: {
     locales: [
     "en",
+    "ru",
     "es",
     "fr",
     "de",
-    "ru",
-    "zh",
     "ko",
-    "ja",
-    "vn",
-    "th"
+    "ua",
+    "uz",
+    "pt",
+    "ar",
+    "cn",
+    "jp",
+    "vi"
     ],
-    path: `config/locales`,
     defaultLocale: 'en'
   },
   dashboard: {
