@@ -1,0 +1,7 @@
+{
+  "Installed Extensions": "インストール済み拡張機能",
+  "Name and installed version": "名前とインストール済みバージョン",
+  "No managed extensions were found": "管理対象の拡張機能が見つかりませんでした",
+  "unknown": "不明",
+  "Failed to load installed extensions list": "インストール済み拡張機能一覧の読み込みに失敗しました"
+}

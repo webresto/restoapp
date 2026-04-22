@@ -87,12 +87,13 @@ const styles = {
 
 export default function ModulesVersions(props) {
   const modules = Array.isArray(props?.data?.modules) ? props.data.modules : [];
+  const translations = props?.data?.translations || {};
   const marketplaceBaseUrl = 'https://marketplace.restoapp.org/catalog/module/';
 
   const rows = modules.map((item, index) => {
-    const name = item?.name || item?.appId || 'unknown';
+    const name = item?.name || item?.appId || translations.unknown || '';
     const appId = item?.appId || '';
-    const version = item?.version || 'unknown';
+    const version = item?.version || translations.unknown || '';
     const marketplaceLink = appId ? `${marketplaceBaseUrl}${encodeURIComponent(appId)}` : '';
 
     const nameNode = marketplaceLink
@@ -120,10 +121,10 @@ export default function ModulesVersions(props) {
   return createElement(
     'div',
     { style: styles.page },
-    createElement('h1', { style: styles.title }, 'Installed Extensions'),
-    createElement('p', { style: styles.subtitle }, 'Name and installed version'),
+    createElement('h1', { style: styles.title }, translations.title || ''),
+    createElement('p', { style: styles.subtitle }, translations.subtitle || ''),
     modules.length
       ? createElement('ul', { style: styles.list }, ...rows)
-      : createElement('p', { style: styles.empty }, 'No managed extensions were found')
+      : createElement('p', { style: styles.empty }, translations.empty || '')
   );
 }

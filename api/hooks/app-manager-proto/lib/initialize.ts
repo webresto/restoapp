@@ -16,6 +16,7 @@ import bindAdminpanelConfig from "./bindAdminpanelConfig";
 import bindInstallStepper from "./bindInstallStepper";
 import bindRoutes from "./bindRoutes";
 import HookTools from "./hookTools";
+import { TranslationHelper } from "../helpers/translationHelper";
 
 let path = require("path");
 
@@ -45,6 +46,15 @@ export default function ToInitialize(sails: any) {
 				}
 			});
 
+			sails.on('Adminpanel:loaded', () => {
+				try {
+					const adminizer = sails.hooks.adminpanel?.adminizer;
+					TranslationHelper.loadAdminizerTranslations(adminizer, resolve(__dirname, "../locales"));
+				} catch (error) {
+					sails.log.error("Adminpanel > Error when loading app-manager-proto adminizer translations", error);
+				}
+			});
+
 			afterHook();
 			bindAccessRights();
 			bindAdminpanelConfig()
@@ -71,7 +81,9 @@ export default function ToInitialize(sails: any) {
 			}
 
 			if (sails.hooks.i18n && sails.hooks.i18n.appendLocale) {
+				TranslationHelper.loadTranslations(resolve(__dirname, "../locales"));
 				sails.after(["hook:i18n:loaded"], () => {
+					TranslationHelper.loadTranslations(resolve(__dirname, "../locales"));
 					bindTranslations();
 				});
 			} else {

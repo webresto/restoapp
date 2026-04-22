@@ -8,12 +8,14 @@ module.exports.adminpanel = {
     locales: [
     "en",
     "es",
-    "zh",
-    "hi",
-    "ar",
-    "ru",
     "fr",
-    "ua"
+    "de",
+    "ru",
+    "zh",
+    "ko",
+    "ja",
+    "vn",
+    "th"
     ],
     path: `config/locales`,
     defaultLocale: 'en'
