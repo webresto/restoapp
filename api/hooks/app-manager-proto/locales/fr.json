@@ -1,0 +1,7 @@
+{
+  "Installed Extensions": "Extensions installées",
+  "Name and installed version": "Nom et version installée",
+  "No managed extensions were found": "Aucune extension gérée n'a été trouvée",
+  "unknown": "inconnu",
+  "Failed to load installed extensions list": "Échec du chargement de la liste des extensions installées"
+}

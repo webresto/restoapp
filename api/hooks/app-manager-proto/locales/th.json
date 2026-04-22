@@ -1,0 +1,7 @@
+{
+  "Installed Extensions": "ส่วนขยายที่ติดตั้งแล้ว",
+  "Name and installed version": "ชื่อและเวอร์ชันที่ติดตั้ง",
+  "No managed extensions were found": "ไม่พบส่วนขยายที่มีการจัดการ",
+  "unknown": "ไม่ทราบ",
+  "Failed to load installed extensions list": "ไม่สามารถโหลดรายการส่วนขยายที่ติดตั้งได้"
+}

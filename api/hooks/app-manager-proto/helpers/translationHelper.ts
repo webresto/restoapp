@@ -88,6 +88,40 @@ export class TranslationHelper {
         }
     }
 
+    public static loadAdminizerTranslations(adminizer: any, translationsPath: string): void {
+        if (!adminizer?.i18n?.appendLocale) {
+            sails.log.warn("Adminizer i18n.appendLocale is not available, skipping app-manager-proto translations");
+            return;
+        }
+
+        try {
+            const translationsDirectoryPath = path.resolve(translationsPath);
+            if (!fs.existsSync(translationsDirectoryPath)) {
+                sails.log.warn(`Adminpanel module translations directory not found: ${translationsDirectoryPath}`);
+                return;
+            }
+
+            const localesList = sails.config.i18n?.locales ?? [];
+            for (const locale of localesList) {
+                const localeFile = path.resolve(translationsDirectoryPath, `${locale}.json`);
+                if (!fs.existsSync(localeFile)) {
+                    sails.log.debug(`Adminpanel module translations: locale file not found for ${locale}`);
+                    continue;
+                }
+
+                try {
+                    const fileContent = fs.readFileSync(localeFile, "utf8");
+                    const jsonData = JSON.parse(fileContent);
+                    adminizer.i18n.appendLocale(locale, jsonData);
+                } catch (error) {
+                    sails.log.error(`Adminpanel module translations > Error when reading ${locale}.json:`, error);
+                }
+            }
+        } catch (e) {
+            sails.log.error("Adminpanel > Error when loading adminizer translations", e);
+        }
+    }
+
     public static translateProperties(object: any, locale: string, fields: string[]): any {
         const i18n = this.getI18nInstance(locale);
 
