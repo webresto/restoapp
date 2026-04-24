@@ -1,14 +1,36 @@
 import {InstallStepper} from "../lib/installStepper/installStepper";
 import * as path from "path";
 import * as ejs from "ejs";
+import * as fs from "fs";
 
 export default async function processInstallStep(req: any, res: any): Promise<void> {
-	console.log(req.user)
+	const locale = resolveRequestLocale(req);
+	const t = buildTranslator(locale, req);
+
 	if (req.adminizer.config.auth.enable) {
         if (!req.user) {
             return req.Inertia.redirect(`${req.adminizer.config.routePrefix}/model/userap/login`);
         } else if (!req.adminizer.accessRightsHelper.hasPermission(`process-install-step`, req.user)) {
-            return res.sendStatus(403);
+			if (req.method.toUpperCase() === 'GET') {
+				const installStepper = InstallStepper.getStepper(req.params.id);
+				const hasActiveBlock =
+					!!installStepper &&
+					(installStepper.hasUnprocessedSteps() || installStepper.hasUnfinalizedSteps());
+				if (!hasActiveBlock) {
+					return res.redirect(req?.adminizer?.config?.routePrefix || '/admin');
+				}
+
+				const adminUrl = req?.adminizer?.config?.routePrefix || '/admin';
+				const html = await ejs.renderFile(
+					path.join(__dirname, '../views/installer/blocked.ejs'),
+					{
+						__: t,
+						adminUrl
+					}
+				);
+				return res.status(403).send(html);
+			}
+            return res.status(403).send(t("System update access denied"));
         }
     }
 
@@ -20,7 +42,7 @@ export default async function processInstallStep(req: any, res: any): Promise<vo
 		}
 
 		if (installStepper.hasUnprocessedSteps() || installStepper.hasUnfinalizedSteps()) {
-			let renderData = installStepper.render(req.user.locale);
+			let renderData = installStepper.render(locale);
 			let renderer = renderData.currentStep.renderer;
 			console.log("Renderer:", renderer, "Step ID:", renderData.currentStep.id);
 			
@@ -34,7 +56,7 @@ export default async function processInstallStep(req: any, res: any): Promise<vo
 				const errorData = {
 					error: e, 
 					stepperId: installStepper.id,
-					__: (key: string) => key // Simple fallback function
+					__: t
 				};
 				const html = await ejs.renderFile(path.join(__dirname, '../views/installer/error.ejs'), errorData);
 				res.send(html);
@@ -48,7 +70,7 @@ export default async function processInstallStep(req: any, res: any): Promise<vo
 			const templateData = {
 				...renderData, 
 				stepperId: installStepper.id,
-				__: (key: string) => key // Simple fallback function that returns the key as-is
+				__: t
 			};
 			
 			const html = await ejs.renderFile(path.join(__dirname, `../views/installer/${templateName}.ejs`), templateData);
@@ -186,8 +208,6 @@ function uploadFiles(files: any, currentStepId: string | number) {
 }
 
 async function processUploadedFile(file: any, currentStepId: string | number): Promise<string> {
-	const fs = require('fs');
-	
 	// Create target directory if it doesn't exist
 	const targetDir = path.join(process.cwd(), 'installStepper', 'uploadedImages');
 	if (!fs.existsSync(targetDir)) {
@@ -205,4 +225,84 @@ async function processUploadedFile(file: any, currentStepId: string | number): P
 	
 	console.log("PROCESSED FILE", finalPath);
 	return finalPath;
+}
+
+function normalizeLocale(value: string): string {
+	if (!value) return '';
+	const clean = value.replace('_', '-');
+	return clean.split('-')[0];
+}
+
+function mapLocaleAlias(locale: string): string {
+	const aliases: Record<string, string> = {
+		jp: 'ja',
+		ja: 'jp',
+		cn: 'zh',
+		zh: 'cn',
+		vi: 'vn',
+		vn: 'vi'
+	};
+
+	return aliases[locale] || locale;
+}
+
+function resolveRequestLocale(req: any): string {
+	const availableLocales: string[] =
+		req?.adminizer?.config?.translation?.locales ||
+		sails.config?.i18n?.locales ||
+		[];
+	const requestedLocale = req?.user?.locale || req?.locale || req?.getLocale?.() || '';
+	const normalizedLocale = normalizeLocale(requestedLocale);
+
+	if (availableLocales.includes(requestedLocale)) {
+		return requestedLocale;
+	}
+
+	if (availableLocales.includes(normalizedLocale)) {
+		return normalizedLocale;
+	}
+
+	const aliasLocale = mapLocaleAlias(normalizedLocale);
+	if (availableLocales.includes(aliasLocale)) {
+		return aliasLocale;
+	}
+
+	return req?.adminizer?.config?.translation?.defaultLocale || sails.config?.i18n?.defaultLocale || 'en';
+}
+
+function loadModuleLocaleMessages(locale: string): Record<string, string> {
+	const messagesDir = path.resolve(__dirname, '../locales');
+	const normalizedLocale = normalizeLocale(locale);
+	const candidates = [
+		locale,
+		normalizedLocale,
+		mapLocaleAlias(locale),
+		mapLocaleAlias(normalizedLocale),
+		'en'
+	].filter(Boolean);
+
+	for (const candidate of candidates) {
+		const localeFile = path.resolve(messagesDir, `${candidate}.json`);
+		if (!fs.existsSync(localeFile)) continue;
+
+		try {
+			const fileContent = fs.readFileSync(localeFile, 'utf8');
+			return JSON.parse(fileContent);
+		} catch (_error) {
+			// Ignore malformed locale file and continue fallback chain
+		}
+	}
+
+	return {};
+}
+
+function buildTranslator(locale: string, req: any): (key: string) => string {
+	const moduleLocaleMessages = loadModuleLocaleMessages(locale);
+
+	return (key: string) => {
+		if (Object.prototype.hasOwnProperty.call(moduleLocaleMessages, key)) {
+			return moduleLocaleMessages[key];
+		}
+		return req?.i18n?.__ ? req.i18n.__(key) : key;
+	};
 }

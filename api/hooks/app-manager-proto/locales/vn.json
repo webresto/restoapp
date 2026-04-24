@@ -3,5 +3,9 @@
   "Name and installed version": "Tên và phiên bản đã cài đặt",
   "No managed extensions were found": "Không tìm thấy tiện ích mở rộng được quản lý",
   "unknown": "không xác định",
-  "Failed to load installed extensions list": "Không thể tải danh sách tiện ích mở rộng đã cài đặt"
+  "Failed to load installed extensions list": "Không thể tải danh sách tiện ích mở rộng đã cài đặt",
+  "System update in progress": "Hệ thống đang được cập nhật",
+  "The system requires an update. Please wait a few minutes, then contact your administrator.": "Hệ thống cần được cập nhật. Vui lòng đợi vài phút, sau đó liên hệ quản trị viên.",
+  "System update access denied": "Từ chối truy cập cập nhật hệ thống",
+  "Go to admin panel": "Đi tới bảng quản trị"
 }

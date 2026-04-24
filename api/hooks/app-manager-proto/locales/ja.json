@@ -3,5 +3,9 @@
   "Name and installed version": "名前とインストール済みバージョン",
   "No managed extensions were found": "管理対象の拡張機能が見つかりませんでした",
   "unknown": "不明",
-  "Failed to load installed extensions list": "インストール済み拡張機能一覧の読み込みに失敗しました"
+  "Failed to load installed extensions list": "インストール済み拡張機能一覧の読み込みに失敗しました",
+  "System update in progress": "システム更新を実行中です",
+  "The system requires an update. Please wait a few minutes, then contact your administrator.": "システムの更新が必要です。数分お待ちいただき、その後管理者へご連絡ください。",
+  "System update access denied": "システム更新へのアクセスが拒否されました",
+  "Go to admin panel": "管理パネルへ移動"
 }

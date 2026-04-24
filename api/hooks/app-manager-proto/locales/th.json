@@ -3,5 +3,9 @@
   "Name and installed version": "ชื่อและเวอร์ชันที่ติดตั้ง",
   "No managed extensions were found": "ไม่พบส่วนขยายที่มีการจัดการ",
   "unknown": "ไม่ทราบ",
-  "Failed to load installed extensions list": "ไม่สามารถโหลดรายการส่วนขยายที่ติดตั้งได้"
+  "Failed to load installed extensions list": "ไม่สามารถโหลดรายการส่วนขยายที่ติดตั้งได้",
+  "System update in progress": "กำลังอัปเดตระบบ",
+  "The system requires an update. Please wait a few minutes, then contact your administrator.": "ระบบต้องการการอัปเดต กรุณารอสักครู่ แล้วแจ้งผู้ดูแลระบบ",
+  "System update access denied": "ไม่อนุญาตให้เข้าถึงการอัปเดตระบบ",
+  "Go to admin panel": "ไปที่แผงผู้ดูแลระบบ"
 }

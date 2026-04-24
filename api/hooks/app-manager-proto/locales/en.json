@@ -3,5 +3,9 @@
   "Name and installed version": "Name and installed version",
   "No managed extensions were found": "No managed extensions were found",
   "unknown": "unknown",
-  "Failed to load installed extensions list": "Failed to load installed extensions list"
+  "Failed to load installed extensions list": "Failed to load installed extensions list",
+  "System update in progress": "System update in progress",
+  "The system requires an update. Please wait a few minutes, then contact your administrator.": "The system requires an update. Please wait a few minutes, then contact your administrator.",
+  "System update access denied": "System update access denied",
+  "Go to admin panel": "Go to admin panel"
 }
