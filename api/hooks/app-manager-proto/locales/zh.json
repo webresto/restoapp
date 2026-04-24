@@ -3,5 +3,9 @@
   "Name and installed version": "名称和已安装版本",
   "No managed extensions were found": "未找到受管理的扩展",
   "unknown": "未知",
-  "Failed to load installed extensions list": "无法加载已安装扩展列表"
+  "Failed to load installed extensions list": "无法加载已安装扩展列表",
+  "System update in progress": "系统正在更新",
+  "The system requires an update. Please wait a few minutes, then contact your administrator.": "系统需要更新。请等待几分钟，然后联系管理员。",
+  "System update access denied": "系统更新访问被拒绝",
+  "Go to admin panel": "前往管理面板"
 }

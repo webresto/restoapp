@@ -3,5 +3,9 @@
   "Name and installed version": "이름 및 설치된 버전",
   "No managed extensions were found": "관리되는 확장 프로그램을 찾을 수 없습니다",
   "unknown": "알 수 없음",
-  "Failed to load installed extensions list": "설치된 확장 프로그램 목록을 불러오지 못했습니다"
+  "Failed to load installed extensions list": "설치된 확장 프로그램 목록을 불러오지 못했습니다",
+  "System update in progress": "시스템 업데이트 진행 중",
+  "The system requires an update. Please wait a few minutes, then contact your administrator.": "시스템 업데이트가 필요합니다. 몇 분 기다린 후 관리자에게 알려주세요.",
+  "System update access denied": "시스템 업데이트 접근이 거부되었습니다",
+  "Go to admin panel": "관리자 패널로 이동"
 }

@@ -3,5 +3,9 @@
   "Name and installed version": "Название и установленная версия",
   "No managed extensions were found": "Управляемые расширения не найдены",
   "unknown": "неизвестно",
-  "Failed to load installed extensions list": "Не удалось загрузить список установленных расширений"
+  "Failed to load installed extensions list": "Не удалось загрузить список установленных расширений",
+  "System update in progress": "Выполняется обновление системы",
+  "The system requires an update. Please wait a few minutes, then contact your administrator.": "Системе требуется обновление. Пожалуйста, подождите несколько минут, затем сообщите администратору.",
+  "System update access denied": "Доступ к обновлению системы запрещен",
+  "Go to admin panel": "Перейти в панель администратора"
 }

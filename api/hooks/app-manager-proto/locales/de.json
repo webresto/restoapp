@@ -3,5 +3,9 @@
   "Name and installed version": "Name und installierte Version",
   "No managed extensions were found": "Keine verwalteten Erweiterungen gefunden",
   "unknown": "unbekannt",
-  "Failed to load installed extensions list": "Die Liste der installierten Erweiterungen konnte nicht geladen werden"
+  "Failed to load installed extensions list": "Die Liste der installierten Erweiterungen konnte nicht geladen werden",
+  "System update in progress": "Systemaktualisierung wird durchgeführt",
+  "The system requires an update. Please wait a few minutes, then contact your administrator.": "Das System benötigt ein Update. Bitte warten Sie einige Minuten und informieren Sie dann den Administrator.",
+  "System update access denied": "Zugriff auf die Systemaktualisierung verweigert",
+  "Go to admin panel": "Zum Admin-Panel"
 }
