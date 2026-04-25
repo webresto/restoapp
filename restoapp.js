@@ -48,10 +48,6 @@ process.env.ADMINPANEL_LAZY_GEN_ADMIN_DISABLE="1"
 //       process.env.HOSTNAME ? process.env.HOSTNAME :
 //         process.env.RESTOCORE_URL ? process.env.RESTOCORE_URL.replace(/^https?:\/\//, '').replace(/[^a-zA-Z0-9-_]/g, '-').toLowerCase() : "";
 
-process.env.LOKI_LABEL_APP_NAME = process.env.LOKI_LABEL_APP_NAME ? process.env.LOKI_LABEL_APP_NAME : `restocore-${process.env.PROJECT_NAME}-${process.env.NODE_ENV}`
-process.env.LOKI_LABEL_SOURCE = "restocore";
-process.env.LOKI_LABEL_RESTOAPP = process.env.LOKI_LABEL_RESTOAPP ? process.env.LOKI_LABEL_RESTOAPP : `restoapp-${process.env.PROJECT_NAME}-${process.env.NODE_ENV}-${process.env.STAGING}-${(new Date).toISOString().split('T')[0]}`
-
 // if (process.env.NODE_ENV !== "production") {
 //   process.env.DEV = process.env.DEV !== undefined? process.env.DEV:"TRUE"
 // }
