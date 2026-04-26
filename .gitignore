@@ -54,5 +54,6 @@ adminizer
 .ai-notes/*
 !.ai-notes/*.plan.md
 .claude
+.ai-notes
 .playwright-mcp
 *.png

@@ -3,8 +3,8 @@ name: Build and publish Docker image
 on:
   push:
     branches:  
-      # - main
-      # - staging
+      - main
+      - staging
       - next
       - dev
   workflow_dispatch: {}

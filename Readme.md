@@ -66,7 +66,7 @@ Since the Sails framework is used as a base, it's necessary to explicitly or ind
 To run the application using Docker:
 
 ```bash
-docker run --name restoapp -p 8080:8080 webresto/restoapp:latest
+docker run --name restoapp -p 8080:8080 ghcr.io/webresto/restoapp:latest
 ```
 
 After the container starts, open your browser and navigate to [http://localhost:8080](http://localhost:8080) to access the RestoApp application.
@@ -76,12 +76,12 @@ After the container starts, open your browser and navigate to [http://localhost:
 To build the Docker image from source:
 
 ```bash
-docker build -t webresto/restoapp:latest .
+docker build -t ghcr.io/webresto/restoapp:latest .
 ```
 
 
 ## Setup
-We currently only support installation via docker. Look at this image [webresto/restoapp](https://hub.docker.com/repository/docker/webresto/restoapp/general)
+We currently only support installation via docker. Look at this image [ghcr.io/webresto/restoapp](https://github.com/webresto/restoapp/pkgs/container/restoapp)
 
 ## Usage
 
@@ -103,12 +103,7 @@ You can find more modules or even upload your own modules from [https://marketpl
 
 
 ## Environment Variables
-
-- `WR_DISABLE_MODULE_EXIST_CHECK`: Turn off module folder presence check (enables forced reinstallation based on the file)
-
-
-
-
+-
 
 ## Thanks & Support
 
