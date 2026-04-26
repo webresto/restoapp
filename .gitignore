@@ -52,3 +52,5 @@ adminizer
 .pnp.loader.mjs
 .env
 .ai-notes
+.playwright-mcp
+*.png
