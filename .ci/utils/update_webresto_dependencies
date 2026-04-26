@@ -97,7 +97,7 @@ for moduleDir in "$OUT_DIR"/*/; do
         # Run npm install after the module is installed
         log_info "Running npm install for $appId in $moduleDir..."
         cd "$moduleDir" || { log_error "Failed to cd to $moduleDir"; continue; }
-        npm install --omit=dev
+        npm install --omit=dev --legacy-peer-deps
 
         # Check the installed version
         if [[ -f "$moduleDir/package.json" ]]; then
