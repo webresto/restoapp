@@ -343,6 +343,30 @@ curl http://localhost:1337/mcp
 curl "http://localhost:1337/mcp?mcp_key=your-admin-key"
 ```
 
+### Menu upload and group assignment (important)
+
+When importing or mass-updating menu data via MCP:
+
+- For dishes, canonical storage field is `parentGroup`.
+- `dish-update` accepts all aliases: `group`, `groupId`, `parentGroup`.
+- `dish-list` accepts `groupId` or `parentGroup` filters.
+- For groups, parent category field is `parentGroup`.
+
+Preferred payload for moving a dish:
+
+```json
+{ "id": "dish-id", "parentGroup": "target-group-id" }
+```
+
+Recommended safe flow for bulk menu load:
+
+1. Resolve target group IDs first (`group-list` / `group-get`).
+2. Apply updates with `dish-update` using `parentGroup` (or legacy aliases).
+3. Verify each batch:
+   - `dish-get` for spot checks (`result.parentGroup` must match target group id).
+   - `dish-list` with `groupId=<target-group-id>` (or `parentGroup=<target-group-id>`) to confirm dish appears in the expected category.
+4. Re-query ungrouped dishes and rerun only for unresolved rows.
+
 ### Internal calls (server-side)
 
 Invoke a tool from server-side code without going through HTTP:
