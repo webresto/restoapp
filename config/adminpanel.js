@@ -26,8 +26,9 @@ module.exports.adminpanel = {
     // Widgets are initialized and configured in local_modules/core/lib/adminpanel/widgets
     // defaultWidgets will be populated by core module
   },
-  showVersion: true,
-  versionText: process.env.CONTAINER_VERSION || process.env.APP_VERSION || process.env.VERSION,
+  showVersion: {
+    text: process.env.CONTAINER_VERSION || process.env.APP_VERSION || process.env.VERSION,
+  },
   mediamanager: false,
   policies: [],
   brand: {
