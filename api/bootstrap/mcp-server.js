@@ -43,4 +43,8 @@ module.exports.default = async function (sails) {
   if (!process.env.MCP_ADMIN_KEY) {
     sails.log.warn('Bootstrap > MCP: MCP_ADMIN_KEY is not set — protected tools are inaccessible');
   }
+
+  // Signal that mcp is ready — modules should listen to this event instead of
+  // hook:<name>:loaded, because mcp global is guaranteed to exist at this point.
+  sails.emit('mcp:ready');
 };

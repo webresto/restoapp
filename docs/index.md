@@ -1,5 +1,5 @@
 
-# [Install](./install.md) | [Features](./features.md) | [Modules](./modules.md) | [Custom Module](./custom-module/index.md) | [MCP](./custom-module/mcp-tools.md)
+# [Install](./install.md) | [Features](./features.md) | [Modules](./modules.md) | [Custom Module](./custom-module/index.md) | [MCP](./mcp.md)
 
 # RestoApp: Open-Source Backend for Food Delivery and Local Commerce
 
@@ -81,4 +81,18 @@ Allows interaction with restaurant management systems:
 - Ability to develop a custom application.
 - Frontend is built with Angular and provided as a service.
 - Free and paid versions of the frontend available.
+
+### 10. MCP Server (AI Agent Integration)
+Built-in HTTP server compatible with the [Model Context Protocol](./mcp.md), allowing AI agents and bots to interact with the application over plain HTTP — no special SDK required.
+
+- **Menu browsing** — tools to list menu groups and dishes (`menu`, `group`, `dishes`, `dish`).
+- **Image upload** — upload images to `assets/uploads/` via a protected tool (`upload-image`).
+- **Health check** — uptime, memory usage, and timestamp (`health`).
+- **Admin info** — environment variables, Node.js version, PID (`admin-info`).
+- **Modules info** — list of installed modules (`modules-info`).
+- **Two access modes** — `public` tools accessible by anyone; `protected` tools require `MCP_ADMIN_KEY`.
+- **Self-documenting** — `GET /mcp` returns the full tool catalogue with ready-to-copy `curl` examples.
+- **Extensible** — add tools by dropping a file into `api/mcp/tools/` or calling `mcp.registerTool()` from any module bootstrap.
+- **Server-side calls** — invoke tools internally via `mcp.callTool()` without going through HTTP.
+- **Opt-in** — disabled by default; enable with `MCP_ENABLED=true`.
 
