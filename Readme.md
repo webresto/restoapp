@@ -37,6 +37,7 @@ Join our community to get support for everyone interested in food delivery using
 - [x] **Admin Panel**: Access an administrative panel to manage and configure the platform's settings, and oversee business operations.
 - [x] **Visual Programming**: Utilize a visual programming environment to intercept events on both the frontend and backend, allowing for modifications and the implementation of custom features without extensive programming knowledge.
 - [x] **User Dashboard**: Manage all delivery-related information on the website, including menu items, order history, and delivery addresses.
+- [x] **MCP Server (AI Agent Integration)**: Built-in HTTP server compatible with the [Model Context Protocol](docs/mcp.md). Exposes menu, dishes, image upload, health check, and admin tools that any AI agent or bot can call over plain HTTP — no special SDK required. Extensible via `api/mcp/tools/` or module bootstrap. Disabled by default, enable with `MCP_ENABLED=true`.
 
 ## Mobile Application
 
