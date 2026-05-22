@@ -3,6 +3,9 @@
 module.exports.adminpanel = {
   models: {
   },
+  filters: {
+    enabled: true
+  },
   auth: true,
   translation: {
     locales: [
