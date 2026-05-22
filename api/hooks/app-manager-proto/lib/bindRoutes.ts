@@ -22,46 +22,46 @@ import multer from 'multer';
 export default function bindRoutes(sails: any) {
       const adminizer = sails.hooks.adminpanel.adminizer;
       adminizer.emitter.on('adminizer:loaded', function () {
-        // Adminizer is already loaded when this function is called
-        const policies = adminizer.config.policies;
+        const middlewares = adminizer.config.middlewares;
         const routePrefix = adminizer.config.routePrefix;
-        
+        const bind = (action: any) => adminizer.middlewareManager.bindMiddlewares(middlewares, action);
+
         // Configure multer for file uploads
-        const upload = multer({ 
+        const upload = multer({
             dest: 'installStepper/uploadedImages/',
             limits: {
                 fileSize: 100000000 // 100MB limit
             }
         });
-        
-        // Register routes with proper adminizer policies (including CSRF) and file upload support
+
+        // Register routes with proper adminizer middlewares (including CSRF) and file upload support
         adminizer.app.all(
             `${routePrefix}/install/:id`,
             upload.any(), // Handle any files
-            adminizer.policyManager.bindPolicies(policies, _processInstallStep)
+            ...bind(_processInstallStep)
         );
-        
+
         adminizer.app.all(
             `${routePrefix}/install/:id/finalize`,
-            adminizer.policyManager.bindPolicies(policies, _processInstallFinalize)
+            ...bind(_processInstallFinalize)
         );
-        
+
         // Upgrade route for WebResto modules
         adminizer.app.get(
             `${routePrefix}/modules/upgrade`,
-            adminizer.policyManager.bindPolicies(policies, _upgrade)
+            ...bind(_upgrade)
         );
-        
+
         // Exit/reboot route
         adminizer.app.get(
             `${routePrefix}/modules/exit`,
-            adminizer.policyManager.bindPolicies(policies, _exit)
+            ...bind(_exit)
         );
 
         // Managed extensions versions page
         adminizer.app.get(
             `${routePrefix}/modules/versions`,
-            adminizer.policyManager.bindPolicies(policies, _modulesVersions)
+            ...bind(_modulesVersions)
         );
 
         if (!adminizer.config.navbar) {
