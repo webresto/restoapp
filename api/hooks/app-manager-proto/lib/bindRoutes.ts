@@ -19,12 +19,29 @@ const _upgrade = require('../actions/upgrade');
 const _exit = require('../actions/exit');
 import multer from 'multer';
 
+function normalizeHandlers(bound: any): any[] {
+    return Array.isArray(bound) ? bound : [bound];
+}
+
+function makeAdminizerBinder(adminizer: any): (action: any) => any[] {
+    const hasMiddlewareManager =
+        adminizer.middlewareManager &&
+        typeof adminizer.middlewareManager.bindMiddlewares === 'function';
+
+    if (hasMiddlewareManager) {
+        const middlewares = adminizer.config.middlewares ?? [];
+        return (action: any) => normalizeHandlers(adminizer.middlewareManager.bindMiddlewares(middlewares, action));
+    }
+
+    const policies = adminizer.config.policies;
+    return (action: any) => normalizeHandlers(adminizer.policyManager.bindPolicies(policies, action));
+}
+
 export default function bindRoutes(sails: any) {
       const adminizer = sails.hooks.adminpanel.adminizer;
       adminizer.emitter.on('adminizer:loaded', function () {
-        const middlewares = adminizer.config.middlewares;
         const routePrefix = adminizer.config.routePrefix;
-        const bind = (action: any) => adminizer.middlewareManager.bindMiddlewares(middlewares, action);
+        const bind = makeAdminizerBinder(adminizer);
 
         // Configure multer for file uploads
         const upload = multer({
