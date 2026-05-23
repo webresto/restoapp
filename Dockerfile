@@ -32,7 +32,7 @@ COPY . .
 # Configure Yarn and install dependencies using lock file
 RUN echo "nodeLinker: node-modules" > .yarnrc.yml
 RUN yarn set version berry || true
-RUN yarn workspaces focus --production --immutable \
+RUN yarn --immutable workspaces focus --production \
  || (echo "yarn.lock is out of sync with package.json — reinstalling without immutable and refreshing the lock" \
      && yarn workspaces focus --production)
 RUN rm -rf ./local_modules
