@@ -19,6 +19,26 @@ class FCMWebChannel extends Channel {
     return isFirebaseAdminInitialized();
   }
 
+  async isConfigured() {
+    try {
+      const key = await Settings.get("FCM_SERVICE_ACCOUNT_KEY");
+      const hasServiceAccount = Boolean(
+        key && typeof key === "object" && key.project_id && key.client_email && key.private_key
+      );
+      if (!hasServiceAccount) return false;
+      const webConfig = await Settings.get("FCM_WEB_CONFIG");
+      if (!webConfig || typeof webConfig !== "object") return false;
+      const required = ["apiKey", "projectId", "messagingSenderId", "appId", "vapidKey"];
+      return required.every((k) => webConfig[k] && String(webConfig[k]).trim() !== "");
+    } catch (_e) {
+      return false;
+    }
+  }
+
+  getConfigUrl() {
+    return "/firebase-notifications/web";
+  }
+
   async send(badge, message, user, subject, data, priorityDevice) {
     if (!user?.id) {
       throw new Error("[FCMWebChannel] No user provided");
