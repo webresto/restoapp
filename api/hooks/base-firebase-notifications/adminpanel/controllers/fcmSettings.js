@@ -5,7 +5,7 @@ const path = require("path");
 const { tryInitFCM } = require("../../initialize");
 const { isFirebaseAdminInitialized } = require("../../firebaseAdmin");
 
-const LOCALES_DIR = path.resolve(__dirname, "../locales");
+const LOCALES_DIR = path.resolve(__dirname, "../../locales");
 const MESSAGES_CACHE = {};
 
 const SERVICE_ACCOUNT_SCHEMA = {
