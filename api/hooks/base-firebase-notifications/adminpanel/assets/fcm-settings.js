@@ -20,6 +20,9 @@ const {
   Upload,
 } = window.LucideReact;
 
+const WEB_APP_CONFIG_FIELDS = ["apiKey", "projectId", "messagingSenderId", "appId"];
+const WEB_CONFIG_REQUIRED_FIELDS = [...WEB_APP_CONFIG_FIELDS, "vapidKey"];
+
 function getAdminPrefix() {
   const parts = window.location.pathname.split("/");
   return "/" + (parts[1] || "admin");
@@ -294,13 +297,14 @@ function FcmSettings({ view, messages }) {
   const webConfigInputRef = useRef(null);
 
   const hasServiceAccount = hasServiceAccountKey || !!serviceAccountDraft;
-  const webConfigComplete = ["apiKey", "projectId", "messagingSenderId", "appId", "vapidKey"]
+  const webConfigComplete = WEB_CONFIG_REQUIRED_FIELDS
     .every((k) => webConfig[k] && String(webConfig[k]).trim() !== "");
   const mobileConfigured = hasServiceAccount;
   const webConfigured = hasServiceAccount && webConfigComplete;
   const webConfigPreview = useMemo(() => JSON.stringify(compactWebConfig(webConfig), null, 2), [webConfig]);
 
   const channelConfigured = isMobileView ? mobileConfigured : webConfigured;
+  const saveDisabled = saving || !channelConfigured;
   const otherChannelLink = isMobileView
     ? `${getBaseAdminPath()}/firebase-notifications/web`
     : `${getBaseAdminPath()}/firebase-notifications/mobile`;
@@ -350,7 +354,7 @@ function FcmSettings({ view, messages }) {
       throw new Error(t("Web config JSON must be an object."));
     }
     const normalized = normalizeWebConfig(value);
-    const missing = ["apiKey", "projectId", "messagingSenderId", "appId", "vapidKey"]
+    const missing = WEB_APP_CONFIG_FIELDS
       .filter((key) => !normalized[key] || String(normalized[key]).trim() === "");
     if (missing.length > 0) {
       throw new Error(t("Web config JSON must contain fields: {fields}.", { fields: missing.join(", ") }));
@@ -400,7 +404,11 @@ function FcmSettings({ view, messages }) {
       setError(null);
       const json = await readJsonFile(file);
       validateWebConfigDraft(json);
-      setWebConfig(normalizeWebConfig(json));
+      const normalized = normalizeWebConfig(json);
+      setWebConfig((prev) => ({
+        ...normalized,
+        vapidKey: normalized.vapidKey || prev.vapidKey,
+      }));
       window.sonner?.toast(t("Web config JSON loaded into the form"));
     } catch (err) {
       const uploadError = makeError(
@@ -496,7 +504,7 @@ function FcmSettings({ view, messages }) {
             h(Button, {
               size: "sm",
               onClick: save,
-              disabled: saving,
+              disabled: saveDisabled,
             },
               h(Save, { className: "mr-1 h-4 w-4" }), saving ? t("Saving...") : t("Save")
             )
@@ -592,7 +600,7 @@ function FcmSettings({ view, messages }) {
                 onPick: pickWebConfigFile,
                 disabled: saving,
                 t,
-                description: t("You can paste the full object from Firebase Console as one file - fields will be filled automatically."),
+                description: t("Upload the Firebase web app config JSON. VAPID is entered separately below."),
               })
             ),
 
@@ -609,9 +617,6 @@ function FcmSettings({ view, messages }) {
               h(Field, { id: "appId", label: "appId", hint: t("Firebase App ID for the web app.") },
                 h(Input, { id: "appId", value: webConfig.appId, onChange: (e) => updateWebConfigField("appId", e.target.value) })
               ),
-              h(Field, { id: "vapidKey", label: "vapidKey", hint: t("Firebase Console -> Cloud Messaging -> Web Push certificates.") },
-                h(Input, { id: "vapidKey", value: webConfig.vapidKey, onChange: (e) => updateWebConfigField("vapidKey", e.target.value) })
-              ),
               h(Field, { id: "authDomain", label: "authDomain", hint: t("Optional, usually project.firebaseapp.com.") },
                 h(Input, { id: "authDomain", value: webConfig.authDomain, onChange: (e) => updateWebConfigField("authDomain", e.target.value) })
               ),
@@ -620,6 +625,15 @@ function FcmSettings({ view, messages }) {
               ),
               h(Field, { id: "measurementId", label: "measurementId", hint: t("Optional, used by Firebase Analytics.") },
                 h(Input, { id: "measurementId", value: webConfig.measurementId, onChange: (e) => updateWebConfigField("measurementId", e.target.value) })
+              )
+            ),
+
+            h(Subsection, {
+              title: t("Web Push certificate"),
+              description: t("Copy the Key pair from Firebase Console -> Project settings -> Cloud Messaging -> Web Push certificates."),
+            },
+              h(Field, { id: "vapidKey", label: t("Web Push certificates Key pair"), hint: t("Saved as vapidKey. Required for browser push tokens.") },
+                h(Input, { id: "vapidKey", value: webConfig.vapidKey, onChange: (e) => updateWebConfigField("vapidKey", e.target.value) })
               )
             ),
 
