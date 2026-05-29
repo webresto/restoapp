@@ -1,6 +1,7 @@
 "use strict";
 
 const { tryInitFCM } = require("./initialize");
+const { bindFirebaseNotificationsAdminpanel } = require("./adminpanel/bindAdminpanel");
 
 module.exports = function (sails) {
   return {
@@ -12,6 +13,7 @@ module.exports = function (sails) {
           sails.log.error("[FCM hook] Initialization error:", e);
         }
       });
+      bindFirebaseNotificationsAdminpanel(sails);
       cb();
     },
   };

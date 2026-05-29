@@ -10,9 +10,11 @@ let initialized = false;
 
 function initFirebaseAdmin(serviceAccountKey) {
   if (initialized) return;
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccountKey),
-  });
+  if (!admin.apps || admin.apps.length === 0) {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccountKey),
+    });
+  }
   initialized = true;
 }
 

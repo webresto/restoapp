@@ -2,7 +2,24 @@
   "key": "FCM_WEB_CONFIG",
   "type": "json",
   "name": "FCM Web Config",
-  "description": "Public Firebase config for the web frontend (apiKey, projectId, messagingSenderId, appId, vapidKey). Safe to expose to the client.",
+  "description": "Публичный Firebase config для браузерных push-уведомлений. Значения берутся из Firebase web app config и Web Push certificates.",
+  "tooltip": "Минимально нужны apiKey, projectId, messagingSenderId, appId и vapidKey. Эти данные можно отдавать клиенту.",
   "defaultValue": null,
-  "isRequired": false
+  "isRequired": false,
+  "module": "base-firebase-notifications",
+  "jsonSchema": {
+    "type": "object",
+    "required": ["apiKey", "projectId", "messagingSenderId", "appId", "vapidKey"],
+    "additionalProperties": true,
+    "properties": {
+      "apiKey": { "type": "string", "minLength": 1 },
+      "authDomain": { "type": "string" },
+      "projectId": { "type": "string", "minLength": 1 },
+      "storageBucket": { "type": "string" },
+      "messagingSenderId": { "type": "string", "minLength": 1 },
+      "appId": { "type": "string", "minLength": 1 },
+      "measurementId": { "type": "string" },
+      "vapidKey": { "type": "string", "minLength": 1 }
+    }
+  }
 }

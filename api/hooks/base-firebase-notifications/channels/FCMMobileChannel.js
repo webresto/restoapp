@@ -19,6 +19,19 @@ class FCMMobileChannel extends Channel {
     return isFirebaseAdminInitialized();
   }
 
+  async isConfigured() {
+    try {
+      const key = await Settings.get("FCM_SERVICE_ACCOUNT_KEY");
+      return Boolean(key && typeof key === "object" && key.project_id && key.client_email && key.private_key);
+    } catch (_e) {
+      return false;
+    }
+  }
+
+  getConfigUrl() {
+    return "/firebase-notifications/mobile";
+  }
+
   async send(badge, message, user, subject, data, priorityDevice) {
     if (!user?.id) {
       throw new Error("[FCMMobileChannel] No user provided");

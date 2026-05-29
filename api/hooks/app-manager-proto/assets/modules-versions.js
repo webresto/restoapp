@@ -1,4 +1,4 @@
-const REACT_ELEMENT_TYPE = Symbol.for('react.element');
+const REACT_ELEMENT_TYPE = Symbol.for('react.transitional.element');
 
 function createElement(type, props, ...children) {
   const react = typeof window !== 'undefined' ? window.React : undefined;

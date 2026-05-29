@@ -8,21 +8,21 @@ const { FCMMobileChannel } = require("./channels/FCMMobileChannel");
 const { FCMWebChannel } = require("./channels/FCMWebChannel");
 
 async function tryInitFCM() {
-  const enabled = await Settings.get("FCM_ENABLED");
-  if (!enabled) return;
+  // Channels are always registered so they appear in the admin channels list,
+  // even when not yet configured. isReady()/isConfigured() reflect actual state.
+  if (!NotificationManager.isChannelExist("fcm-mobile")) {
+    NotificationManager.registerChannel(new FCMMobileChannel());
+  }
+  if (!NotificationManager.isChannelExist("fcm-web")) {
+    NotificationManager.registerChannel(new FCMWebChannel());
+  }
 
   const key = await Settings.get("FCM_SERVICE_ACCOUNT_KEY");
-  if (!key) {
-    sails.log.warn("[FCM] FCM_ENABLED=true but FCM_SERVICE_ACCOUNT_KEY not set");
-    return;
-  }
+  if (!key) return;
 
   try {
     initFirebaseAdmin(key);
-    NotificationManager.registerChannel(new FCMMobileChannel());
-    NotificationManager.registerChannel(new FCMWebChannel());
-    sails.log.info("[FCM] Channels registered (mobile + web)");
   } catch (e) {
-    sails.log.error("[FCM] Init failed:", e);
+    sails.log.error("[FCM] firebase-admin init failed:", e);
   }
 }

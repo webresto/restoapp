@@ -1,0 +1,10 @@
+{
+  "key": "FCM_WEB_ENABLED",
+  "type": "boolean",
+  "name": "FCM Web Enabled",
+  "description": "Устаревший флаг совместимости для web push. Фактическая готовность определяется заполненными FCM_SERVICE_ACCOUNT_KEY, FCM_WEB_CONFIG и состоянием канала в менеджере уведомлений.",
+  "tooltip": "Ненастроенный канал fcm-web не участвует в очереди отправки.",
+  "defaultValue": false,
+  "isRequired": false,
+  "module": "base-firebase-notifications"
+}
