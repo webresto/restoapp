@@ -33,14 +33,22 @@ class FCMMobileChannel extends Channel {
   }
 
   async send(badge, message, user, subject, data, priorityDevice) {
-    if (!user?.id) {
-      throw new Error("[FCMMobileChannel] No user provided");
+    let devices;
+    if (user?.id) {
+      // Обычная адресация: все устройства пользователя с токеном
+      devices = await UserDevice.find({
+        user: user.id,
+        notificationToken: { "!=": null },
+      });
+    } else if (priorityDevice?.id || priorityDevice?.notificationToken) {
+      // Гостевая корзина без user: шлём только на устройство, с которого она обрабатывалась
+      const dev = priorityDevice.notificationToken
+        ? priorityDevice
+        : await UserDevice.findOne({ id: priorityDevice.id, notificationToken: { "!=": null } });
+      devices = dev ? [dev] : [];
+    } else {
+      throw new Error("[FCMMobileChannel] No user or device provided");
     }
-
-    const devices = await UserDevice.find({
-      user: user.id,
-      notificationToken: { "!=": null },
-    });
 
     const mobileDevices = devices.filter((d) => {
       const token = d.notificationToken;
