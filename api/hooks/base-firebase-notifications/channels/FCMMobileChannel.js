@@ -51,12 +51,16 @@ class FCMMobileChannel extends Channel {
     }
 
     const mobileDevices = devices.filter((d) => {
-      const token = d.notificationToken;
+      let token = d.notificationToken;
+      if (typeof token === "string") {
+        try { token = JSON.parse(token); } catch (_) { return false; }
+      }
+      d.notificationToken = token;
       return token && (token.platform === "ios" || token.platform === "android") && token.token;
     });
 
     if (mobileDevices.length === 0) {
-      throw new Error("[FCMMobileChannel] No mobile devices with notification tokens");
+      throw new Error(`[FCMMobileChannel] No mobile devices with notification tokens. devices: ${devices.length}, tokens: ${JSON.stringify(devices.map(d => ({ id: d.id, tokenType: typeof d.notificationToken, token: d.notificationToken })))}`);
     }
 
     let orderedDevices = mobileDevices;
