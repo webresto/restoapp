@@ -106,7 +106,8 @@ class FCMMobileChannel extends Channel {
     }
 
     if (response.successCount === 0) {
-      throw new Error(`[FCMMobileChannel] All ${tokens.length} tokens failed`);
+      const errors = response.responses.map((r, idx) => `token[${idx}]: ${r.error?.code} — ${r.error?.message}`).join("; ");
+      throw new Error(`[FCMMobileChannel] All ${tokens.length} tokens failed: ${errors}`);
     }
 
     const firstSuccess = response.responses.find((r) => r.success);
