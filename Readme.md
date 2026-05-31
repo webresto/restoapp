@@ -23,6 +23,8 @@ Join our community to get support for everyone interested in food delivery using
 
 - [x] **Modular architecture**: Ability to install various modules via the app store to extend the platform's functionality.
 - [x] **Mobile Applications**: Supports mobile applications for iOS and Android platforms, providing users with a convenient way to order food on the go.
+- [x] **Sales Channels**: Accept orders through bots, websites, mobile applications, social media, and assistant skills connected to the platform.
+- [x] **Push Notifications**: Send real-time push notifications to customers, couriers, and staff about order status, promotions, and operational updates.
 - [x] **Installer**: After deploying the system, an installer appears, allowing you to configure various parameters and launch the food delivery site in a short time.
 - [x] **Simple installation with Docker**: The system is provided as a Docker container, ensuring easy deployment and installation without the need for deep programming knowledge.
 - [x] **White Label solution**: Ability to use the project as a White Label solution for your own food delivery service.
