@@ -58,7 +58,11 @@ class FCMWebChannel extends Channel {
     }
 
     const webDevices = devices.filter((d) => {
-      const token = d.notificationToken;
+      let token = d.notificationToken;
+      if (typeof token === "string") {
+        try { token = JSON.parse(token); } catch (_) { return false; }
+      }
+      d.notificationToken = token;
       return token && token.platform === "web" && token.token;
     });
 
