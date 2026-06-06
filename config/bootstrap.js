@@ -40,7 +40,7 @@ module.exports.bootstrap = async function (cb) {
     }
 
     let flowNamespace = process.env.NODE_RED_NAMESPACE
-    let flowsFile = "restoapp"
+    let flowsFile = "restoapp.json"
     if(flowNamespace) {
       flowsFile = `flows-${flowNamespace}.json`
     }
