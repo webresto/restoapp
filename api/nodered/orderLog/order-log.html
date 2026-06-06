@@ -1,0 +1,63 @@
+<script type="text/javascript">
+  RED.nodes.registerType('order-log',{
+      category: 'function',
+      color: '#a6bbcf',
+      defaults: {
+          name: {value:""},
+          orderId: {value:""},
+          criteria: {value:""},
+          level: {value:"info"},
+          module: {value:"node-red"},
+          message: {value:""},
+          data: {value:""}
+      },
+      inputs: 1,
+      outputs: 1,
+      icon: "font-awesome/fa-list-alt",
+      label: function() {
+          return this.name || "order-log";
+      }
+  });
+</script>
+
+<script type="text/html" data-template-name="order-log">
+  <div class="form-row">
+      <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+      <input type="text" id="node-input-name" placeholder="Name">
+  </div>
+  <div class="form-row">
+      <label for="node-input-orderId"><i class="fa fa-hashtag"></i> Order ID</label>
+      <input type="text" id="node-input-orderId" placeholder="msg.payload.orderId">
+  </div>
+  <div class="form-row">
+      <label for="node-input-criteria"><i class="fa fa-filter"></i> Criteria</label>
+      <input type="text" id="node-input-criteria" placeholder='{"id":"..."}'>
+  </div>
+  <div class="form-row">
+      <label for="node-input-level"><i class="fa fa-signal"></i> Level</label>
+      <select id="node-input-level" style="width: 70%;">
+          <option value="info">info</option>
+          <option value="warn">warn</option>
+          <option value="error">error</option>
+          <option value="debug">debug</option>
+      </select>
+  </div>
+  <div class="form-row">
+      <label for="node-input-module"><i class="fa fa-cube"></i> Module</label>
+      <input type="text" id="node-input-module" placeholder="node-red">
+  </div>
+  <div class="form-row">
+      <label for="node-input-message"><i class="fa fa-comment"></i> Message</label>
+      <input type="text" id="node-input-message" placeholder="msg.payload.message">
+  </div>
+  <div class="form-row">
+      <label for="node-input-data"><i class="fa fa-code"></i> Data JSON</label>
+      <input type="text" id="node-input-data" placeholder='{"key":"value"}'>
+  </div>
+</script>
+
+<script type="text/html" data-help-name="order-log">
+  <p>Writes an arbitrary entry to Order logs and passes the message through.</p>
+  <p>Order can be selected by <code>msg.payload.orderId</code>, <code>msg.orderId</code>, config Order ID, or JSON criteria from <code>msg.payload.criteria</code>, <code>msg.criteria</code>, or config Criteria.</p>
+  <p>Runtime values <code>level</code>, <code>module</code>, <code>message</code>, and <code>data</code> may be passed in <code>msg.payload</code> or <code>msg</code>. Node config values are used as defaults.</p>
+</script>
