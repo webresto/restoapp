@@ -33,9 +33,9 @@ module.exports.bootstrap = async function (cb) {
     const RED = require("node-red");
     const { getNodeRedAuth } = require("../lib/bindNodeRed")
     let flowNamespace = process.env.NODE_RED_NAMESPACE
-    let flowsFile = "restoapp.json"
+    let flowsFile = "restoapp"
     if(flowNamespace) {
-      flowsFile = `flows-${flowFile}.json`
+      flowsFile = `flows-${flowNamespace}.json`
     }
     const settings = {
       flowFile: flowsFile,
@@ -61,7 +61,6 @@ module.exports.bootstrap = async function (cb) {
       const httpRedServer = http.createServer(app);
       RED.init(httpRedServer,settings);
 
-      RED.init(httpRedServer,settings);
       app.use(settings.httpAdminRoot,RED.httpAdmin);  
       app.use(settings.httpNodeRoot,RED.httpNode);
       RED.start();
