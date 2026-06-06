@@ -260,9 +260,11 @@ function validateFlows(flows) {
 
     if (node.type === 'function') {
       try {
-        // Node-RED function bodies are plain JavaScript function bodies.
+        // Node-RED wraps function bodies in an async function at runtime, so
+        // top-level `await` is valid. Mirror that here, otherwise every node
+        // using `await` would be falsely reported as a syntax error.
         // eslint-disable-next-line no-new-func
-        new Function('msg', 'send', 'done', node.func || '');
+        new Function('msg', 'send', 'done', `return (async () => {\n${node.func || ''}\n})();`);
       } catch (error) {
         errors.push({
           code: 'function-syntax',
