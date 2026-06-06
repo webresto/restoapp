@@ -31,7 +31,14 @@ module.exports.bootstrap = async function (cb) {
 
   if(process.env.NODE_RED_TOKEN !== undefined) {
     const RED = require("node-red");
-    const { getNodeRedAuth } = require("../lib/bindNodeRed")
+    const { getNodeRedAuth, NodeRedToken } = require("../lib/bindNodeRed")
+
+    const tokenCheck = NodeRedToken.gate();
+    if (!tokenCheck.ok) {
+      sails.log.error(`Nodered NOT started: ${tokenCheck.reason}. Set a strong NODE_RED_TOKEN to enable Node-RED (and its MCP tools).`);
+      return cb();
+    }
+
     let flowNamespace = process.env.NODE_RED_NAMESPACE
     let flowsFile = "restoapp"
     if(flowNamespace) {
