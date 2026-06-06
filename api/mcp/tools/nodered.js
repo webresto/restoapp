@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
+const { NodeRedToken } = require('../../../lib/bindNodeRed');
 
 const DEFAULT_RED_PORT = 42881;
 const MAX_FIND_LIMIT = 100;
@@ -400,6 +401,16 @@ async function deployFlows(flows, rev, deploymentType) {
 }
 
 module.exports = function register(mcp) {
+  // Node-RED only starts with a strong NODE_RED_TOKEN (see config/bootstrap.js).
+  // If the token is missing or low-entropy, the runtime is not up, so registering
+  // these tools would only expose dead/unauthenticated endpoints — skip them.
+  const tokenCheck = NodeRedToken.gate();
+  if (!tokenCheck.ok) {
+    const log = (typeof sails !== 'undefined' && sails.log) ? sails.log : console;
+    log.warn(`MCP: Node-RED tools NOT registered: ${tokenCheck.reason}.`);
+    return;
+  }
+
   mcp.registerTool({
     name: 'nodered_status',
     description: 'Returns Node-RED runtime and flow-file status. Admin only.',
