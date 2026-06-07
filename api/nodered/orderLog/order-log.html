@@ -27,7 +27,7 @@
   </div>
   <div class="form-row">
       <label for="node-input-orderId"><i class="fa fa-hashtag"></i> Order ID</label>
-      <input type="text" id="node-input-orderId" placeholder="msg.payload.orderId">
+      <input type="text" id="node-input-orderId" placeholder="uuid or shortId">
   </div>
   <div class="form-row">
       <label for="node-input-criteria"><i class="fa fa-filter"></i> Criteria</label>
@@ -58,6 +58,6 @@
 
 <script type="text/html" data-help-name="order-log">
   <p>Writes an arbitrary entry to Order logs and passes the message through.</p>
-  <p>Order can be selected by <code>msg.payload.orderId</code>, <code>msg.orderId</code>, config Order ID, or JSON criteria from <code>msg.payload.criteria</code>, <code>msg.criteria</code>, or config Criteria.</p>
+  <p>Order can be selected by UUID or shortId in <code>msg.payload.orderId</code>, <code>msg.orderId</code>, config Order ID, or JSON criteria from <code>msg.payload.criteria</code>, <code>msg.criteria</code>, or config Criteria.</p>
   <p>Runtime values <code>level</code>, <code>module</code>, <code>message</code>, and <code>data</code> may be passed in <code>msg.payload</code> or <code>msg</code>. Node config values are used as defaults.</p>
 </script>
