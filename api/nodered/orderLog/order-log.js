@@ -31,6 +31,18 @@ function pickPayload(msg) {
     : {};
 }
 
+function orderIdentifierCriteria(orderId) {
+  const value = String(orderId).trim();
+  return {
+    where: {
+      or: [
+        { id: value },
+        { shortId: value.toUpperCase() },
+      ],
+    },
+  };
+}
+
 module.exports = function(RED) {
   function OrderLogNode(config) {
     RED.nodes.createNode(this, config);
@@ -44,7 +56,7 @@ module.exports = function(RED) {
         const criteriaFromConfig = parseJson(config.criteria, "criteria", node);
         const criteria = firstValue(payload.criteria, msg.criteria, criteriaFromConfig);
         const orderId = firstValue(payload.orderId, payload.id, payload.order && payload.order.id, msg.orderId, config.orderId);
-        const orderCriteria = criteria || (orderId ? { id: orderId } : undefined);
+        const orderCriteria = criteria || (orderId ? orderIdentifierCriteria(orderId) : undefined);
 
         if (!orderCriteria) {
           throw new Error("Order criteria is required. Set orderId or criteria in node config, msg, or msg.payload.");
