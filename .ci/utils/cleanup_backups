@@ -1,0 +1,163 @@
+#!/bin/bash
+# Cleanup old PostgreSQL backups using a GFS (grandfather-father-son) retention policy.
+#
+# Backups are produced by .ci/bootstrap with the name pattern:
+#   ${PROJECT_NAME}_${DEPLOY_TIME}.dump.sql
+# where DEPLOY_TIME = date '+%d_%m_%Y_%H_%M' (e.g. restoapp_08_06_2026_14_30.dump.sql).
+#
+# Retention buckets (configurable via env, see defaults below):
+#   - daily   : keep the newest backup of each of the last N days
+#   - weekly  : keep the newest backup of each of the last N ISO weeks
+#   - monthly : keep the newest backup of each of the last N months
+#   - yearly  : keep the newest backup of each of the last N years
+# A backup is kept if it is selected by ANY bucket; everything else is deleted.
+#
+# Controlling env vars:
+#   BACKUP_CLEANUP_ENABLED   - set to false/0/no to disable cleanup entirely (default: true)
+#   BACKUP_KEEP_DAILY        - number of daily backups to keep   (default: 7)
+#   BACKUP_KEEP_WEEKLY       - number of weekly backups to keep  (default: 5)
+#   BACKUP_KEEP_MONTHLY      - number of monthly backups to keep (default: 6)
+#   BACKUP_KEEP_YEARLY       - number of yearly backups to keep  (default: 3)
+#   POSTGRES_BACKUP_PATH     - directory holding the backups     (default: /backup)
+#   PROJECT_NAME             - backup filename prefix            (default: restoapp)
+#   BACKUP_CLEANUP_DRY_RUN   - set to true to only log what would be deleted (default: false)
+
+set -e
+
+# Source shared logging/helpers (parse_boolean, log_*)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/helpers"
+
+# --- Configuration with defaults ---
+PROJECT_NAME=${PROJECT_NAME:-restoapp}
+POSTGRES_BACKUP_PATH=${POSTGRES_BACKUP_PATH:-/backup}
+
+KEEP_DAILY=${BACKUP_KEEP_DAILY:-7}
+KEEP_WEEKLY=${BACKUP_KEEP_WEEKLY:-5}
+KEEP_MONTHLY=${BACKUP_KEEP_MONTHLY:-6}
+KEEP_YEARLY=${BACKUP_KEEP_YEARLY:-3}
+
+DRY_RUN=$(parse_boolean "${BACKUP_CLEANUP_DRY_RUN}" "false")
+
+# Master switch
+if [[ "$(parse_boolean "${BACKUP_CLEANUP_ENABLED}" "true")" != "true" ]]; then
+    log_info "BACKUP_CLEANUP_ENABLED is disabled - skipping backup cleanup"
+    exit 0
+fi
+
+if [[ ! -d "$POSTGRES_BACKUP_PATH" ]]; then
+    log_info "Backup path '$POSTGRES_BACKUP_PATH' does not exist - nothing to clean"
+    exit 0
+fi
+
+log_info "Starting backup cleanup in '$POSTGRES_BACKUP_PATH' (prefix='${PROJECT_NAME}')"
+log_info "Retention: daily=$KEEP_DAILY weekly=$KEEP_WEEKLY monthly=$KEEP_MONTHLY yearly=$KEEP_YEARLY (dry_run=$DRY_RUN)"
+
+# Convert a DEPLOY_TIME token (DD_MM_YYYY_HH_MM) into an epoch timestamp.
+# Returns empty string if the token cannot be parsed.
+parse_backup_epoch() {
+    local token="$1"
+    # token: DD_MM_YYYY_HH_MM
+    local d m y H M
+    IFS='_' read -r d m y H M <<< "$token"
+    if [[ -z "$d" || -z "$m" || -z "$y" || -z "$H" || -z "$M" ]]; then
+        echo ""
+        return
+    fi
+    # GNU/busybox date: build an ISO-ish string it understands.
+    date -d "${y}-${m}-${d} ${H}:${M}:00" +%s 2>/dev/null || echo ""
+}
+
+# Collect candidate backups as "epoch<TAB>filepath", sorted newest-first.
+declare -a entries=()
+shopt -s nullglob
+for file in "$POSTGRES_BACKUP_PATH"/${PROJECT_NAME}_*.dump.sql; do
+    [[ -f "$file" ]] || continue
+    base=$(basename "$file")
+    # strip prefix "${PROJECT_NAME}_" and suffix ".dump.sql" -> DEPLOY_TIME token
+    token="${base#${PROJECT_NAME}_}"
+    token="${token%.dump.sql}"
+    epoch=$(parse_backup_epoch "$token")
+    if [[ -z "$epoch" ]]; then
+        # Fall back to file mtime if the name can't be parsed, so we never lose track of it.
+        epoch=$(stat -c %Y "$file" 2>/dev/null || echo "")
+    fi
+    [[ -z "$epoch" ]] && { log_warn "Could not determine date for '$base' - skipping (kept)"; continue; }
+    entries+=("${epoch}	${file}")
+done
+shopt -u nullglob
+
+if [[ ${#entries[@]} -eq 0 ]]; then
+    log_info "No backups matching pattern found - nothing to clean"
+    exit 0
+fi
+
+# Sort newest-first by epoch.
+mapfile -t sorted < <(printf '%s\n' "${entries[@]}" | sort -rn -t$'\t' -k1,1)
+
+# Track which files are kept, and which period-keys are already filled per bucket.
+declare -A keep_set=()
+declare -A seen_daily=()
+declare -A seen_weekly=()
+declare -A seen_monthly=()
+declare -A seen_yearly=()
+daily_count=0
+weekly_count=0
+monthly_count=0
+yearly_count=0
+
+for line in "${sorted[@]}"; do
+    epoch="${line%%	*}"
+    file="${line#*	}"
+
+    key_day=$(date -d "@$epoch" +%Y-%m-%d 2>/dev/null)
+    key_week=$(date -d "@$epoch" +%G-%V 2>/dev/null)   # ISO year-week
+    key_month=$(date -d "@$epoch" +%Y-%m 2>/dev/null)
+    key_year=$(date -d "@$epoch" +%Y 2>/dev/null)
+
+    # Daily bucket
+    if [[ -n "$key_day" && -z "${seen_daily[$key_day]:-}" && $daily_count -lt $KEEP_DAILY ]]; then
+        seen_daily[$key_day]=1
+        ((daily_count++)) || true
+        keep_set[$file]=1
+    fi
+    # Weekly bucket
+    if [[ -n "$key_week" && -z "${seen_weekly[$key_week]:-}" && $weekly_count -lt $KEEP_WEEKLY ]]; then
+        seen_weekly[$key_week]=1
+        ((weekly_count++)) || true
+        keep_set[$file]=1
+    fi
+    # Monthly bucket
+    if [[ -n "$key_month" && -z "${seen_monthly[$key_month]:-}" && $monthly_count -lt $KEEP_MONTHLY ]]; then
+        seen_monthly[$key_month]=1
+        ((monthly_count++)) || true
+        keep_set[$file]=1
+    fi
+    # Yearly bucket
+    if [[ -n "$key_year" && -z "${seen_yearly[$key_year]:-}" && $yearly_count -lt $KEEP_YEARLY ]]; then
+        seen_yearly[$key_year]=1
+        ((yearly_count++)) || true
+        keep_set[$file]=1
+    fi
+done
+
+kept=0
+deleted=0
+for line in "${sorted[@]}"; do
+    file="${line#*	}"
+    base=$(basename "$file")
+    if [[ -n "${keep_set[$file]:-}" ]]; then
+        log_debug "KEEP   $base"
+        ((kept++)) || true
+    else
+        if [[ "$DRY_RUN" == "true" ]]; then
+            log_info "DRY-RUN would delete $base"
+        else
+            log_info "DELETE $base"
+            rm -f "$file"
+        fi
+        ((deleted++)) || true
+    fi
+done
+
+log_info "Backup cleanup complete: kept=$kept deleted=$deleted (total=${#sorted[@]})"
