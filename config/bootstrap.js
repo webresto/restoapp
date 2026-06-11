@@ -29,6 +29,13 @@ const path = require("path");
 module.exports.bootstrap = async function (cb) {
   sails.config.paths.app = process.cwd();
 
+  // Safety net: a leaked promise rejection must not crash the whole app
+  // (pm2 crash-loop). Real handling belongs at call sites; this only logs
+  // whatever slipped through.
+  process.on("unhandledRejection", (reason) => {
+    sails.log.error("Unhandled promise rejection (safety net):", reason);
+  });
+
   if(process.env.NODE_RED_TOKEN !== undefined) {
     const RED = require("node-red");
     const { getNodeRedAuth, NodeRedToken } = require("../lib/bindNodeRed")
