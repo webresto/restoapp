@@ -248,6 +248,13 @@ if [[ "${DATASTORE}" == "postgres" ]]; then
         else
             log_info "Skipping backup creation because a recent backup was found"
         fi
+
+        # Prune old backups according to the GFS retention policy.
+        # Runs detached in the background so it never blocks application startup.
+        # Disable with BACKUP_CLEANUP_ENABLED=false; tune via BACKUP_KEEP_{DAILY,WEEKLY,MONTHLY,YEARLY}.
+        log_info "Launching backup cleanup utility in background"
+        ( "$SCRIPT_DIR/utils/cleanup_backups" || log_warn "Backup cleanup failed" ) &
+        disown 2>/dev/null || true
     fi
 
 
