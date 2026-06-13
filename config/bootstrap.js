@@ -36,15 +36,18 @@ module.exports.bootstrap = async function (cb) {
     sails.log.error("Unhandled promise rejection (safety net):", reason);
   });
 
-  if(process.env.NODE_RED_TOKEN !== undefined) {
-    const RED = require("node-red");
-    const { getNodeRedAuth, NodeRedToken } = require("../lib/bindNodeRed")
+  // Node-RED — опциональная фича. Слабый/невалидный NODE_RED_TOKEN отключает
+  // только Node-RED, но НЕ должен прерывать остальной bootstrap (загрузку
+  // модульных config/bootstrap.js, регистрацию MCP-tools и т.д.). Поэтому здесь
+  // gate лишь ПРОПУСКАЕТ блок Node-RED, а не делает return cb() из всего bootstrap.
+  const nodeRedTokenCheck =
+    process.env.NODE_RED_TOKEN !== undefined
+      ? require("../lib/bindNodeRed").NodeRedToken.gate()
+      : { ok: false, reason: "NODE_RED_TOKEN is not set" };
 
-    const tokenCheck = NodeRedToken.gate();
-    if (!tokenCheck.ok) {
-      sails.log.error(`Nodered NOT started: ${tokenCheck.reason}. Set a strong NODE_RED_TOKEN to enable Node-RED (and its MCP tools).`);
-      return cb();
-    }
+  if (process.env.NODE_RED_TOKEN !== undefined && nodeRedTokenCheck.ok) {
+    const RED = require("node-red");
+    const { getNodeRedAuth } = require("../lib/bindNodeRed")
 
     let flowNamespace = process.env.NODE_RED_NAMESPACE
     let flowsFile = "restoapp.json"
@@ -84,8 +87,12 @@ module.exports.bootstrap = async function (cb) {
     } catch (error) {
       sails.log.error("Nodered init error:",error);
     }
+  } else if (process.env.NODE_RED_TOKEN !== undefined) {
+    // Токен задан, но не прошёл проверку — Node-RED (и его MCP-tools) выключен,
+    // bootstrap продолжается дальше.
+    sails.log.error(`Nodered NOT started: ${nodeRedTokenCheck.reason}. Set a strong NODE_RED_TOKEN to enable Node-RED (and its MCP tools).`);
   }
-  
+
   ////////////////////////////////////////////////////////////////////////////
 
   /**
