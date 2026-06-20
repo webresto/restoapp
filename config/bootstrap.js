@@ -29,13 +29,30 @@ const path = require("path");
 module.exports.bootstrap = async function (cb) {
   sails.config.paths.app = process.cwd();
 
-  if(process.env.NODE_RED_TOKEN !== undefined) {
+  // Safety net: a leaked promise rejection must not crash the whole app
+  // (pm2 crash-loop). Real handling belongs at call sites; this only logs
+  // whatever slipped through.
+  process.on("unhandledRejection", (reason) => {
+    sails.log.error("Unhandled promise rejection (safety net):", reason);
+  });
+
+  // Node-RED — опциональная фича. Слабый/невалидный NODE_RED_TOKEN отключает
+  // только Node-RED, но НЕ должен прерывать остальной bootstrap (загрузку
+  // модульных config/bootstrap.js, регистрацию MCP-tools и т.д.). Поэтому здесь
+  // gate лишь ПРОПУСКАЕТ блок Node-RED, а не делает return cb() из всего bootstrap.
+  const nodeRedTokenCheck =
+    process.env.NODE_RED_TOKEN !== undefined
+      ? require("../lib/bindNodeRed").NodeRedToken.gate()
+      : { ok: false, reason: "NODE_RED_TOKEN is not set" };
+
+  if (process.env.NODE_RED_TOKEN !== undefined && nodeRedTokenCheck.ok) {
     const RED = require("node-red");
     const { getNodeRedAuth } = require("../lib/bindNodeRed")
+
     let flowNamespace = process.env.NODE_RED_NAMESPACE
     let flowsFile = "restoapp.json"
     if(flowNamespace) {
-      flowsFile = `flows-${flowFile}.json`
+      flowsFile = `flows-${flowNamespace}.json`
     }
     const settings = {
       flowFile: flowsFile,
@@ -61,7 +78,6 @@ module.exports.bootstrap = async function (cb) {
       const httpRedServer = http.createServer(app);
       RED.init(httpRedServer,settings);
 
-      RED.init(httpRedServer,settings);
       app.use(settings.httpAdminRoot,RED.httpAdmin);  
       app.use(settings.httpNodeRoot,RED.httpNode);
       RED.start();
@@ -71,8 +87,12 @@ module.exports.bootstrap = async function (cb) {
     } catch (error) {
       sails.log.error("Nodered init error:",error);
     }
+  } else if (process.env.NODE_RED_TOKEN !== undefined) {
+    // Токен задан, но не прошёл проверку — Node-RED (и его MCP-tools) выключен,
+    // bootstrap продолжается дальше.
+    sails.log.error(`Nodered NOT started: ${nodeRedTokenCheck.reason}. Set a strong NODE_RED_TOKEN to enable Node-RED (and its MCP tools).`);
   }
-  
+
   ////////////////////////////////////////////////////////////////////////////
 
   /**
