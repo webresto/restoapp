@@ -29,6 +29,36 @@ module.exports.adminpanel = {
     // Widgets are initialized and configured in local_modules/core/lib/adminpanel/widgets
     // defaultWidgets will be populated by core module
   },
+  defaultGroups: [
+    {
+      name: 'Operator',
+      description: 'Processes and updates current orders',
+      tokens: [
+        'access-to-adminpanel',
+        'widgets',
+        'order-kanban',
+        'read-order-model',
+        'update-order-model',
+      ],
+    },
+    {
+      name: 'Marketer',
+      description: 'Manages the product catalog, promotions, notifications, and reports',
+      tokens: [
+        'access-to-adminpanel',
+        'widgets',
+        'catalog-products',
+        'notifications-manager',
+        'orders-report',
+        'read-promotion-model',
+        'create-promotion-model',
+        'update-promotion-model',
+        'read-promotioncode-model',
+        'create-promotioncode-model',
+        'update-promotioncode-model',
+      ],
+    },
+  ],
   showVersion: {
     text: process.env.CONTAINER_VERSION || process.env.APP_VERSION || process.env.VERSION,
   },
