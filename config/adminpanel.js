@@ -49,6 +49,8 @@ module.exports.adminpanel = {
         'widgets',
         'catalog-products',
         'notifications-manager',
+        'promocodes-manager',
+        'promotions-manager',
         'orders-report',
         'read-promotion-model',
         'create-promotion-model',
