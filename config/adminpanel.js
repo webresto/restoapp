@@ -51,6 +51,7 @@ module.exports.adminpanel = {
         'notifications-manager',
         'promocodes-manager',
         'promotions-manager',
+        'sales-channels-manager',
         'orders-report',
         'read-promotion-model',
         'create-promotion-model',
@@ -58,6 +59,9 @@ module.exports.adminpanel = {
         'read-promotioncode-model',
         'create-promotioncode-model',
         'update-promotioncode-model',
+      ],
+      ensureTokens: [
+        'sales-channels-manager',
       ],
     },
   ],
