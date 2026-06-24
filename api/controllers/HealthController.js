@@ -29,10 +29,32 @@ module.exports = {
         });
       }
 
+      // A deployed store must have at least one enabled sales channel, otherwise
+      // orders have no known source and traffic should not be accepted yet.
+      if (typeof SalesChannel === 'undefined' || !SalesChannel.count) {
+        return res.status(503).json({
+          status: 'not ready',
+          reason: 'SalesChannel model not available'
+        });
+      }
+
+      const enabledSalesChannels = await SalesChannel.count({ enabled: true });
+      if (enabledSalesChannels < 1) {
+        return res.status(503).json({
+          status: 'not ready',
+          reason: 'At least one enabled sales channel is required',
+          checks: {
+            enabledSalesChannels
+          }
+        });
+      }
 
       // All checks passed
       return res.status(200).json({
         status: 'ready',
+        checks: {
+          enabledSalesChannels
+        },
         timestamp: new Date().toISOString()
       });
 
