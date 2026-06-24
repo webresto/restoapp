@@ -1,0 +1,8 @@
+# Full profile: minimal content modules + the admin order-entry frontend.
+# Build with: docker build --build-arg MODULES_LIST=seeds/modules.full.list ...
+base-promotions
+admin-frontend
+base-feedbacks
+base-pages
+simple-navigation
+base-forms

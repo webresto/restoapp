@@ -42,11 +42,14 @@ RUN rm -rf ./local_modules
 FROM base AS cacher_base_modules
 RUN apk add --no-cache git build-base  && update-ca-certificates
 ENV WEBRESTO_LICENSE=null
+# Seed module profile to bake into the image. Default = minimal (no admin-frontend).
+# Use seeds/modules.full.list (adds admin-frontend) or seeds/modules.demo.list (adds demo data).
+ARG MODULES_LIST=seeds/modules.list
 WORKDIR /app
 COPY . .
 
 RUN sed -i 's/\r$//' /app/.ci/utils/install_webresto_dependencies
-RUN bash /app/.ci/utils/install_webresto_dependencies /app/seeds/modules.list /app/modules $WEBRESTO_LICENSE
+RUN bash /app/.ci/utils/install_webresto_dependencies "/app/${MODULES_LIST}" /app/modules $WEBRESTO_LICENSE
 RUN sed -i 's/\r$//' /app/.ci/utils/bake_admin_frontend
 RUN /app/.ci/utils/bake_admin_frontend
 
