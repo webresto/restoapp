@@ -20,6 +20,11 @@ if [[ -z "$WEBRESTO_LICENSE" ]]; then
     WEBRESTO_LICENSE="ci"
 fi
 
+# Marketplace channel: WR_MODULES_CHANNEL (main|staging|any) if set,
+# otherwise STAGING=1 -> "any" (newest across all channels), else "main".
+CHANNEL="$(resolve_modules_channel)"
+log_info "Marketplace channel resolved to '$CHANNEL' (WR_MODULES_CHANNEL='${WR_MODULES_CHANNEL:-}', STAGING='${STAGING:-}')"
+
 # Iterate over each directory in OUT_DIR
 for moduleDir in "$OUT_DIR"/*/; do
     moduleDir=${moduleDir%/} # Remove trailing slash
@@ -47,11 +52,7 @@ for moduleDir in "$OUT_DIR"/*/; do
         fi
 
         # Fetch the latest version from the WebResto API
-        log_info "Checking for updates for module $appId..."
-        CHANNEL=main
-        if [[ "$(parse_boolean "$STAGING")" == "true" ]]; then
-          CHANNEL="staging"
-        fi
+        log_info "Checking for updates for module $appId (channel=$CHANNEL)..."
         response=$(curl -sf --retry 3 --retry-delay 3 "https://marketplace.restoapp.org/getModuleDetails?appId=$appId&license=$WEBRESTO_LICENSE&channel=$CHANNEL" 2>/dev/null) || {
             log_warn "Failed to reach marketplace API for $appId (network error). Skipping module."
             continue
@@ -85,13 +86,9 @@ for moduleDir in "$OUT_DIR"/*/; do
         fi
 
         # Install module
-        log_info "Installing module $appId..."
+        log_info "Installing module $appId (channel=$CHANNEL)..."
 
-        if [[ "$(parse_boolean "$STAGING")" == "true" ]]; then
-          webresto install "$appId" -c "staging"
-        else
-          webresto install "$appId" 
-        fi
+        webresto install "$appId" -c "$CHANNEL"
 
 
         # Run npm install after the module is installed
