@@ -60,6 +60,30 @@ parse_boolean() {
     echo "$default"
 }
 
+# Resolve marketplace channel for module install/update
+# Priority: explicit WR_MODULES_CHANNEL (main|staging|any) wins;
+# otherwise STAGING=1 means "any" (newest version across all channels,
+# convenient for dev stacks); otherwise "main" (stable).
+resolve_modules_channel() {
+    local explicit="${WR_MODULES_CHANNEL:-}"
+    if [[ -n "$explicit" ]]; then
+        case "$explicit" in
+            main|staging|any)
+                echo "$explicit"
+                return
+                ;;
+            *)
+                log_warn "Unknown WR_MODULES_CHANNEL '$explicit' (expected main|staging|any) - ignoring"
+                ;;
+        esac
+    fi
+    if [[ "$(parse_boolean "$STAGING")" == "true" ]]; then
+        echo "any"
+    else
+        echo "main"
+    fi
+}
+
 # Exit helper that respects EXIT_BEHAVIOR environment variable
 # If EXIT_BEHAVIOR is set to "sleep", performs infinite sleep instead of exit
 # Default behavior is exit
