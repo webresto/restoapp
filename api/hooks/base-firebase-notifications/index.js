@@ -2,6 +2,7 @@
 
 const { tryInitFCM } = require("./initialize");
 const { bindFirebaseNotificationsAdminpanel } = require("./adminpanel/bindAdminpanel");
+const registerSnippet = require("./registerSnippet");
 
 module.exports = function (sails) {
   return {
@@ -14,6 +15,7 @@ module.exports = function (sails) {
         }
       });
       bindFirebaseNotificationsAdminpanel(sails);
+      registerSnippet();
       cb();
     },
   };

@@ -102,6 +102,11 @@ Environment variables are loaded into the container from the `.env` file (case-s
 
 To install additional RestoApp modules into the container at startup, add the `/app/webresto-modules.list` file containing the module list, with each module on a new line. Each line will be executed using the `webresto install $line_module` template.
 
+Marketplace channel selection for install and auto-update (`MODULES_AUTO_UPDATE`):
+- `WR_MODULES_CHANNEL=main|staging|any` — explicit channel, always wins;
+- otherwise `STAGING=1` selects `any` (the newest semver version across all marketplace channels — handy for dev stacks);
+- otherwise `main` (stable).
+
 You can find more modules or even upload your own modules from [https://marketplace.restoapp.org/](https://marketplace.restoapp.org/).
 
 
