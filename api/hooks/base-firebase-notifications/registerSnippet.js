@@ -28,15 +28,19 @@ function registerSnippet() {
       module: "base-firebase-notifications",
       key: "firebase-web-config",
       name: "Firebase Web Config (env)",
+      // Nested under `firebase` on purpose: admin-frontend deep-merges env-snippet JSON
+      // into recipe.environment, so this lands at recipe.environment.firebase — exactly the
+      // shape the frontend reads (Environment.firebase). Only the six fields the frontend
+      // actually uses; storageBucket/measurementId are not part of that contract.
       content: JSON.stringify({
-        apiKey: webConfig.apiKey,
-        authDomain: webConfig.authDomain,
-        projectId: webConfig.projectId,
-        messagingSenderId: webConfig.messagingSenderId,
-        appId: webConfig.appId,
-        vapidKey: webConfig.vapidKey,
-        storageBucket: webConfig.storageBucket,
-        measurementId: webConfig.measurementId,
+        firebase: {
+          apiKey: webConfig.apiKey,
+          authDomain: webConfig.authDomain,
+          projectId: webConfig.projectId,
+          messagingSenderId: webConfig.messagingSenderId,
+          appId: webConfig.appId,
+          vapidKey: webConfig.vapidKey,
+        },
       }),
       placement: "env",
       enabledByDefault: true,
