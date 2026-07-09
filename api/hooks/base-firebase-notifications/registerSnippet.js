@@ -18,9 +18,19 @@ function registerSnippet() {
 
   emitter.on(EVENT, SUBSCRIBER_ID, async () => {
     const webConfig = await Settings.get("FCM_WEB_CONFIG");
+    const channelsState = await Settings.get("NOTIFICATION_CHANNELS_STATE");
+    const webChannelState = channelsState && typeof channelsState === "object"
+      ? channelsState["fcm-web"]
+      : null;
 
     if (!webConfig || !webConfig.apiKey) {
       // No config yet — return nothing so the snippet doesn't appear in recipe
+      return null;
+    }
+
+    if (webChannelState && webChannelState.enabled === false) {
+      // Respect the admin notifications manager toggle: disabled web push should not
+      // leak Firebase config into the frontend recipe because the channel is off.
       return null;
     }
 
