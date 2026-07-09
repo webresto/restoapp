@@ -49,7 +49,10 @@ services:
       MODULES_AUTO_UPDATE: 'TRUE'
       LOG_LEVEL: 'debug'
       NODE_RED_TOKEN: 'put-your-token-here'
+      # Marketplace channel: STAGING=1 defaults to "any" (newest across all
+      # channels); pin explicitly with WR_MODULES_CHANNEL=main|staging|any.
       STAGING: '0'
+      # WR_MODULES_CHANNEL: 'staging'
       WEBRESTO_LICENSE: "Free"
     env_file:
       - .env
