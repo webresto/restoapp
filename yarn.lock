@@ -9055,10 +9055,10 @@ safe-stable-stringify@^2.3.1:
   resolved "https://registry.npmjs.org/safer-buffer/-/safer-buffer-2.1.2.tgz"
   integrity sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg==
 
-sails-adminpanel@^4.7.0-build.187:
-  version "4.7.0-build.187"
-  resolved "https://registry.yarnpkg.com/sails-adminpanel/-/sails-adminpanel-4.7.0-build.187.tgz#2499048c63c71050b9071484f08d3a555ae37ccd"
-  integrity sha512-JbmzeM5jnWiCljSDzy25ej0pV3tYmsC5dStH2OF8HIzXLv6xjKI+Cq3nINsdR76ITphKOiLxrYP9P6I88KdNYA==
+sails-adminpanel@^4.7.0-build.188:
+  version "4.7.0-build.188"
+  resolved "https://registry.yarnpkg.com/sails-adminpanel/-/sails-adminpanel-4.7.0-build.188.tgz#b5213d9fdf9e430fd37e07dd6c51e6d1b0fadb6e"
+  integrity sha512-iTrhNtU0iY83gzh4lzZmA6mY8Xu5frpyF7ia5SOzzGfQyuBz5U6DvSJI1tRe+O/EHdDT4HWXdmZC95ynMN1cVw==
   dependencies:
     adminizer "4.7.0-build.224"
     lodash "^4.17.21"

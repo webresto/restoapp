@@ -23,7 +23,7 @@
     "patch-package": "^6.5.1",
     "rc": "^1.2.8",
     "sails": "1.5.11",
-    "sails-adminpanel": "^4.7.0-build.187",
+    "sails-adminpanel": "^4.7.0-build.188",
     "sails-build-dictionary": "^0.10.1",
     "sails-disk": "^2.1.2",
     "sails-hook-orm": "^4.0.3",
