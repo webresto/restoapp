@@ -91,7 +91,11 @@ module.exports.adminpanel = {
   showVersion: {
     text: process.env.CONTAINER_VERSION || process.env.APP_VERSION || process.env.VERSION,
   },
-  mediamanager: false,
+  mediamanager: {
+    fileStoragePath: '.tmp/public',
+    allowMIME: ['image/*'],
+    maxByteSize: 5 * 1024 * 1024,
+  },
   policies: [],
   brand: {
     link: {
