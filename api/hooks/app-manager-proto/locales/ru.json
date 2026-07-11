@@ -12,5 +12,16 @@
   "Updating...": "Обновление...",
   "Version {{version}} is available": "Доступна версия {{version}}",
   "Module update failed": "Не удалось обновить модуль",
-  "Updated. The application is restarting...": "Модуль обновлён. Приложение перезапускается..."
+  "Updated. The application is restarting...": "Модуль обновлён. Приложение перезапускается...",
+  "Add module": "Добавить модуль",
+  "Install module": "Установить модуль",
+  "Choose a module from marketplace": "Выберите модуль из marketplace",
+  "Back to installed modules": "Назад к установленным модулям",
+  "Install": "Установить",
+  "Installing...": "Установка...",
+  "Unavailable for this license": "Недоступно для этой лицензии",
+  "No modules are available for installation": "Нет доступных для установки модулей",
+  "Failed to load marketplace catalog": "Не удалось загрузить каталог marketplace",
+  "Module installation failed": "Не удалось установить модуль",
+  "Installed. The application is restarting...": "Модуль установлен. Приложение перезапускается..."
 }

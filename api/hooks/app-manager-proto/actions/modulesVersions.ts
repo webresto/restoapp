@@ -63,6 +63,7 @@ export default async function modulesVersions(req: any, res: any) {
     }
 
     try {
+        const isCatalog = /\/modules\/catalog\/?$/.test(req.path || req.url || '');
         const modulesFromDb = await Module.find({
             where: {
                 isDeleted: {
@@ -78,6 +79,56 @@ export default async function modulesVersions(req: any, res: any) {
             ? explicitChannel
             : (staging ? 'any' : 'main');
         const license = process.env.WEBRESTO_LICENSE || '';
+
+        if (isCatalog) {
+            let catalog: any[] = [];
+            let catalogError = '';
+            try {
+                const response = await axios.get('https://marketplace.restoapp.org/getRecommendedModules', {
+                    params: { token: license, channel },
+                    timeout: 12000
+                });
+                const installed = new Set((modulesFromDb || []).map((item: any) => item.appId));
+                catalog = (Array.isArray(response.data) ? response.data : [])
+                    .filter((item: any) => item?.id && !installed.has(item.id) && !item.disabled && !item.isDeleted)
+                    .map((item: any) => ({
+                        appId: item.id,
+                        name: item.name || item.id,
+                        teaser: item.teaser || '',
+                        latestVersion: item.latestVersion || '',
+                        canInstall: item.purchased !== false
+                    }))
+                    .sort((a: any, b: any) => a.name.localeCompare(b.name));
+            } catch (error) {
+                catalogError = t('Failed to load marketplace catalog');
+                sails.log.warn('MM: could not load marketplace catalog', error);
+            }
+
+            return req.Inertia.render({
+                component: 'module',
+                props: {
+                    moduleComponent: `${routePrefix}/modules/assets/modules-versions.js`,
+                    data: {
+                        view: 'catalog',
+                        catalog,
+                        catalogError,
+                        translations: {
+                            catalogTitle: t('Add module'),
+                            catalogSubtitle: t('Choose a module from marketplace'),
+                            back: t('Back to installed modules'),
+                            install: t('Install'),
+                            installing: t('Installing...'),
+                            unavailable: t('Unavailable for this license'),
+                            emptyCatalog: t('No modules are available for installation'),
+                            installFailed: t('Module installation failed'),
+                            restarting: t('Installed. The application is restarting...')
+                        }
+                    },
+                    versionsUrl: `${routePrefix}/modules/versions`,
+                    updateUrl: `${routePrefix}/modules/upgrade`
+                }
+            });
+        }
 
         const modules = await Promise.all((modulesFromDb || []).map(async (item: any) => {
             const currentVersion = item.version || '';
@@ -127,9 +178,11 @@ export default async function modulesVersions(req: any, res: any) {
                         updating: t('Updating...'),
                         available: t('Version {{version}} is available'),
                         updateFailed: t('Module update failed'),
-                        restarting: t('Updated. The application is restarting...')
+                        restarting: t('Updated. The application is restarting...'),
+                        addModule: t('Install module')
                     }
                 },
+                catalogUrl: `${routePrefix}/modules/catalog`,
                 updateUrl: `${routePrefix}/modules/upgrade`
             }
         });

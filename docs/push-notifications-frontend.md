@@ -168,6 +168,37 @@ The `id` is the notification UUID. Only the recipient knows it — this serves a
 
 ---
 
+## 7b. Acknowledge delivery (`markNotificationDelivered`)
+
+`delivered` is a signal parallel to `read`: "the device received the push and the OS displayed it",
+even if the user has not looked at it. The backend stores it as a separate `deliveredAt` timestamp
+(the status does not change). A notification can be delivered but not yet read.
+
+```graphql
+mutation MarkNotificationDelivered($id: ID!) {
+  markNotificationDelivered(id: $id)
+}
+```
+
+**When to call (best-effort, fire-and-forget):**
+- Web, open tab: inside `onMessage` as soon as the push arrives.
+- Web, background: in the service worker right after `registration.showNotification(...)`
+  — a plain `fetch` to the GraphQL endpoint, **no JWT needed** (possession of the UUID already
+  proves receipt, and the SW has no auth context).
+- Native (Cordova): in the notification receive callback. Note: without native extensions
+  (iOS Notification Service Extension / custom Android FCM service) the app code only runs on
+  tap or in foreground, so on native "delivered" effectively coincides with "read".
+
+No provider (FCM/APNs) confirms delivery to the server — absence of an ack does NOT mean
+"not delivered" (an offline device acks later). The mutation is idempotent.
+
+**Why it matters:** each notification type (`NotificationRules.escalateBy`) chooses which signal
+stops the channel-escalation waterfall: `read` (default — escalate until the user opens it) or
+`delivered` (stop as soon as the device confirmed receipt, e.g. to avoid a paid SMS follow-up
+when a web push demonstrably reached the device).
+
+---
+
 ## 8. Token refresh
 
 FCM periodically rotates tokens. Subscribe to refresh events:

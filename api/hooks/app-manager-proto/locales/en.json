@@ -12,5 +12,16 @@
   "Updating...": "Updating...",
   "Version {{version}} is available": "Version {{version}} is available",
   "Module update failed": "Module update failed",
-  "Updated. The application is restarting...": "Updated. The application is restarting..."
+  "Updated. The application is restarting...": "Updated. The application is restarting...",
+  "Add module": "Add module",
+  "Install module": "Install module",
+  "Choose a module from marketplace": "Choose a module from marketplace",
+  "Back to installed modules": "Back to installed modules",
+  "Install": "Install",
+  "Installing...": "Installing...",
+  "Unavailable for this license": "Unavailable for this license",
+  "No modules are available for installation": "No modules are available for installation",
+  "Failed to load marketplace catalog": "Failed to load marketplace catalog",
+  "Module installation failed": "Module installation failed",
+  "Installed. The application is restarting...": "Installed. The application is restarting..."
 }
