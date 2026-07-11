@@ -81,6 +81,11 @@ export default function bindRoutes(sails: any) {
             ...bind(_modulesVersions)
         );
 
+        adminizer.app.get(
+            `${routePrefix}/modules/catalog`,
+            ...bind(_modulesVersions)
+        );
+
         if (!adminizer.config.navbar) {
             adminizer.config.navbar = {};
         }

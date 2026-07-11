@@ -1,4 +1,6 @@
 const { spawn } = require('child_process');
+const fs = require('fs');
+const axios = require('axios');
 let activeUpdate = null;
 
 module.exports = async function (req, res) {
@@ -18,14 +20,18 @@ module.exports = async function (req, res) {
     const modulesPath = '/app/modules';
     const scriptPath = '/app/.ci/utils/install_webresto_dependencies';
     const appId = typeof req.query.appId === 'string' ? req.query.appId.trim() : '';
+    const isInstall = req.query.action === 'install';
 
     if (!appId || !/^[a-zA-Z0-9._-]+$/.test(appId)) {
         return res.status(400).send('A valid appId is required');
     }
 
     const managedModule = await Module.findOne({ appId, isDeleted: { '!=': true } });
-    if (!managedModule) {
+    if (!isInstall && !managedModule) {
         return res.status(404).send('Managed module not found');
+    }
+    if (isInstall && managedModule) {
+        return res.status(409).send('Module is already installed');
     }
 
     if (activeUpdate) {
@@ -36,6 +42,35 @@ module.exports = async function (req, res) {
         return res.status(400).send('WEBRESTO_MODULES_LISTFILE environment variable is not set');
     }
 
+    if (isInstall) {
+        try {
+            const explicitChannel = process.env.WR_MODULES_CHANNEL;
+            const staging = ['1', 'true', 'yes'].includes(String(process.env.STAGING || '').toLowerCase());
+            const channel = ['main', 'staging', 'any'].includes(explicitChannel)
+                ? explicitChannel
+                : (staging ? 'any' : 'main');
+            const marketplaceResponse = await axios.get('https://marketplace.restoapp.org/getModuleDetails', {
+                params: { appId, token: WEBRESTO_LICENSE, channel },
+                timeout: 12000
+            });
+            if (!marketplaceResponse.data || marketplaceResponse.data.id !== appId || marketplaceResponse.data.purchased === false) {
+                return res.status(403).send('Module is not available for this license');
+            }
+
+            const listContent = fs.existsSync(WEBRESTO_MODULES_LISTFILE)
+                ? fs.readFileSync(WEBRESTO_MODULES_LISTFILE, 'utf8')
+                : '';
+            const entries = listContent.split(/\r?\n/).map((line) => line.trim());
+            if (!entries.includes(appId)) {
+                const separator = listContent && !listContent.endsWith('\n') ? '\n' : '';
+                fs.appendFileSync(WEBRESTO_MODULES_LISTFILE, `${separator}${appId}\n`, 'utf8');
+            }
+        } catch (error) {
+            sails.log.warn(`MM: could not validate marketplace module ${appId}`, error);
+            return res.status(502).send('Could not validate marketplace module');
+        }
+    }
+
     // Set headers for text streaming
     res.writeHead(200, {
         'Content-Type': 'text/plain; charset=utf-8',
@@ -44,7 +79,7 @@ module.exports = async function (req, res) {
         'Connection': 'keep-alive'
     });
 
-    res.write('=== Starting WebResto modules upgrade ===\n\n');
+    res.write(`=== Starting WebResto module ${isInstall ? 'installation' : 'upgrade'} ===\n\n`);
     res.write(`Script: ${scriptPath}\n`);
     res.write(`Modules list: ${WEBRESTO_MODULES_LISTFILE}\n`);
     res.write(`Target path: ${modulesPath}\n`);
