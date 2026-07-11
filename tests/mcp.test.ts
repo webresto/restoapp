@@ -25,6 +25,11 @@ function makeReq(opts: {
   };
 }
 
+// Flatten all tool names out of the grouped catalogue returned by GET /mcp.
+function groupedToolNames(body: any): string[] {
+  return (body.groups ?? []).flatMap((g: any) => (g.tools ?? []).map((t: any) => t.name));
+}
+
 function makeRes() {
   const res: any = {
     _status: 200,
@@ -114,7 +119,7 @@ describe("McpServer middleware — GET /mcp", function () {
     expect(res._body).to.have.property("version");
     expect(res._body).to.have.property("info");
     expect(res._body).to.have.property("endpoints");
-    expect(res._body).to.have.property("tools");
+    expect(res._body).to.have.property("groups");
   });
 
   it("unauthenticated request sees only public tools", async function () {
@@ -122,7 +127,7 @@ describe("McpServer middleware — GET /mcp", function () {
     const res = makeRes();
     await handle(req, res, () => {});
 
-    const names = res._body.tools.map((t: any) => t.name);
+    const names = groupedToolNames(res._body);
     expect(names).to.include("pub");
     expect(names).to.not.include("priv");
   });
@@ -134,7 +139,7 @@ describe("McpServer middleware — GET /mcp", function () {
       const res = makeRes();
       await handle(req, res, () => {});
 
-      const names = res._body.tools.map((t: any) => t.name);
+      const names = groupedToolNames(res._body);
       expect(names).to.include("pub");
       expect(names).to.include("priv");
     } finally {
@@ -149,7 +154,7 @@ describe("McpServer middleware — GET /mcp", function () {
       const res = makeRes();
       await handle(req, res, () => {});
 
-      const names = res._body.tools.map((t: any) => t.name);
+      const names = groupedToolNames(res._body);
       expect(names).to.include("priv");
     } finally {
       delete process.env.MCP_ADMIN_KEY;
@@ -157,7 +162,7 @@ describe("McpServer middleware — GET /mcp", function () {
   });
 
   it("each tool entry contains call documentation", async function () {
-    const req = makeReq({ method: "GET", url: "/mcp" });
+    const req = makeReq({ method: "GET", url: "/mcp?flat=1", query: { flat: "1" } });
     const res = makeRes();
     await handle(req, res, () => {});
 
@@ -334,7 +339,7 @@ describe("McpServer — schema example generation", function () {
   });
 
   it("generates example params from JSON Schema", async function () {
-    const req = makeReq({ method: "GET", url: "/mcp" });
+    const req = makeReq({ method: "GET", url: "/mcp?flat=1", query: { flat: "1" } });
     const res = makeRes();
     await handle(req, res, () => {});
 
@@ -351,7 +356,7 @@ describe("McpServer — schema example generation", function () {
   });
 
   it("curl example contains the tool name", async function () {
-    const req = makeReq({ method: "GET", url: "/mcp" });
+    const req = makeReq({ method: "GET", url: "/mcp?flat=1", query: { flat: "1" } });
     const res = makeRes();
     await handle(req, res, () => {});
 
