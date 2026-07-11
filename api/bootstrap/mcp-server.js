@@ -22,6 +22,24 @@ module.exports.default = async function (sails) {
   sails.log.info('Bootstrap > MCP Server starting...');
 
   // global.mcp is set by api/mcp/McpServer.js which is always loaded via config/http.js
+
+  // Describe the groups the api/mcp/tools/*.js tools belong to. The group name
+  // for each tool is inferred from its source file basename (e.g. tools in
+  // nodered.js land in group 'nodered'), so these names must match the files.
+  // registerGroup is idempotent — safe to call before the tools are loaded.
+  const TOOL_GROUPS = {
+    'health':       'Application health and liveness checks.',
+    'admin-info':   'Admin and instance metadata: versions, environment info.',
+    'modules-info': 'Installed modules / packages and their metadata.',
+    'menu':         'Public menu catalogue: browse groups, dishes and single items.',
+    'restart':      'Process control: restart the application.',
+    'upload-image': 'Upload images to the media library.',
+    'nodered':      'Node-RED flow management: status, flows, nodes, validate, backup, patch, deploy, rollback, logs.',
+  };
+  for (const [name, description] of Object.entries(TOOL_GROUPS)) {
+    if (typeof mcp.registerGroup === 'function') mcp.registerGroup({ name, description });
+  }
+
   const toolsDir = path.join(sails.config.paths.app, 'api/mcp/tools');
 
   // Auto-load all tools from api/mcp/tools/*.js
