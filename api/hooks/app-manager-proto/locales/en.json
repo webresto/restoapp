@@ -7,5 +7,10 @@
   "System update in progress": "System update in progress",
   "The system requires an update. Please wait a few minutes, then contact your administrator.": "The system requires an update. Please wait a few minutes, then contact your administrator.",
   "System update access denied": "System update access denied",
-  "Go to admin panel": "Go to admin panel"
+  "Go to admin panel": "Go to admin panel",
+  "Update": "Update",
+  "Updating...": "Updating...",
+  "Version {{version}} is available": "Version {{version}} is available",
+  "Module update failed": "Module update failed",
+  "Updated. The application is restarting...": "Updated. The application is restarting..."
 }

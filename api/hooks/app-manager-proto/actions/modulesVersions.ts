@@ -1,5 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import axios from 'axios';
+import semver from 'semver';
 
 export default async function modulesVersions(req: any, res: any) {
     const { config } = req.adminizer || {};
@@ -70,10 +72,44 @@ export default async function modulesVersions(req: any, res: any) {
             sort: 'name ASC'
         });
 
-        const modules = (modulesFromDb || []).map((item: any) => ({
-            name: item.name || item.appId || t('unknown'),
-            appId: item.appId || '',
-            version: item.version || t('unknown')
+        const explicitChannel = process.env.WR_MODULES_CHANNEL;
+        const staging = ['1', 'true', 'yes'].includes(String(process.env.STAGING || '').toLowerCase());
+        const channel = ['main', 'staging', 'any'].includes(explicitChannel || '')
+            ? explicitChannel
+            : (staging ? 'any' : 'main');
+        const license = process.env.WEBRESTO_LICENSE || '';
+
+        const modules = await Promise.all((modulesFromDb || []).map(async (item: any) => {
+            const currentVersion = item.version || '';
+            let latestVersion = '';
+            let updateAvailable = false;
+
+            if (item.appId && license) {
+                try {
+                    const response = await axios.get('https://marketplace.restoapp.org/getModuleDetails', {
+                        params: { appId: item.appId, license, channel },
+                        timeout: 8000
+                    });
+                    latestVersion = response?.data?.latestVersion || '';
+                    updateAvailable = Boolean(
+                        latestVersion &&
+                        currentVersion &&
+                        (semver.valid(latestVersion) && semver.valid(currentVersion)
+                            ? semver.gt(latestVersion, currentVersion)
+                            : latestVersion !== currentVersion)
+                    );
+                } catch (error) {
+                    sails.log.warn(`MM: could not check marketplace version for ${item.appId}`);
+                }
+            }
+
+            return {
+                name: item.name || item.appId || t('unknown'),
+                appId: item.appId || '',
+                version: currentVersion || t('unknown'),
+                latestVersion,
+                updateAvailable
+            };
         }));
 
         return req.Inertia.render({
@@ -86,9 +122,15 @@ export default async function modulesVersions(req: any, res: any) {
                         title: t('Installed Extensions'),
                         subtitle: t('Name and installed version'),
                         empty: t('No managed extensions were found'),
-                        unknown: t('unknown')
+                        unknown: t('unknown'),
+                        update: t('Update'),
+                        updating: t('Updating...'),
+                        available: t('Version {{version}} is available'),
+                        updateFailed: t('Module update failed'),
+                        restarting: t('Updated. The application is restarting...')
                     }
-                }
+                },
+                updateUrl: `${routePrefix}/modules/upgrade`
             }
         });
     } catch (error) {

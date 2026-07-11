@@ -1,4 +1,5 @@
 const { spawn } = require('child_process');
+let activeUpdate = null;
 
 module.exports = async function (req, res) {
     const { config } = req.adminizer;
@@ -16,6 +17,20 @@ module.exports = async function (req, res) {
     const WEBRESTO_LICENSE = process.env.WEBRESTO_LICENSE || '';
     const modulesPath = '/app/modules';
     const scriptPath = '/app/.ci/utils/install_webresto_dependencies';
+    const appId = typeof req.query.appId === 'string' ? req.query.appId.trim() : '';
+
+    if (!appId || !/^[a-zA-Z0-9._-]+$/.test(appId)) {
+        return res.status(400).send('A valid appId is required');
+    }
+
+    const managedModule = await Module.findOne({ appId, isDeleted: { '!=': true } });
+    if (!managedModule) {
+        return res.status(404).send('Managed module not found');
+    }
+
+    if (activeUpdate) {
+        return res.status(409).send(`Module ${activeUpdate} is already being updated`);
+    }
 
     if (!WEBRESTO_MODULES_LISTFILE) {
         return res.status(400).send('WEBRESTO_MODULES_LISTFILE environment variable is not set');
@@ -34,9 +49,11 @@ module.exports = async function (req, res) {
     res.write(`Modules list: ${WEBRESTO_MODULES_LISTFILE}\n`);
     res.write(`Target path: ${modulesPath}\n`);
     res.write(`License: ${WEBRESTO_LICENSE ? '***' : 'not set'}\n\n`);
+    res.write(`Module: ${appId}\n\n`);
     res.write('===========================================\n\n');
 
     // Spawn the installation script with update flag
+    activeUpdate = appId;
     const child = spawn('bash', [
         scriptPath,
         WEBRESTO_MODULES_LISTFILE,
@@ -46,7 +63,8 @@ module.exports = async function (req, res) {
     ], {
         env: {
             ...process.env,
-            FORCE_UPDATE: 'true' // Additional flag for forcing updates
+            FORCE_UPDATE: 'true',
+            WR_UPDATE_MODULE: appId
         }
     });
 
@@ -62,6 +80,7 @@ module.exports = async function (req, res) {
 
     // Handle process completion
     child.on('close', (code) => {
+        activeUpdate = null;
         res.write(`\n\n===========================================\n`);
         if (code === 0) {
             res.write(`✓ Upgrade completed successfully (exit code: ${code})\n`);
@@ -70,22 +89,22 @@ module.exports = async function (req, res) {
         }
         res.write('===========================================\n');
         res.end();
+        if (code === 0) {
+            setTimeout(() => process.exit(0), 1000);
+        }
     });
 
     // Handle errors
     child.on('error', (error) => {
+        activeUpdate = null;
         res.write(`\n\n[FATAL ERROR] ${error.message}\n`);
         res.end();
     });
 
-    // Handle request abortion
-    req.on('close', () => {
+    // Stop the installer only when the client disconnects before a response is complete.
+    req.on('aborted', () => {
         if (!child.killed) {
             child.kill();
         }
-
-        setTimeout(() => {
-            process.exit();
-        }, 5000);
     });
 };

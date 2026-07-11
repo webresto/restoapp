@@ -13,6 +13,8 @@ mkdir -p "$OUT_DIR"
 
 WR_MODULES_LIST_FILE=$1
 WEBRESTO_LICENSE=$3
+WR_UPDATE_MODULE="${WR_UPDATE_MODULE:-}"
+update_module_found=false
 
 # STAGING can be set externally. Default to 0 only if not provided.
 : ${STAGING:=0}
@@ -50,6 +52,13 @@ if [[ -f "$WR_MODULES_LIST_FILE" ]]; then
                 continue
             fi
 
+            # An update started from the admin UI is intentionally limited to
+            # one module from the configured allow-list.
+            if [[ -n "$WR_UPDATE_MODULE" && "$module" != "$WR_UPDATE_MODULE" ]]; then
+                continue
+            fi
+            update_module_found=true
+
             log_info "Processing module entry: $module"
 
             # Check for empty folders
@@ -65,10 +74,10 @@ if [[ -f "$WR_MODULES_LIST_FILE" ]]; then
             fi
 
 
-            if [[ -d "$OUT_DIR/$module" && ( "$(parse_boolean "$WR_AUTOUPDATE_MODULES")" == "true" || "$NODE_ENV" != "production" ) ]]; then
+            if [[ -d "$OUT_DIR/$module" && ( "$(parse_boolean "$WR_AUTOUPDATE_MODULES")" == "true" || "$(parse_boolean "$FORCE_UPDATE")" == "true" || "$NODE_ENV" != "production" ) ]]; then
                 log_info "Module $module exists - checking marketplace for updates (channel=$CHANNEL)"
-                latestVersion=$(curl -sf --retry 3 --retry-delay 3 "https://marketplace.restoapp.org/getModuleDetails?appId=$module&license=$WEBRESTO_LICENSE&channel=$CHANNEL" 2>/dev/null | jq -r '.latestVersion' 2>/dev/null) || latestVersion=""
-                currentVersion=$(jq -r '.version' "$OUT_DIR/$module/package.json")
+                latestVersion=$(curl -sf --retry 3 --retry-delay 3 "https://marketplace.restoapp.org/getModuleDetails?appId=$module&license=$WEBRESTO_LICENSE&channel=$CHANNEL" 2>/dev/null | jq -r '.latestVersion // empty' 2>/dev/null) || latestVersion=""
+                currentVersion=$(jq -r '.version // empty' "$OUT_DIR/$module/package.json")
                 log_info "Latest: '$latestVersion' Current: '$currentVersion'"
                 if [[ "$latestVersion" != "$currentVersion" && ! -z "$latestVersion" ]]; then
                     log_info "Newer version detected for $module - removing old folder to update"
@@ -97,6 +106,11 @@ if [[ -f "$WR_MODULES_LIST_FILE" ]]; then
             fi
         fi
     done < "$WR_MODULES_LIST_FILE"
+
+    if [[ -n "$WR_UPDATE_MODULE" && "$update_module_found" != "true" ]]; then
+        log_error "Requested module '$WR_UPDATE_MODULE' is not present in $WR_MODULES_LIST_FILE"
+        exit 2
+    fi
 else
     log_info "WebResto modules list file not found: $WR_MODULES_LIST_FILE - nothing to install"
 fi

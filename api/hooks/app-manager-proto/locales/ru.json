@@ -7,5 +7,10 @@
   "System update in progress": "Выполняется обновление системы",
   "The system requires an update. Please wait a few minutes, then contact your administrator.": "Системе требуется обновление. Пожалуйста, подождите несколько минут, затем сообщите администратору.",
   "System update access denied": "Доступ к обновлению системы запрещен",
-  "Go to admin panel": "Перейти в панель администратора"
+  "Go to admin panel": "Перейти в панель администратора",
+  "Update": "Обновить",
+  "Updating...": "Обновление...",
+  "Version {{version}} is available": "Доступна версия {{version}}",
+  "Module update failed": "Не удалось обновить модуль",
+  "Updated. The application is restarting...": "Модуль обновлён. Приложение перезапускается..."
 }

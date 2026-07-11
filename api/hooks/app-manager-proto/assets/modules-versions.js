@@ -78,6 +78,12 @@ const styles = {
     whiteSpace: 'nowrap',
     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
   },
+  rowActions: { display: 'flex', alignItems: 'center', gap: '12px' },
+  updateInfo: { color: 'var(--muted-foreground)', fontSize: '12px' },
+  updateButton: {
+    border: '1px solid var(--border)', borderRadius: '6px', padding: '6px 10px',
+    background: 'var(--primary)', color: 'var(--primary-foreground)', cursor: 'pointer'
+  },
   empty: {
     fontSize: '14px',
     color: 'var(--muted-foreground)',
@@ -89,6 +95,25 @@ export default function ModulesVersions(props) {
   const modules = Array.isArray(props?.data?.modules) ? props.data.modules : [];
   const translations = props?.data?.translations || {};
   const marketplaceBaseUrl = 'https://marketplace.restoapp.org/catalog/module/';
+  const updateUrl = props?.updateUrl || '';
+  const react = typeof window !== 'undefined' ? window.React : undefined;
+  const state = react?.useState ? react.useState({}) : [{}, () => {}];
+  const statuses = state[0];
+  const setStatuses = state[1];
+
+  const updateModule = async (appId) => {
+    setStatuses((current) => ({ ...current, [appId]: 'updating' }));
+    try {
+      const response = await fetch(`${updateUrl}?appId=${encodeURIComponent(appId)}`, { credentials: 'same-origin' });
+      const output = await response.text();
+      if (!response.ok) throw new Error(output || `HTTP ${response.status}`);
+      setStatuses((current) => ({ ...current, [appId]: 'restarting' }));
+      setTimeout(() => window.location.reload(), 5000);
+    } catch (error) {
+      console.error(error);
+      setStatuses((current) => ({ ...current, [appId]: 'failed' }));
+    }
+  };
 
   const rows = modules.map((item, index) => {
     const name = item?.name || item?.appId || translations.unknown || '';
@@ -114,7 +139,25 @@ export default function ModulesVersions(props) {
       'li',
       { key: `${name}-${index}`, style: { ...styles.row, borderBottom: index === modules.length - 1 ? 'none' : styles.row.borderBottom } },
       createElement('span', { style: styles.rowName }, nameNode),
-      createElement('span', { style: styles.rowVersion }, `v${version}`)
+      createElement(
+        'span', { style: styles.rowActions },
+        item?.updateAvailable && createElement(
+          'span', { style: styles.updateInfo },
+          (translations.available || 'Version {{version}} is available').replace('{{version}}', item.latestVersion)
+        ),
+        createElement('span', { style: styles.rowVersion }, `v${version}`),
+        item?.updateAvailable && createElement(
+          'button',
+          {
+            type: 'button', style: styles.updateButton,
+            disabled: statuses[appId] === 'updating' || statuses[appId] === 'restarting',
+            onClick: () => updateModule(appId)
+          },
+          statuses[appId] === 'updating' ? translations.updating :
+            statuses[appId] === 'restarting' ? translations.restarting :
+              statuses[appId] === 'failed' ? translations.updateFailed : translations.update
+        )
+      )
     );
   });
 
