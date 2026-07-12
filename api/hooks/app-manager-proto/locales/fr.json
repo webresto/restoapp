@@ -7,5 +7,21 @@
   "System update in progress": "Mise à jour système en cours",
   "The system requires an update. Please wait a few minutes, then contact your administrator.": "Le système nécessite une mise à jour. Veuillez patienter quelques minutes, puis contacter votre administrateur.",
   "System update access denied": "Accès à la mise à jour système refusé",
-  "Go to admin panel": "Aller au panneau d'administration"
+  "Go to admin panel": "Aller au panneau d'administration",
+  "Update": "Mettre à jour",
+  "Updating...": "Mise à jour en cours...",
+  "Version {{version}} is available": "La version {{version}} est disponible",
+  "Module update failed": "La mise à jour du module a échoué",
+  "Updated. The application is restarting...": "Mis à jour. L'application redémarre...",
+  "Add module": "Ajouter un module",
+  "Install module": "Installer le module",
+  "Choose a module from marketplace": "Choisissez un module depuis la marketplace",
+  "Back to installed modules": "Retour aux modules installés",
+  "Install": "Installer",
+  "Installing...": "Installation en cours...",
+  "Unavailable for this license": "Indisponible pour cette licence",
+  "No modules are available for installation": "Aucun module n'est disponible à l'installation",
+  "Failed to load marketplace catalog": "Échec du chargement du catalogue de la marketplace",
+  "Module installation failed": "L'installation du module a échoué",
+  "Installed. The application is restarting...": "Installé. L'application redémarre..."
 }

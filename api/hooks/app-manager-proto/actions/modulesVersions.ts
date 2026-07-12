@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import axios from 'axios';
 import semver from 'semver';
+const restartScheduler = require('../helpers/restartScheduler');
 
 export default async function modulesVersions(req: any, res: any) {
     const { config } = req.adminizer || {};
@@ -83,22 +84,47 @@ export default async function modulesVersions(req: any, res: any) {
         if (isCatalog) {
             let catalog: any[] = [];
             let catalogError = '';
+            let availableGroups: string[] = [];
+            let availableTags: string[] = [];
+            const queryValue = (value: any): string => typeof value === 'string' ? value.trim().slice(0, 200) : '';
+            const search = queryValue(req.query?.search);
+            const group = queryValue(req.query?.group);
+            const tags = queryValue(req.query?.tags);
+            const requestedTags = tags.split(/[;,]/).map((tag) => tag.trim().toLowerCase()).filter(Boolean);
             try {
                 const response = await axios.get('https://marketplace.restoapp.org/getRecommendedModules', {
                     params: { token: license, channel },
                     timeout: 12000
                 });
                 const installed = new Set((modulesFromDb || []).map((item: any) => item.appId));
-                catalog = (Array.isArray(response.data) ? response.data : [])
-                    .filter((item: any) => item?.id && !installed.has(item.id) && !item.disabled && !item.isDeleted)
+                const recommended = (Array.isArray(response.data) ? response.data : [])
+                    .filter((item: any) => item?.id && !installed.has(item.id) && !item.disabled && !item.isDeleted);
+
+                availableGroups = Array.from(new Set(recommended.map((item: any) => item.category).filter(Boolean))).sort();
+                availableTags = Array.from(new Set(recommended.flatMap((item: any) => Array.isArray(item.tags) ? item.tags : []).filter(Boolean))).sort();
+
+                const normalizedSearch = search.toLowerCase();
+                catalog = recommended
+                    .filter((item: any) => {
+                        const itemTags = (Array.isArray(item.tags) ? item.tags : []).map((tag: any) => String(tag).toLowerCase());
+                        const matchesSearch = !normalizedSearch || [
+                            item.id, item.name, item.teaser, item.description, item.category, ...itemTags
+                        ].filter(Boolean).join(' ').toLowerCase().includes(normalizedSearch);
+                        const matchesGroup = !group || String(item.category || '').toLowerCase() === group.toLowerCase();
+                        const matchesTags = !requestedTags.length || requestedTags.every((tag) => itemTags.includes(tag));
+                        return matchesSearch && matchesGroup && matchesTags;
+                    })
                     .map((item: any) => ({
                         appId: item.id,
                         name: item.name || item.id,
                         teaser: item.teaser || '',
+                        group: item.category || '',
+                        tags: Array.isArray(item.tags) ? item.tags : [],
                         latestVersion: item.latestVersion || '',
                         canInstall: item.purchased !== false
                     }))
-                    .sort((a: any, b: any) => a.name.localeCompare(b.name));
+                    .sort((a: any, b: any) => a.name.localeCompare(b.name))
+                    .slice(0, 10);
             } catch (error) {
                 catalogError = t('Failed to load marketplace catalog');
                 sails.log.warn('MM: could not load marketplace catalog', error);
@@ -112,6 +138,7 @@ export default async function modulesVersions(req: any, res: any) {
                         view: 'catalog',
                         catalog,
                         catalogError,
+                        filters: { search, group, tags, availableGroups, availableTags },
                         translations: {
                             catalogTitle: t('Add module'),
                             catalogSubtitle: t('Choose a module from marketplace'),
@@ -121,11 +148,25 @@ export default async function modulesVersions(req: any, res: any) {
                             unavailable: t('Unavailable for this license'),
                             emptyCatalog: t('No modules are available for installation'),
                             installFailed: t('Module installation failed'),
-                            restarting: t('Installed. The application is restarting...')
+                            installed: t('Installed'),
+                            restartScheduled: t('Restart is scheduled for 00:00 server time.'),
+                            restartNow: t('Restart now'),
+                            restartingNow: t('Restarting...'),
+                            restartFailed: t('Failed to restart'),
+                            search: t('Search'),
+                            searchPlaceholder: t('Search by name or description'),
+                            group: t('Group'),
+                            allGroups: t('All groups'),
+                            tags: t('Tags'),
+                            tagsPlaceholder: t('Tags separated by commas'),
+                            applyFilters: t('Apply filters')
                         }
                     },
                     versionsUrl: `${routePrefix}/modules/versions`,
-                    updateUrl: `${routePrefix}/modules/upgrade`
+                    catalogUrl: `${routePrefix}/modules/catalog`,
+                    updateUrl: `${routePrefix}/modules/upgrade`,
+                    restartUrl: `${routePrefix}/modules/restart`,
+                    restartNotice: restartScheduler.getState()
                 }
             });
         }
@@ -178,12 +219,18 @@ export default async function modulesVersions(req: any, res: any) {
                         updating: t('Updating...'),
                         available: t('Version {{version}} is available'),
                         updateFailed: t('Module update failed'),
-                        restarting: t('Updated. The application is restarting...'),
+                        updated: t('Updated'),
+                        restartScheduled: t('Restart is scheduled for 00:00 server time.'),
+                        restartNow: t('Restart now'),
+                        restartingNow: t('Restarting...'),
+                        restartFailed: t('Failed to restart'),
                         addModule: t('Install module')
                     }
                 },
                 catalogUrl: `${routePrefix}/modules/catalog`,
-                updateUrl: `${routePrefix}/modules/upgrade`
+                updateUrl: `${routePrefix}/modules/upgrade`,
+                restartUrl: `${routePrefix}/modules/restart`,
+                restartNotice: restartScheduler.getState()
             }
         });
     } catch (error) {

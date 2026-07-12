@@ -7,5 +7,21 @@
   "System update in progress": "Systemaktualisierung wird durchgeführt",
   "The system requires an update. Please wait a few minutes, then contact your administrator.": "Das System benötigt ein Update. Bitte warten Sie einige Minuten und informieren Sie dann den Administrator.",
   "System update access denied": "Zugriff auf die Systemaktualisierung verweigert",
-  "Go to admin panel": "Zum Admin-Panel"
+  "Go to admin panel": "Zum Admin-Panel",
+  "Update": "Aktualisieren",
+  "Updating...": "Wird aktualisiert...",
+  "Version {{version}} is available": "Version {{version}} ist verfügbar",
+  "Module update failed": "Modulaktualisierung fehlgeschlagen",
+  "Updated. The application is restarting...": "Aktualisiert. Die Anwendung wird neu gestartet...",
+  "Add module": "Modul hinzufügen",
+  "Install module": "Modul installieren",
+  "Choose a module from marketplace": "Wählen Sie ein Modul aus dem Marketplace",
+  "Back to installed modules": "Zurück zu den installierten Modulen",
+  "Install": "Installieren",
+  "Installing...": "Wird installiert...",
+  "Unavailable for this license": "Für diese Lizenz nicht verfügbar",
+  "No modules are available for installation": "Keine Module zur Installation verfügbar",
+  "Failed to load marketplace catalog": "Marketplace-Katalog konnte nicht geladen werden",
+  "Module installation failed": "Modulinstallation fehlgeschlagen",
+  "Installed. The application is restarting...": "Installiert. Die Anwendung wird neu gestartet..."
 }

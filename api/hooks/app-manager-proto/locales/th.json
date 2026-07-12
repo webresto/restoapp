@@ -7,5 +7,21 @@
   "System update in progress": "กำลังอัปเดตระบบ",
   "The system requires an update. Please wait a few minutes, then contact your administrator.": "ระบบต้องการการอัปเดต กรุณารอสักครู่ แล้วแจ้งผู้ดูแลระบบ",
   "System update access denied": "ไม่อนุญาตให้เข้าถึงการอัปเดตระบบ",
-  "Go to admin panel": "ไปที่แผงผู้ดูแลระบบ"
+  "Go to admin panel": "ไปที่แผงผู้ดูแลระบบ",
+  "Update": "อัปเดต",
+  "Updating...": "กำลังอัปเดต...",
+  "Version {{version}} is available": "มีเวอร์ชัน {{version}} พร้อมใช้งาน",
+  "Module update failed": "การอัปเดตโมดูลล้มเหลว",
+  "Updated. The application is restarting...": "อัปเดตแล้ว แอปพลิเคชันกำลังเริ่มต้นใหม่...",
+  "Add module": "เพิ่มโมดูล",
+  "Install module": "ติดตั้งโมดูล",
+  "Choose a module from marketplace": "เลือกโมดูลจาก marketplace",
+  "Back to installed modules": "กลับไปยังโมดูลที่ติดตั้งแล้ว",
+  "Install": "ติดตั้ง",
+  "Installing...": "กำลังติดตั้ง...",
+  "Unavailable for this license": "ไม่พร้อมใช้งานสำหรับใบอนุญาตนี้",
+  "No modules are available for installation": "ไม่มีโมดูลที่พร้อมให้ติดตั้ง",
+  "Failed to load marketplace catalog": "ไม่สามารถโหลดแคตตาล็อก marketplace ได้",
+  "Module installation failed": "การติดตั้งโมดูลล้มเหลว",
+  "Installed. The application is restarting...": "ติดตั้งแล้ว แอปพลิเคชันกำลังเริ่มต้นใหม่..."
 }

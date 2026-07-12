@@ -17,6 +17,7 @@ import _processInstallFinalize from '../actions/processInstallFinalize';
 import _modulesVersions from '../actions/modulesVersions';
 const _upgrade = require('../actions/upgrade');
 const _exit = require('../actions/exit');
+const _restart = require('../actions/restart');
 import multer from 'multer';
 
 function normalizeHandlers(bound: any): any[] {
@@ -73,6 +74,11 @@ export default function bindRoutes(sails: any) {
         adminizer.app.get(
             `${routePrefix}/modules/exit`,
             ...bind(_exit)
+        );
+
+        adminizer.app.get(
+            `${routePrefix}/modules/restart`,
+            ...bind(_restart)
         );
 
         // Managed extensions versions page

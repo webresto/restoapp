@@ -23,5 +23,18 @@
   "No modules are available for installation": "No modules are available for installation",
   "Failed to load marketplace catalog": "Failed to load marketplace catalog",
   "Module installation failed": "Module installation failed",
-  "Installed. The application is restarting...": "Installed. The application is restarting..."
+  "Installed. The application is restarting...": "Installed. The application is restarting...",
+  "Installed": "Installed",
+  "Updated": "Updated",
+  "Restart is scheduled for 00:00 server time.": "Restart is scheduled for 00:00 server time.",
+  "Restart now": "Restart now",
+  "Restarting...": "Restarting...",
+  "Failed to restart": "Failed to restart",
+  "Search": "Search",
+  "Search by name or description": "Search by name or description",
+  "Group": "Group",
+  "All groups": "All groups",
+  "Tags": "Tags",
+  "Tags separated by commas": "Tags separated by commas",
+  "Apply filters": "Apply filters"
 }

@@ -23,5 +23,18 @@
   "No modules are available for installation": "Нет доступных для установки модулей",
   "Failed to load marketplace catalog": "Не удалось загрузить каталог marketplace",
   "Module installation failed": "Не удалось установить модуль",
-  "Installed. The application is restarting...": "Модуль установлен. Приложение перезапускается..."
+  "Installed. The application is restarting...": "Модуль установлен. Приложение перезапускается...",
+  "Installed": "Установлено",
+  "Updated": "Обновлено",
+  "Restart is scheduled for 00:00 server time.": "Перезагрузка запланирована на 00:00 по времени сервера.",
+  "Restart now": "Перезагрузить сейчас",
+  "Restarting...": "Перезагрузка...",
+  "Failed to restart": "Не удалось перезагрузить",
+  "Search": "Поиск",
+  "Search by name or description": "Поиск по названию или описанию",
+  "Group": "Группа",
+  "All groups": "Все группы",
+  "Tags": "Теги",
+  "Tags separated by commas": "Теги через запятую",
+  "Apply filters": "Найти"
 }

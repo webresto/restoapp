@@ -7,5 +7,21 @@
   "System update in progress": "系统正在更新",
   "The system requires an update. Please wait a few minutes, then contact your administrator.": "系统需要更新。请等待几分钟，然后联系管理员。",
   "System update access denied": "系统更新访问被拒绝",
-  "Go to admin panel": "前往管理面板"
+  "Go to admin panel": "前往管理面板",
+  "Update": "更新",
+  "Updating...": "更新中...",
+  "Version {{version}} is available": "版本 {{version}} 可用",
+  "Module update failed": "模块更新失败",
+  "Updated. The application is restarting...": "已更新。应用正在重新启动...",
+  "Add module": "添加模块",
+  "Install module": "安装模块",
+  "Choose a module from marketplace": "从 marketplace 选择一个模块",
+  "Back to installed modules": "返回已安装模块",
+  "Install": "安装",
+  "Installing...": "安装中...",
+  "Unavailable for this license": "此许可证不可用",
+  "No modules are available for installation": "没有可安装的模块",
+  "Failed to load marketplace catalog": "无法加载 marketplace 目录",
+  "Module installation failed": "模块安装失败",
+  "Installed. The application is restarting...": "已安装。应用正在重新启动..."
 }
