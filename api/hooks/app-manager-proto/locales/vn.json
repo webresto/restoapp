@@ -7,5 +7,21 @@
   "System update in progress": "Hệ thống đang được cập nhật",
   "The system requires an update. Please wait a few minutes, then contact your administrator.": "Hệ thống cần được cập nhật. Vui lòng đợi vài phút, sau đó liên hệ quản trị viên.",
   "System update access denied": "Từ chối truy cập cập nhật hệ thống",
-  "Go to admin panel": "Đi tới bảng quản trị"
+  "Go to admin panel": "Đi tới bảng quản trị",
+  "Update": "Cập nhật",
+  "Updating...": "Đang cập nhật...",
+  "Version {{version}} is available": "Phiên bản {{version}} đã có sẵn",
+  "Module update failed": "Cập nhật mô-đun thất bại",
+  "Updated. The application is restarting...": "Đã cập nhật. Ứng dụng đang khởi động lại...",
+  "Add module": "Thêm mô-đun",
+  "Install module": "Cài đặt mô-đun",
+  "Choose a module from marketplace": "Chọn một mô-đun từ marketplace",
+  "Back to installed modules": "Quay lại các mô-đun đã cài đặt",
+  "Install": "Cài đặt",
+  "Installing...": "Đang cài đặt...",
+  "Unavailable for this license": "Không khả dụng với giấy phép này",
+  "No modules are available for installation": "Không có mô-đun nào sẵn sàng để cài đặt",
+  "Failed to load marketplace catalog": "Không thể tải danh mục marketplace",
+  "Module installation failed": "Cài đặt mô-đun thất bại",
+  "Installed. The application is restarting...": "Đã cài đặt. Ứng dụng đang khởi động lại..."
 }

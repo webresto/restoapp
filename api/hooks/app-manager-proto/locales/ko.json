@@ -7,5 +7,21 @@
   "System update in progress": "시스템 업데이트 진행 중",
   "The system requires an update. Please wait a few minutes, then contact your administrator.": "시스템 업데이트가 필요합니다. 몇 분 기다린 후 관리자에게 알려주세요.",
   "System update access denied": "시스템 업데이트 접근이 거부되었습니다",
-  "Go to admin panel": "관리자 패널로 이동"
+  "Go to admin panel": "관리자 패널로 이동",
+  "Update": "업데이트",
+  "Updating...": "업데이트 중...",
+  "Version {{version}} is available": "버전 {{version}}을 사용할 수 있습니다",
+  "Module update failed": "모듈 업데이트에 실패했습니다",
+  "Updated. The application is restarting...": "업데이트되었습니다. 애플리케이션을 다시 시작하는 중입니다...",
+  "Add module": "모듈 추가",
+  "Install module": "모듈 설치",
+  "Choose a module from marketplace": "마켓플레이스에서 모듈 선택",
+  "Back to installed modules": "설치된 모듈로 돌아가기",
+  "Install": "설치",
+  "Installing...": "설치 중...",
+  "Unavailable for this license": "이 라이선스에서는 사용할 수 없습니다",
+  "No modules are available for installation": "설치 가능한 모듈이 없습니다",
+  "Failed to load marketplace catalog": "마켓플레이스 카탈로그를 불러오지 못했습니다",
+  "Module installation failed": "모듈 설치에 실패했습니다",
+  "Installed. The application is restarting...": "설치되었습니다. 애플리케이션을 다시 시작하는 중입니다..."
 }

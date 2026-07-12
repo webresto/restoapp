@@ -1,6 +1,7 @@
 const { spawn } = require('child_process');
 const fs = require('fs');
 const axios = require('axios');
+const restartScheduler = require('../helpers/restartScheduler');
 let activeUpdate = null;
 
 module.exports = async function (req, res) {
@@ -119,14 +120,12 @@ module.exports = async function (req, res) {
         res.write(`\n\n===========================================\n`);
         if (code === 0) {
             res.write(`✓ Upgrade completed successfully (exit code: ${code})\n`);
+            restartScheduler.scheduleRestart();
         } else {
             res.write(`✗ Upgrade failed with exit code: ${code}\n`);
         }
         res.write('===========================================\n');
         res.end();
-        if (code === 0) {
-            setTimeout(() => process.exit(0), 1000);
-        }
     });
 
     // Handle errors
