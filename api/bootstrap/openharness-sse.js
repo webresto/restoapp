@@ -46,12 +46,17 @@ function isTextFile(file) {
 }
 
 /** Turns prompt + uploaded files into a ModelMessage[] for session.send(). */
-function buildInput(prompt, files, vision) {
+function buildInput(prompt, files, vision, savedFiles = []) {
   if (!files?.length) return prompt;
   const parts = [];
   if (prompt) parts.push({ type: 'text', text: prompt });
-  for (const file of files) {
+  for (let index = 0; index < files.length; index += 1) {
+    const file = files[index];
+    const saved = savedFiles[index];
     const name = file.originalname || 'file';
+    const savedNote = saved?.id
+      ? ` saved_file_id=${JSON.stringify(saved.id)} saved_file_name=${JSON.stringify(saved.name || name)}`
+      : '';
     if (isTextFile(file)) {
       let text = file.buffer.toString('utf8');
       let note = '';
@@ -59,15 +64,15 @@ function buildInput(prompt, files, vision) {
         text = text.slice(0, MAX_INLINE_TEXT_CHARS);
         note = `\n[attachment truncated at ${MAX_INLINE_TEXT_CHARS} characters]`;
       }
-      parts.push({ type: 'text', text: `<attachment name=${JSON.stringify(name)}>\n${text}${note}\n</attachment>` });
+      parts.push({ type: 'text', text: `<attachment name=${JSON.stringify(name)}${savedNote}>\n${text}${note}\n</attachment>` });
     } else if ((file.mimetype || '').startsWith('image/')) {
       if (vision) {
         parts.push({ type: 'image', image: `data:${file.mimetype};base64,${file.buffer.toString('base64')}` });
       } else {
-        parts.push({ type: 'text', text: `[Image attached: ${name} — the current model cannot see images]` });
+        parts.push({ type: 'text', text: `[Image attached: ${name}${saved?.id ? `, saved_file_id=${saved.id}` : ''} — the current model cannot see images]` });
       }
     } else {
-      parts.push({ type: 'text', text: `[Unsupported attachment skipped: ${name} (${file.mimetype || 'unknown type'})]` });
+      parts.push({ type: 'text', text: `[Unsupported attachment saved but not inlined: ${name}${saved?.id ? `, saved_file_id=${saved.id}` : ''} (${file.mimetype || 'unknown type'})]` });
     }
   }
   return [{ role: 'user', content: parts }];
@@ -124,8 +129,9 @@ module.exports.default = async function (sails) {
         if (!prompt && !files.length) return res.status(400).json({ error: 'Message is required' });
         cleanup();
 
+        const savedFiles = await adminizer.openHarnessAgentService.saveUploadedFiles(req.user, files);
         const { vision } = adminizer.openHarnessAgentService.getSessionMeta(req.user);
-        const input = buildInput(prompt || 'See the attached files.', files, vision);
+        const input = buildInput(prompt || 'See the attached files.', files, vision, savedFiles);
 
         const id = `oh-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
         const run = { id, userId: req.user.id, createdAt: Date.now(), events: [], clients: new Set(), done: false };
