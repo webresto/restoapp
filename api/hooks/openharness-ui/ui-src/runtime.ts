@@ -239,7 +239,7 @@ export class OpenHarnessAttachmentAdapter implements AttachmentAdapter {
   constructor(private readonly getMeta: () => SessionMeta | null) {}
 
   get accept(): string {
-    return this.getMeta()?.vision ? `${TEXT_ACCEPT},image/*` : TEXT_ACCEPT;
+    return '*';
   }
 
   async add({ file }: { file: File }): Promise<PendingAttachment> {

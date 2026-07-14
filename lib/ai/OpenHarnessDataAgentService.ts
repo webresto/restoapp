@@ -12,6 +12,7 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
     private readonly model: string;
     private readonly contextWindow: number;
     private readonly vision: boolean;
+    private readonly fileStore: string;
     private readonly sessions = new Map<number, any>();
 
     constructor(adminizer: Adminizer) {
@@ -26,6 +27,7 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
         // Image attachments are forwarded to the model only when the selected
         // OpenAI-compatible provider is known to support vision inputs.
         this.vision = process.env.OPENHARNESS_VISION === 'true';
+        this.fileStore = process.env.OPENHARNESS_FILE_STORE || `${process.cwd()}/.tmp/openharness-agent/files`;
     }
 
     public isEnabled(): boolean {
@@ -66,6 +68,39 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
 
     public resetSession(user: UserAP): boolean {
         return this.sessions.delete(user.id);
+    }
+
+    public async saveUploadedFiles(user: UserAP, files: any[] = []): Promise<Array<Record<string, unknown>>> {
+        if (!files.length) return [];
+        const fs = require('fs');
+        const path = require('path');
+        const crypto = require('crypto');
+        const dir = this.userFileDir(user);
+        fs.mkdirSync(dir, { recursive: true });
+
+        const existing = this.readFileIndex(user);
+        const saved: Array<Record<string, unknown>> = [];
+        for (const file of files) {
+            const originalName = file.originalname || 'attachment';
+            const ext = path.extname(originalName);
+            const id = `file-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+            const storedName = `${id}${ext}`;
+            const diskPath = path.join(dir, storedName);
+            fs.writeFileSync(diskPath, file.buffer);
+            const meta = {
+                id,
+                name: originalName,
+                storedName,
+                mimeType: file.mimetype || 'application/octet-stream',
+                size: file.size ?? file.buffer?.length ?? 0,
+                savedAt: new Date().toISOString(),
+                readableAsText: this.isStoredTextFile(originalName, file.mimetype),
+            };
+            existing.push(meta);
+            saved.push(meta);
+        }
+        this.writeFileIndex(user, existing);
+        return saved;
     }
 
     private async getSession(user: UserAP): Promise<any> {
@@ -170,8 +205,64 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
             },
         });
 
+        const listSavedFiles = tool({
+            description: 'List files uploaded by this user in the OpenHarness chat. Use this before read_saved_file.',
+            inputSchema: z.object({}),
+            execute: async () => {
+                const files = this.readFileIndex(user).map((file: any) => ({
+                    id: file.id,
+                    name: file.name,
+                    mimeType: file.mimeType,
+                    size: file.size,
+                    savedAt: file.savedAt,
+                    readableAsText: file.readableAsText || this.isStoredTextFile(file.name, file.mimeType),
+                }));
+                return { count: files.length, files };
+            },
+        });
+
+        const readSavedFile = tool({
+            description: 'Read a text-like file previously uploaded in this OpenHarness chat by file id.',
+            inputSchema: z.object({
+                id: z.string().min(1),
+                maxChars: z.number().int().min(1).max(256_000).optional(),
+            }),
+            execute: async (input: { id: string; maxChars?: number }) => {
+                const fs = require('fs');
+                const path = require('path');
+                const file = this.readFileIndex(user).find((entry: any) => entry.id === input.id);
+                if (!file) return { error: `Saved file "${input.id}" was not found.` };
+                if (!file.readableAsText && !this.isStoredTextFile(file.name, file.mimeType)) {
+                    return {
+                        id: file.id,
+                        name: file.name,
+                        mimeType: file.mimeType,
+                        size: file.size,
+                        error: 'This saved file is binary and cannot be read as text.',
+                    };
+                }
+                const diskPath = path.join(this.userFileDir(user), file.storedName);
+                const maxChars = input.maxChars ?? 64_000;
+                let text = fs.readFileSync(diskPath, 'utf8');
+                const truncated = text.length > maxChars;
+                if (truncated) text = text.slice(0, maxChars);
+                return {
+                    id: file.id,
+                    name: file.name,
+                    mimeType: file.mimeType,
+                    size: file.size,
+                    truncated,
+                    text,
+                };
+            },
+        });
+
         const readable = this.listReadableModels(user).map(({ name, config }) => `${name} (${config.model})`).join(', ') || 'none';
-        const tools: Record<string, any> = { query_model_records: queryModelRecords };
+        const tools: Record<string, any> = {
+            query_model_records: queryModelRecords,
+            list_saved_files: listSavedFiles,
+            read_saved_file: readSavedFile,
+        };
         const mcpPrompt = user.isAdministrator
             ? [
                 'You can also use registered MCP tools.',
@@ -195,6 +286,7 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
                 'You answer questions about Restoapp using only the supplied tools.',
                 'Never claim to have direct shell or filesystem access.',
                 'Explain results concisely after inspecting data.',
+                'Uploaded chat files are saved for this user. Use list_saved_files and read_saved_file when the user refers to an earlier uploaded file.',
                 `Readable models for this user: ${readable}.`,
                 mcpPrompt,
             ].join('\n'),
@@ -207,6 +299,49 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
 
     private getBaseUrl(): string {
         return process.env.OPENHARNESS_BASE_URL ?? process.env.OPENAI_URL ?? process.env.OPENAI_BASE_URL ?? '';
+    }
+
+    private userFileDir(user: UserAP): string {
+        const path = require('path');
+        const safeUserId = String(user.id).replace(/[^a-zA-Z0-9_-]/g, '_');
+        return path.join(this.fileStore, safeUserId);
+    }
+
+    private fileIndexPath(user: UserAP): string {
+        const path = require('path');
+        return path.join(this.userFileDir(user), 'index.json');
+    }
+
+    private readFileIndex(user: UserAP): any[] {
+        const fs = require('fs');
+        const indexPath = this.fileIndexPath(user);
+        if (!fs.existsSync(indexPath)) return [];
+        try {
+            const parsed = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return [];
+        }
+    }
+
+    private writeFileIndex(user: UserAP, files: any[]): void {
+        const fs = require('fs');
+        const dir = this.userFileDir(user);
+        fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(this.fileIndexPath(user), JSON.stringify(files, null, 2));
+    }
+
+    private isStoredTextFile(name: string, mimeType?: string): boolean {
+        const lowerName = name.toLowerCase();
+        if (lowerName === '.env' || lowerName.startsWith('.env.')) return true;
+        const mime = mimeType || '';
+        if (mime.startsWith('text/')) return true;
+        if (['application/json', 'application/xml', 'application/x-yaml', 'application/sql', 'image/svg+xml'].includes(mime)) return true;
+        const ext = name.split('.').pop()?.toLowerCase() || '';
+        return [
+            'txt', 'md', 'markdown', 'csv', 'tsv', 'json', 'yaml', 'yml', 'xml', 'html', 'css',
+            'js', 'ts', 'jsx', 'tsx', 'sql', 'log', 'ini', 'conf', 'env', 'sh', 'graphql',
+        ].includes(ext);
     }
 
     private listReadableModels(user: UserAP): Array<{ name: string; config: ModelConfig }> {
