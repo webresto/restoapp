@@ -100,9 +100,14 @@ module.exports.bootstrap = async function (cb) {
    * async call bootsrap config modules from %MODULE_PATH%/config/bootstrap.js
    */
 
-  let modules = fs.readdirSync(sails.config.paths.hooks).filter(function (file) {
+  const hooksPath = sails.config.paths.hooks;
+  let modules = fs.existsSync(hooksPath) ? fs.readdirSync(hooksPath).filter(function (file) {
     return fs.statSync(sails.config.paths.hooks + "/" + file).isDirectory();
-  });
+  }) : [];
+
+  if (!fs.existsSync(hooksPath)) {
+    sails.log.warn(`Optional hooks directory does not exist: ${hooksPath}`);
+  }
 
   for await (let module of modules) {
     let bootstrap_js = sails.config.paths.hooks + "/" + module + "/config/bootstrap.js";

@@ -10,6 +10,10 @@
  */
 
 
+if (process.env.OPENHARNESS_MCP_TOOLS !== 'false') {
+    process.env.MCP_INTERNAL_ENABLED = process.env.MCP_INTERNAL_ENABLED || 'true';
+}
+
 // TODO: add 500 and 404 for admin panel
 module.exports.http = {
     middleware: {

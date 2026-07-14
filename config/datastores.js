@@ -31,7 +31,7 @@ function setDatastore(datastore) {
 
 
 let datastores = {
-  default: {}
+  default: { adapter: 'sails-disk' }
 }
 if (process.env.DATASTORE){
   datastores["default"] = setDatastore(process.env.DATASTORE)

@@ -12,10 +12,17 @@ module.exports.default = async function (sails) {
     try {
       const adminizer = sails.hooks.adminpanel.adminizer;
 
-      // Check if AI Assistant is enabled in config
+      // OpenHarness is configured independently from the legacy OpenAI agent.
+      // Do not let the legacy OpenAI toggle prevent Adminizer from creating
+      // aiAssistantHandler for later model registration.
       if (!adminizer.config.aiAssistant?.enabled) {
-        sails.log.info('Bootstrap > AI Assistant is disabled in config. Skipping agent registration.');
-        return;
+        adminizer.config.aiAssistant = {
+          ...(adminizer.config.aiAssistant ?? {}),
+          enabled: true,
+          models: adminizer.config.aiAssistant?.models ?? [],
+          defaultModel: adminizer.config.aiAssistant?.defaultModel ?? 'openharness',
+        };
+        sails.log.info('Bootstrap > Enabling AI Assistant for OpenHarness model registration.');
       }
 
       sails.log.info('Bootstrap > Registering OpenAI Data Agent...');
@@ -23,6 +30,8 @@ module.exports.default = async function (sails) {
       // Dynamic import to avoid loading OpenAI dependencies when AI assistant is disabled
       const {OpenAiDataAgentService} = require('../../lib/ai/OpenAiDataAgentService');
       const openAiAgent = new OpenAiDataAgentService(adminizer);
+      const {OpenHarnessDataAgentService} = require('../../lib/ai/OpenHarnessDataAgentService');
+      const openHarnessAgent = new OpenHarnessDataAgentService(adminizer);
 
       if (openAiAgent.isEnabled()) {
         adminizer.aiAssistantHandler.registerModel(openAiAgent);
@@ -43,6 +52,17 @@ module.exports.default = async function (sails) {
       } else {
         sails.log.warn('Bootstrap > Skipping OpenAI data agent registration because OPENAI_API_KEY is missing.');
         sails.log.warn('Bootstrap > Please set OPENAI_API_KEY environment variable to enable the agent.');
+      }
+
+      if (openHarnessAgent.isEnabled()) {
+        adminizer.aiAssistantHandler.registerModel(openHarnessAgent);
+        adminizer.openHarnessAgentService = openHarnessAgent;
+        const declaredModels = new Set(adminizer.config.aiAssistant.models ?? []);
+        declaredModels.add(openHarnessAgent.id);
+        adminizer.config.aiAssistant.models = Array.from(declaredModels);
+        sails.log.debug(`Bootstrap > OpenHarness agent successfully registered with ID: ${openHarnessAgent.id}`);
+      } else {
+        sails.log.warn('Bootstrap > Skipping OpenHarness agent registration. Set OPENHARNESS_API_KEY, OPENHARNESS_MODEL, and OPENHARNESS_BASE_URL.');
       }
     } catch (error) {
       sails.log.error('Bootstrap > Failed to initialize AI Agent:', error);
