@@ -1,0 +1,84 @@
+/*
+ * Tailwind v4 utilities for the vendored assistant-ui components.
+ * Preflight is intentionally NOT imported: this stylesheet is injected into
+ * the admin panel page, which already ships its own (tailwind) base styles.
+ * The @theme inline mapping matches adminizer's app.css so utilities resolve
+ * to the same shadcn CSS variables (light/dark themes included).
+ */
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css";
+@import "tw-animate-css";
+@import "@assistant-ui/react-markdown/styles/dot.css";
+
+@source "./";
+
+@theme inline {
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+    --radius-sm: calc(var(--radius) - 4px);
+    --radius-md: calc(var(--radius) - 2px);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) + 4px);
+    --animate-collapsible-down: collapsible-down 0.2s ease-out;
+    --animate-collapsible-up: collapsible-up 0.2s ease-out;
+}
+
+@keyframes collapsible-down {
+    from { height: 0; }
+    to { height: var(--radix-collapsible-content-height); }
+}
+
+@keyframes collapsible-up {
+    from { height: var(--radix-collapsible-content-height); }
+    to { height: 0; }
+}
+
+/* Shimmer for "running" labels (stand-in for the tw-shimmer package). */
+.shimmer {
+    color: transparent;
+    background-image: linear-gradient(
+        90deg,
+        transparent 20%,
+        color-mix(in oklab, var(--foreground) 90%, transparent) 50%,
+        transparent 80%
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    animation: ohx-shimmer 1.6s linear infinite;
+}
+
+@keyframes ohx-shimmer {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
+}
+
+/* Page layout: fill the admin panel content area. */
+.ohx-root {
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh - 8.5rem);
+    min-height: 24rem;
+}
+
+.ohx-root .aui-thread-root {
+    flex: 1;
+    min-height: 0;
+}

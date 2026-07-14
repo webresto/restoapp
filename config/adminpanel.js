@@ -107,8 +107,10 @@ module.exports.adminpanel = {
   },
   sections: [],
   aiAssistant: {
-    enabled: (process.env.ENABLE_AI_ASSISTANT ?? "true") === 'true' && Boolean(process.env.OPENAI_API_KEY || process.env.ADMINIZER_OPENAI_KEY),
-    defaultModel: 'openai-data',
-    models: ['openai-data'],
+    // This must be enabled before Adminizer starts, otherwise it never creates
+    // aiAssistantHandler for model registration.
+    enabled: (process.env.ENABLE_AI_ASSISTANT ?? "true") === 'true',
+    defaultModel: 'openharness',
+    models: ['openharness', 'openai-data'],
   },
 };

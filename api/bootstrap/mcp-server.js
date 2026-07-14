@@ -10,16 +10,17 @@ const path = require('path');
  * into sails.config.http.middleware before 'router'.
  *
  * Environment variables:
- *   MCP_ENABLED=true   — enable MCP server (disabled by default)
+ *   MCP_ENABLED=true   — enable public HTTP MCP server (disabled by default)
+ *   MCP_INTERNAL_ENABLED=true — load tools for trusted in-process callers
  *   MCP_ADMIN_KEY=...  — global admin key for protected tools
  */
 module.exports.default = async function (sails) {
-  if (process.env.MCP_ENABLED !== 'true') {
-    sails.log.debug('Bootstrap > MCP Server disabled (set MCP_ENABLED=true to enable)');
+  if (process.env.MCP_ENABLED !== 'true' && process.env.MCP_INTERNAL_ENABLED !== 'true') {
+    sails.log.debug('Bootstrap > MCP Server disabled (set MCP_ENABLED=true or MCP_INTERNAL_ENABLED=true to enable)');
     return;
   }
 
-  sails.log.info('Bootstrap > MCP Server starting...');
+  sails.log.info(`Bootstrap > MCP Server starting (${process.env.MCP_ENABLED === 'true' ? 'HTTP + internal' : 'internal only'})...`);
 
   // global.mcp is set by api/mcp/McpServer.js which is always loaded via config/http.js
 
