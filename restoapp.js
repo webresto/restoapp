@@ -37,8 +37,13 @@ const legacySystemModules = [
   `${process.cwd()}/@webresto/graphql`,
 ].filter((modulePath) => fs.existsSync(modulePath));
 
+const installedSystemModules = [
+  `${process.cwd()}/node_modules/@webresto/core`,
+  `${process.cwd()}/node_modules/@webresto/graphql`,
+].filter((modulePath) => fs.existsSync(modulePath));
+
 // Prefer workspace-local modules while developing; fallback to legacy @webresto/* paths.
-process.env.MM_SYSTEM_MODULES = [...localSystemModules, ...legacySystemModules].join(";");
+process.env.MM_SYSTEM_MODULES = [...localSystemModules, ...legacySystemModules, ...installedSystemModules].join(";");
 
 process.env.ADMINPANEL_LAZY_GEN_ADMIN_DISABLE="1"
 
