@@ -13,6 +13,12 @@ export type TokenUsage = {
 
 export type SessionMeta = {
   model: string;
+  availableModels: Array<{
+    id: string;
+    contextWindow: number | null;
+    maxOutputTokens: number | null;
+    vision: boolean;
+  }>;
   contextWindow: number;
   vision: boolean;
   turns: number;
@@ -64,6 +70,124 @@ export async function resetSession(): Promise<void> {
     headers: { Accept: 'application/json', ...csrfHeaders() },
   });
   if (!response.ok) throw new Error(await readError(response));
+}
+
+export async function setModel(model: string): Promise<SessionMeta> {
+  const response = await fetch(`${basePath()}/api/openharness/model`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      ...csrfHeaders(),
+    },
+    body: JSON.stringify({ model }),
+  });
+  if (!response.ok) throw new Error(await readError(response));
+  return response.json();
+}
+
+// ── Dialog restore from the server session ───────────────────────────
+// The server session is the source of truth: on page load the UI pulls its
+// ai-sdk message history and rebuilds the thread from it. When the server
+// restarts, both the visible dialog and the agent context reset together.
+
+export async function fetchHistory(): Promise<any[]> {
+  const response = await fetch(`${basePath()}/api/openharness/history`, {
+    credentials: 'same-origin',
+    headers: { Accept: 'application/json' },
+  });
+  if (!response.ok) throw new Error(await readError(response));
+  const data = await response.json();
+  return Array.isArray(data?.messages) ? data.messages : [];
+}
+
+export async function compactSession(): Promise<Record<string, any>> {
+  const response = await fetch(`${basePath()}/api/openharness/compact`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { Accept: 'application/json', ...csrfHeaders() },
+  });
+  if (!response.ok) throw new Error(await readError(response));
+  return response.json();
+}
+
+/** `<attachment name="...">` text blobs are shown as a short chip-like note. */
+function userPartsFrom(content: any): any[] {
+  if (typeof content === 'string') return [{ type: 'text', text: content }];
+  const parts: any[] = [];
+  for (const part of content ?? []) {
+    if (part?.type === 'text') {
+      const attachment = /^<attachment name=("(?:[^"\\]|\\.)*")/.exec(part.text ?? '');
+      if (attachment) {
+        let name = 'file';
+        try { name = JSON.parse(attachment[1]); } catch { /* keep default */ }
+        parts.push({ type: 'text', text: `📎 ${name}` });
+      } else {
+        parts.push({ type: 'text', text: part.text ?? '' });
+      }
+    } else if (part?.type === 'image' && typeof part.image === 'string') {
+      parts.push({ type: 'image', image: part.image });
+    }
+  }
+  return parts.length ? parts : [{ type: 'text', text: '' }];
+}
+
+/**
+ * ai-sdk ModelMessage[] → assistant-ui ThreadMessageLike[]. Consecutive
+ * assistant/tool messages (steps of one turn) are merged into a single
+ * assistant message with ordered text / reasoning / tool-call parts, matching
+ * how the live stream renders.
+ */
+export function historyToThreadMessages(messages: any[]): any[] {
+  const result: any[] = [];
+  const toolCalls = new Map<string, any>();
+  let assistantParts: any[] | null = null;
+  const flushAssistant = () => {
+    if (assistantParts?.length) result.push({ role: 'assistant', content: assistantParts });
+    assistantParts = null;
+  };
+
+  for (const message of messages ?? []) {
+    if (message?.role === 'user') {
+      flushAssistant();
+      result.push({ role: 'user', content: userPartsFrom(message.content) });
+    } else if (message?.role === 'assistant') {
+      if (!assistantParts) assistantParts = [];
+      const content = typeof message.content === 'string'
+        ? [{ type: 'text', text: message.content }]
+        : (message.content ?? []);
+      for (const part of content) {
+        if (part?.type === 'text' && part.text) {
+          assistantParts.push({ type: 'text', text: part.text });
+        } else if (part?.type === 'reasoning' && part.text) {
+          assistantParts.push({ type: 'reasoning', text: part.text });
+        } else if (part?.type === 'tool-call') {
+          const call = {
+            type: 'tool-call',
+            toolCallId: part.toolCallId,
+            toolName: part.toolName,
+            args: part.input ?? part.args ?? {},
+          };
+          toolCalls.set(part.toolCallId, call);
+          assistantParts.push(call);
+        }
+      }
+    } else if (message?.role === 'tool') {
+      for (const part of message.content ?? []) {
+        if (part?.type !== 'tool-result') continue;
+        const call = toolCalls.get(part.toolCallId);
+        if (!call) continue;
+        const output = part.output ?? part.result;
+        call.result = output && typeof output === 'object' && 'type' in output && 'value' in output
+          ? output.value
+          : output;
+      }
+    }
+    // system messages are internal — never shown
+  }
+  flushAssistant();
+  return result;
 }
 
 type OpenHarnessEvent = Record<string, any> & { type: string };

@@ -10,7 +10,6 @@ It includes:
 - The Admin Panel for managing content and system settings
 - The RestoCore engine, the e-commerce core for restaurants and local businesses
 
-
 ## Join Our Community
 
 Join our community to get support for everyone interested in food delivery using our restaurant engine. This is the place where restaurateurs and developers collaborate on the restaurant system. Get the latest news and share ideas. Join us!
@@ -39,7 +38,7 @@ Join our community to get support for everyone interested in food delivery using
 - [x] **Admin Panel**: Access an administrative panel to manage and configure the platform's settings, and oversee business operations.
 - [x] **Visual Programming**: Utilize a visual programming environment to intercept events on both the frontend and backend, allowing for modifications and the implementation of custom features without extensive programming knowledge.
 - [x] **User Dashboard**: Manage all delivery-related information on the website, including menu items, order history, and delivery addresses.
-- [x] **MCP Server (AI Agent Integration)**: Built-in HTTP server compatible with the [Model Context Protocol](docs/mcp.md). Exposes menu, dishes, image upload, health check, and admin tools that any AI agent or bot can call over plain HTTP — no special SDK required. Extensible via `api/mcp/tools/` or module bootstrap. Disabled by default, enable with `MCP_ENABLED=true`.
+- [x] **MCP Tools for AI Agents and Server Integrations**: Built-in [Model Context Protocol](docs/mcp.md) layer for both the HTTP MCP server and the internal AI agent. Exposes menu, dishes, image upload, health check, and admin tools that external agents and bots can call over plain HTTP, while server-side agents can invoke the same tools internally without a separate SDK. Extensible via `api/mcp/tools/` or module bootstrap. Disabled by default; enable HTTP access with `MCP_ENABLED=true` or internal agent access with `MCP_INTERNAL_ENABLED=true`.
 
 ## Mobile Application
 
@@ -121,3 +120,4 @@ You can find more modules or even upload your own modules from [https://marketpl
 ## License
 
 [MIT License](https://opensource.org/licenses/MIT)  Copyright © 2018-2026
+Designed by humans

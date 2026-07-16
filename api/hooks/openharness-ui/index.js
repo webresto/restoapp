@@ -29,14 +29,36 @@ module.exports = function openharnessUiHook(sails) {
         if (!adminizer) return;
         const prefix = adminizer.config.routePrefix;
 
-        adminizer.config.navbar.additionalLinks.push({
+        const navbarEntry = {
           id: 'openharness-agent',
-          title: 'OpenHarness Agent',
+          title: 'RestoApp Assistant',
           link: `${prefix}/openharness-agent`,
           icon: 'smart_toy',
           accessRightsToken: 'ai-assistant-openharness',
           section: 'Tools',
-        });
+        };
+
+        const existingLink = adminizer.config.navbar.additionalLinks
+          .find((link) => link && link.id === 'openharness-agent');
+        if (!existingLink) {
+          adminizer.config.navbar.additionalLinks.push(navbarEntry);
+        }
+
+        // Provide this page to anything building links into the admin router.
+        // Answered live over the emitter, so load order does not matter.
+        try {
+          const { AdminLinkProvider } = require('./AdminLinkProvider');
+          AdminLinkProvider.provide('openharness-ui', () => ([{
+            type: 'app',
+            name: navbarEntry.id,
+            link: navbarEntry.link,
+            title: navbarEntry.title,
+            section: navbarEntry.section,
+            accessRightsToken: navbarEntry.accessRightsToken,
+          }]));
+        } catch (e) {
+          sails.log.debug('OpenHarness admin link provider registration skipped', e);
+        }
 
         adminizer.app.get(`${prefix}/openharness-agent`, (req, res) => {
           const config = req.adminizer?.config;

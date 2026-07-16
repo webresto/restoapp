@@ -8,8 +8,6 @@
  * For more information on configuration, check out:
  * http://sailsjs.org/#!/documentation/reference/sails.config/sails.config.http.html
  */
-
-
 if (process.env.OPENHARNESS_MCP_TOOLS !== 'false') {
     process.env.MCP_INTERNAL_ENABLED = process.env.MCP_INTERNAL_ENABLED || 'true';
 }
@@ -44,7 +42,6 @@ module.exports.http = {
         // HTTP routes are only active when MCP_ENABLED=true.
         // Tools are registered by api/bootstrap/mcp-server.js at startup.
         mcpServer: require('../api/mcp/McpServer').middleware(),
-
         poweredBy: function (req, res, next) {
             res.set('X-Powered-By', "WebResto");
             return next();

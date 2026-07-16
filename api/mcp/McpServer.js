@@ -215,13 +215,24 @@ function checkAdminKey(req) {
 }
 
 /**
+ * Protected MCP access is granted either by the global admin key or by an
+ * authenticated Adminpanel administrator session.
+ * @param {Object} req
+ * @returns {boolean}
+ */
+function hasProtectedAccess(req) {
+  if (checkAdminKey(req)) return true;
+  return Boolean(req && req.user && req.user.isAdministrator === true);
+}
+
+/**
  * Return the tools visible to the caller, optionally filtered by group.
  * @param {Object} req
  * @param {string} [groupName]
  * @returns {McpTool[]}
  */
 function visibleTools(req, groupName) {
-  const isAdmin = checkAdminKey(req);
+  const isAdmin = hasProtectedAccess(req);
   const result = [];
   for (const [, tool] of tools) {
     if (tool.mode !== 'public' && !isAdmin) continue;
@@ -240,7 +251,7 @@ function toolDetail(tool) {
   const exampleParams = buildExampleParams(tool.schema);
   const exampleBody = JSON.stringify(exampleParams);
   const authNote = tool.mode === 'protected'
-    ? 'Required — pass X-Mcp-Key header or ?mcp_key= query param'
+    ? 'Required for external clients — pass X-Mcp-Key header or ?mcp_key= query param. Adminpanel administrators may call it without a key.'
     : 'None';
   const curlAuth = tool.mode === 'protected'
     ? ' -H "X-Mcp-Key: <admin-key>"'
@@ -347,7 +358,7 @@ function middleware() {
     if (process.env.NODE_ENV !== 'test' && process.env.MCP_ENABLED !== 'true') return next();
 
     const url = req.url.split('?')[0];
-    const isAdmin = checkAdminKey(req);
+    const isAdmin = hasProtectedAccess(req);
     const baseUrl = `${req.protocol}://${req.headers.host}`;
 
     // GET /mcp — server info + group catalogue (or legacy flat list with ?flat=1)
@@ -363,7 +374,7 @@ function middleware() {
           description: 'MCP-compatible server for RestoApp. Tools are organized into groups: fetch the group catalogue here, then GET /mcp/group/:group for full schemas. Exposes tools in two access modes: public (no auth) and protected (admin key required).',
           auth: {
             type: 'api-key',
-            description: 'To access protected tools, pass the admin key using one of the methods below.',
+            description: 'External clients can access protected tools with the admin key. Logged-in Adminpanel administrators can access them without a key.',
             methods: [
               { type: 'header', name: 'X-Mcp-Key', example: 'X-Mcp-Key: <your-admin-key>' },
               { type: 'query',  name: 'mcp_key',   example: `${baseUrl}/mcp?mcp_key=<your-admin-key>` },
@@ -443,8 +454,8 @@ function middleware() {
         return res.status(404).json({ error: `Tool '${toolName}' not found` });
       }
 
-      if (tool.mode === 'protected' && !checkAdminKey(req)) {
-        return res.status(401).json({ error: 'Admin key required for this tool' });
+      if (tool.mode === 'protected' && !hasProtectedAccess(req)) {
+        return res.status(401).json({ error: 'Admin access required for this tool' });
       }
 
       try {

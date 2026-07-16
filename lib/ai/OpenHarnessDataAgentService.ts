@@ -1,37 +1,47 @@
 import { z } from 'zod';
 import { AbstractAiModelService, Adminizer, DataAccessor, ModelConfig, UserAP } from 'adminizer';
+import { AdminLinkProvider } from '../../api/hooks/openharness-ui/AdminLinkProvider';
 
 type StreamEvent = Record<string, unknown>;
-
+type ModelOption = {
+    id: string;
+    model: string;
+    baseURL: string;
+    vision: boolean;
+    contextWindow: number | null;
+    maxOutputTokens: number | null;
+};
 /**
  * OpenHarness-backed data agent.  The OpenHarness packages are ESM-only, so
  * they are loaded lazily and only when this optional agent is used.
  */
 export class OpenHarnessDataAgentService extends AbstractAiModelService {
     private readonly apiKey?: string;
-    private readonly model: string;
+    private readonly defaultModel: string;
     private readonly contextWindow: number;
-    private readonly vision: boolean;
+    private readonly defaultVision: boolean;
     private readonly fileStore: string;
     private readonly sessions = new Map<number, any>();
+    private readonly selectedModels = new Map<number, string>();
+    private modelCatalogCache: { fetchedAt: number; models: ModelOption[] } | null = null;
 
     constructor(adminizer: Adminizer) {
         super(adminizer, {
             id: 'openharness',
-            name: 'OpenHarness data agent',
+            name: 'RestoApp Assistant',
             description: 'Streams answers and uses only Restoapp tools permitted for the current user.',
         });
         this.apiKey = process.env.OPENHARNESS_API_KEY ?? process.env.OPENAI_API_KEY ?? process.env.ADMINIZER_OPENAI_KEY;
-        this.model = process.env.OPENHARNESS_MODEL ?? process.env.OPENAI_AGENT_MODEL ?? '';
+        this.defaultModel = process.env.OPENHARNESS_MODEL ?? process.env.OPENAI_AGENT_MODEL ?? '';
         this.contextWindow = Number(process.env.OPENHARNESS_CONTEXT_WINDOW) || 128_000;
         // Image attachments are forwarded to the model only when the selected
         // OpenAI-compatible provider is known to support vision inputs.
-        this.vision = process.env.OPENHARNESS_VISION === 'true';
+        this.defaultVision = process.env.OPENHARNESS_VISION === 'true';
         this.fileStore = process.env.OPENHARNESS_FILE_STORE || `${process.cwd()}/.tmp/openharness-agent/files`;
     }
 
     public isEnabled(): boolean {
-        return Boolean(this.apiKey && this.model && this.getBaseUrl());
+        return Boolean(this.apiKey && this.defaultModel && this.getBaseUrl());
     }
 
     public async generateReply(prompt: string, _history: any[], user: UserAP): Promise<string> {
@@ -39,7 +49,7 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
         await this.streamReply(prompt, user, (event) => {
             if (event.type === 'text.delta' && typeof event.text === 'string') output += event.text;
         });
-        return output || 'The OpenHarness agent finished without returning a message.';
+        return output || 'RestoApp Assistant finished without returning a message.';
     }
 
     /** `input` is either a plain prompt or ai-sdk `ModelMessage[]` (multimodal parts). */
@@ -54,12 +64,13 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
     /** Session facts for the UI header: model, context window and usage so far. */
     public getSessionMeta(user: UserAP): Record<string, unknown> {
         const session = this.sessions.get(user.id);
+        const active = this.getCurrentSelection(user);
         // Same rough estimator the session's compaction uses by default.
         const contextTokens = session ? Math.round(JSON.stringify(session.messages ?? []).length / 4) : 0;
         return {
-            model: this.model,
-            contextWindow: this.contextWindow,
-            vision: this.vision,
+            model: active.id,
+            contextWindow: active.contextWindow ?? this.contextWindow,
+            vision: active.vision,
             turns: session?.turns ?? 0,
             totalUsage: session?.totalUsage ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
             contextTokens,
@@ -68,6 +79,63 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
 
     public resetSession(user: UserAP): boolean {
         return this.sessions.delete(user.id);
+    }
+
+    /** Raw ai-sdk conversation history from the in-memory session (empty when none). */
+    public getSessionHistory(user: UserAP): any[] {
+        return this.sessions.get(user.id)?.messages ?? [];
+    }
+
+    /** Manually compact the session context (prune tool results / summarize). */
+    public async compactSession(user: UserAP): Promise<Record<string, unknown>> {
+        const session = this.sessions.get(user.id);
+        if (!session || !session.messages?.length) return { compacted: false };
+        let tokensBefore = 0;
+        let tokensAfter = 0;
+        let messagesRemoved = 0;
+        let done = false;
+        for await (const event of session.compact()) {
+            if (event.type === 'compaction.start') tokensBefore = event.tokensBefore ?? 0;
+            if (event.type === 'compaction.pruned') messagesRemoved += event.messagesRemoved ?? 0;
+            if (event.type === 'compaction.done') {
+                tokensBefore = event.tokensBefore ?? tokensBefore;
+                tokensAfter = event.tokensAfter ?? 0;
+                done = true;
+            }
+        }
+        return { compacted: done, tokensBefore, tokensAfter, messagesRemoved };
+    }
+
+    public async listAvailableModels(): Promise<string[]> {
+        const options = await this.getAvailableModelOptions();
+        return options.map((entry) => entry.id);
+    }
+
+    public async getModelChoices(): Promise<Array<Record<string, unknown>>> {
+        const options = await this.getAvailableModelOptions();
+        return options.map((entry) => ({
+            id: entry.id,
+            contextWindow: entry.contextWindow,
+            maxOutputTokens: entry.maxOutputTokens,
+            vision: entry.vision,
+        }));
+    }
+
+    public getCurrentModel(user: UserAP): string {
+        return this.selectedModels.get(user.id) || this.defaultModel;
+    }
+
+    public async setCurrentModel(user: UserAP, model: string): Promise<boolean> {
+        const normalized = model.trim();
+        if (!normalized) throw new Error('Model name is required.');
+        const available = await this.getAvailableModelOptions();
+        if (!available.some((entry) => entry.id === normalized)) {
+            throw new Error(`Model "${normalized}" is not available from the provider.`);
+        }
+        if (this.getCurrentModel(user) === normalized) return false;
+        this.selectedModels.set(user.id, normalized);
+        this.resetSession(user);
+        return true;
     }
 
     public async saveUploadedFiles(user: UserAP, files: any[] = []): Promise<Array<Record<string, unknown>>> {
@@ -112,9 +180,48 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
         const [{ Agent, Session }, { createOpenAI }, { tool }] = await Promise.all([
             load('@openharness/core'), load('@ai-sdk/openai'), load('ai'),
         ]);
+        const activeSelection = this.getCurrentSelection(user);
         const provider = createOpenAI({
             apiKey: this.apiKey,
-            baseURL: this.getBaseUrl(),
+            baseURL: activeSelection.baseURL,
+        });
+        const activeModel = activeSelection.model;
+        const activeContextWindow = activeSelection.contextWindow ?? this.contextWindow;
+
+        // Admin pages are collected live from modules over the emitter, gated by
+        // the same rule the navbar uses (no token = public).
+        const canAccess = (token: string) => Boolean(this.adminizer.accessRightsHelper?.hasPermission(token, user));
+        const listApps = () => AdminLinkProvider.list('app', canAccess);
+        const appList = (await listApps()).map((app) => `${app.name} (${app.title})`).join(', ') || 'none';
+
+        const generateAdminLink = tool({
+            description: [
+                'Generate a link into the Restoapp admin panel.',
+                'type "model": model is a model name from the readable models list; with id the link opens the record edit page, without id the model list page.',
+                'type "app": model is an admin page id; these pages are single views, so id is ignored.',
+                `Admin pages available to this user: ${appList}.`,
+            ].join(' '),
+            inputSchema: z.object({
+                model: z.string().min(1),
+                id: z.union([z.string(), z.number()]).optional(),
+                type: z.enum(['model', 'app']),
+            }),
+            execute: async (input: { model: string; id?: string | number; type: 'model' | 'app' }) => {
+                if (input.type === 'app') {
+                    const app = await AdminLinkProvider.resolve('app', input.model, canAccess);
+                    if (!app) {
+                        // Pages are permission-filtered, so a miss is a wrong id or no access.
+                        const apps = (await listApps()).map((entry) => entry.name).join(', ') || 'none';
+                        return { error: `No admin page "${input.model}" available to this user. Available pages: ${apps}.` };
+                    }
+                    return { link: app.link, type: 'app', target: app.name };
+                }
+                // Normalize model names the same way query_model_records does.
+                const entity = this.resolveEntity(input.model);
+                const id = input.id === undefined || input.id === null ? '' : String(input.id).trim();
+                const link = id ? `${entity.uri}/edit/${encodeURIComponent(id)}` : entity.uri;
+                return { link, type: 'model', target: entity.name };
+            },
         });
 
         const queryModelRecords = tool({
@@ -162,6 +269,16 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
 
                 if (input.group) {
                     const tools = mcp.listTools('all', input.group);
+                    if (tools.length === 0) {
+                        const groups = typeof mcp.listGroups === 'function' ? mcp.listGroups() : [];
+                        return {
+                            group: input.group,
+                            count: 0,
+                            tools: [],
+                            error: `No tools found in group "${input.group}". This group name may not exist — check availableGroups below and retry with the matching one.`,
+                            availableGroups: groups,
+                        };
+                    }
                     return { group: input.group, count: tools.length, tools };
                 }
 
@@ -258,47 +375,172 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
         });
 
         const readable = this.listReadableModels(user).map(({ name, config }) => `${name} (${config.model})`).join(', ') || 'none';
+        const mcpToolsEnabled = process.env.OPENHARNESS_MCP_TOOLS !== 'false';
+        const mcpAvailable = mcpToolsEnabled && user.isAdministrator;
         const tools: Record<string, any> = {
             query_model_records: queryModelRecords,
             list_saved_files: listSavedFiles,
             read_saved_file: readSavedFile,
+            generate_admin_link: generateAdminLink,
         };
-        const mcpPrompt = user.isAdministrator
+        const mcpPrompt = mcpAvailable
             ? [
                 'You can also use registered MCP tools.',
+                'If the user asks whether MCP tools are available, answer yes.',
+                'Do not say you lack context about MCP when list_mcp_tools is available in this chat.',
                 'Use list_mcp_tools first: without group for a compact catalogue, with group for exact schemas.',
+                'If list_mcp_tools with a group returns count:0, do not conclude the capability is missing — the group name was likely a guess; re-check availableGroups in the response (or call list_mcp_tools without group) and retry with the matching group.',
                 'Then use call_mcp_tool with the exact tool_name and params object.',
                 'Prefer read-only MCP tools for diagnostics. Do not call mutating MCP tools unless the user explicitly requested that operation.',
             ].join('\n')
-            : 'MCP tools are not available to this user.';
+            : mcpToolsEnabled
+                ? 'MCP tools are only available to administrator users in this chat.'
+                : 'MCP tools are disabled by configuration for this chat.';
 
-        if (user.isAdministrator) {
+        if (mcpAvailable) {
             tools.list_mcp_tools = listMcpTools;
             tools.call_mcp_tool = callMcpTool;
         }
+        const availableTools = Object.keys(tools).sort().join(', ') || 'none';
 
+        const path = require('path');
         const agent = new Agent({
-            name: 'Restoapp OpenHarness agent',
-            model: provider.chat(this.model),
+            name: 'RestoApp Assistant',
+            model: provider.chat(activeModel),
             instructions: false,
             maxSteps: 6,
+            skills: { paths: [path.join(__dirname, 'skills')] },
             systemPrompt: [
-                'You answer questions about Restoapp using only the supplied tools.',
+                'You are RestoApp Assistant. You answer questions about Restoapp using only the supplied tools.',
+                'If the user asks who you are or what you are called, say you are RestoApp Assistant.',
+                'Always reply in the same language the user writes in.',
+                'Skills are available through the skill tool; load a skill before the task it covers.',
+                'When the user should open a record or page in the admin panel (e.g. after you created or found a record), use the admin-links skill and the generate_admin_link tool to produce the link — never construct admin URLs by hand.',
                 'Never claim to have direct shell or filesystem access.',
+                'Before saying a capability is unavailable, check the supplied tool list and the notes below.',
                 'Explain results concisely after inspecting data.',
                 'Uploaded chat files are saved for this user. Use list_saved_files and read_saved_file when the user refers to an earlier uploaded file.',
+                `Active provider model for this chat: ${activeSelection.id} -> ${activeModel}.`,
+                `Available tools in this chat: ${availableTools}.`,
                 `Readable models for this user: ${readable}.`,
                 mcpPrompt,
             ].join('\n'),
             tools,
         });
-        const session = new Session({ agent, contextWindow: this.contextWindow });
+        const session = new Session({ agent, contextWindow: activeContextWindow });
         this.sessions.set(user.id, session);
         return session;
     }
 
     private getBaseUrl(): string {
         return process.env.OPENHARNESS_BASE_URL ?? process.env.OPENAI_URL ?? process.env.OPENAI_BASE_URL ?? '';
+    }
+
+    private getFallbackModelOptions(): ModelOption[] {
+        const selected = Array.from(this.selectedModels.values())
+            .filter((id) => id && id !== this.defaultModel)
+            .map((id) => ({
+                id,
+                model: id,
+                baseURL: this.getBaseUrl(),
+                vision: this.defaultVision,
+                contextWindow: this.contextWindow,
+                maxOutputTokens: null,
+            }));
+        return this.mergeModelOptions([
+            {
+                id: this.defaultModel,
+                model: this.defaultModel,
+                baseURL: this.getBaseUrl(),
+                vision: this.defaultVision,
+                contextWindow: this.contextWindow,
+                maxOutputTokens: null,
+            },
+            ...selected,
+        ]);
+    }
+
+    private getCurrentSelection(user: UserAP): ModelOption {
+        const selectedId = this.selectedModels.get(user.id);
+        const cached = this.modelCatalogCache?.models ?? [];
+        if (selectedId) {
+            const match = cached.find((entry) => entry.id === selectedId);
+            if (match) return match;
+        }
+        return cached.find((entry) => entry.id === this.defaultModel) ?? this.getFallbackModelOptions()[0];
+    }
+
+    private async getAvailableModelOptions(): Promise<ModelOption[]> {
+        const fallback = this.getFallbackModelOptions();
+        const cached = this.modelCatalogCache;
+        if (cached && (Date.now() - cached.fetchedAt) < 180_000) {
+            return cached.models;
+        }
+
+        try {
+            const discovered = await this.discoverModelOptions();
+            const merged = this.mergeModelOptions([...discovered, ...fallback]);
+            if (!merged.length) throw new Error('Provider returned no models');
+            this.modelCatalogCache = { fetchedAt: Date.now(), models: merged };
+            return merged;
+        } catch {
+            return fallback;
+        }
+    }
+
+    private async discoverModelOptions(): Promise<ModelOption[]> {
+        const options: ModelOption[] = [];
+        const proxyBaseUrl = this.getBaseUrl().replace(/\/+$/, '');
+        const headers = {
+            Accept: 'application/json',
+            Authorization: `Bearer ${this.apiKey}`,
+        };
+
+        // Only the OpenAI-compatible /v1/models list is used: LiteLLM scopes
+        // it to the calling key's Team model list. /model/info and the
+        // upstream Ollama endpoints are NOT key-scoped and would leak every
+        // model configured on the proxy (including ones this key has no
+        // access to), so they are deliberately not queried here.
+        const proxyModels = await this.fetchJson<{
+            data?: Array<{
+                id?: string;
+                max_input_tokens?: number | null;
+                max_output_tokens?: number | null;
+            }>
+        }>(`${proxyBaseUrl}/models`, { headers });
+        for (const entry of proxyModels?.data ?? []) {
+            const id = entry?.id?.trim();
+            if (!id) continue;
+            options.push({
+                id,
+                model: id,
+                baseURL: proxyBaseUrl,
+                vision: this.defaultVision,
+                contextWindow: Number.isFinite(entry.max_input_tokens) ? entry.max_input_tokens ?? null : null,
+                maxOutputTokens: Number.isFinite(entry.max_output_tokens) ? entry.max_output_tokens ?? null : null,
+            });
+        }
+
+        return options;
+    }
+
+    private async fetchJson<T>(url: string, init?: RequestInit): Promise<T | null> {
+        try {
+            const response = await fetch(url, init);
+            if (!response.ok) return null;
+            return await response.json() as T;
+        } catch {
+            return null;
+        }
+    }
+
+    private mergeModelOptions(options: ModelOption[]): ModelOption[] {
+        const result = new Map<string, ModelOption>();
+        for (const option of options) {
+            if (!option?.id || !option?.model || !option?.baseURL) continue;
+            if (!result.has(option.id)) result.set(option.id, option);
+        }
+        return Array.from(result.values());
     }
 
     private userFileDir(user: UserAP): string {

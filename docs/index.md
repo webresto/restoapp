@@ -82,8 +82,8 @@ Allows interaction with restaurant management systems:
 - Frontend is built with Angular and provided as a service.
 - Free and paid versions of the frontend available.
 
-### 10. MCP Server (AI Agent Integration)
-Built-in HTTP server compatible with the [Model Context Protocol](./mcp.md), allowing AI agents and bots to interact with the application over plain HTTP — no special SDK required.
+### 10. MCP Tools for AI Agents and Server Integrations
+Built-in [Model Context Protocol](./mcp.md) layer for both the HTTP MCP server and the internal AI agent, allowing external agents and bots to interact with the application over plain HTTP while server-side agents can call the same tools internally — no special SDK required.
 
 - **Menu browsing** — tools to list menu groups and dishes (`menu`, `group`, `dishes`, `dish`).
 - **Image upload** — upload images to `assets/uploads/` via a protected tool (`upload-image`).
@@ -94,5 +94,5 @@ Built-in HTTP server compatible with the [Model Context Protocol](./mcp.md), all
 - **Self-documenting** — `GET /mcp` returns the full tool catalogue with ready-to-copy `curl` examples.
 - **Extensible** — add tools by dropping a file into `api/mcp/tools/` or calling `mcp.registerTool()` from any module bootstrap.
 - **Server-side calls** — invoke tools internally via `mcp.callTool()` without going through HTTP.
-- **Opt-in** — disabled by default; enable with `MCP_ENABLED=true`.
+- **Opt-in** — disabled by default; enable HTTP access with `MCP_ENABLED=true` or internal agent access with `MCP_INTERNAL_ENABLED=true`.
 
