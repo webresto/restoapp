@@ -111,6 +111,6 @@ module.exports.adminpanel = {
     // aiAssistantHandler for model registration.
     enabled: (process.env.ENABLE_AI_ASSISTANT ?? "true") === 'true',
     defaultModel: 'openharness',
-    models: ['openharness', 'openai-data'],
+    models: ['openharness'],
   },
 };

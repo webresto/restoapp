@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { AbstractAiModelService, Adminizer, DataAccessor, ModelConfig, UserAP } from 'adminizer';
 import { AdminLinkProvider } from '../../api/hooks/openharness-ui/AdminLinkProvider';
+import { loadSystemPrompt, normalizePromptKey, promptExists } from './loadSystemPrompt';
 
 type StreamEvent = Record<string, unknown>;
 type ModelOption = {
@@ -31,8 +32,8 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
             name: 'RestoApp Assistant',
             description: 'Streams answers and uses only Restoapp tools permitted for the current user.',
         });
-        this.apiKey = process.env.OPENHARNESS_API_KEY ?? process.env.OPENAI_API_KEY ?? process.env.ADMINIZER_OPENAI_KEY;
-        this.defaultModel = process.env.OPENHARNESS_MODEL ?? process.env.OPENAI_AGENT_MODEL ?? '';
+        this.apiKey = process.env.OPENHARNESS_API_KEY;
+        this.defaultModel = process.env.OPENHARNESS_MODEL ?? '';
         this.contextWindow = Number(process.env.OPENHARNESS_CONTEXT_WINDOW) || 128_000;
         // Image attachments are forwarded to the model only when the selected
         // OpenAI-compatible provider is known to support vision inputs.
@@ -402,6 +403,7 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
             tools.call_mcp_tool = callMcpTool;
         }
         const availableTools = Object.keys(tools).sort().join(', ') || 'none';
+        const modelPromptName = this.getModelPromptName(activeSelection.id, activeModel);
 
         const path = require('path');
         const agent = new Agent({
@@ -410,21 +412,12 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
             instructions: false,
             maxSteps: 6,
             skills: { paths: [path.join(__dirname, 'skills')] },
-            systemPrompt: [
-                'You are RestoApp Assistant. You answer questions about Restoapp using only the supplied tools.',
-                'If the user asks who you are or what you are called, say you are RestoApp Assistant.',
-                'Always reply in the same language the user writes in.',
-                'Skills are available through the skill tool; load a skill before the task it covers.',
-                'When the user should open a record or page in the admin panel (e.g. after you created or found a record), use the admin-links skill and the generate_admin_link tool to produce the link — never construct admin URLs by hand.',
-                'Never claim to have direct shell or filesystem access.',
-                'Before saying a capability is unavailable, check the supplied tool list and the notes below.',
-                'Explain results concisely after inspecting data.',
-                'Uploaded chat files are saved for this user. Use list_saved_files and read_saved_file when the user refers to an earlier uploaded file.',
-                `Active provider model for this chat: ${activeSelection.id} -> ${activeModel}.`,
-                `Available tools in this chat: ${availableTools}.`,
-                `Readable models for this user: ${readable}.`,
-                mcpPrompt,
-            ].join('\n'),
+            systemPrompt: loadSystemPrompt(['openharness', modelPromptName], {
+                active_provider_model: `${activeSelection.id} -> ${activeModel}`,
+                available_tools: availableTools,
+                readable_models: readable,
+                mcp_prompt: mcpPrompt,
+            }),
             tools,
         });
         const session = new Session({ agent, contextWindow: activeContextWindow });
@@ -433,7 +426,7 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
     }
 
     private getBaseUrl(): string {
-        return process.env.OPENHARNESS_BASE_URL ?? process.env.OPENAI_URL ?? process.env.OPENAI_BASE_URL ?? '';
+        return process.env.OPENHARNESS_BASE_URL ?? '';
     }
 
     private getFallbackModelOptions(): ModelOption[] {
@@ -541,6 +534,14 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
             if (!result.has(option.id)) result.set(option.id, option);
         }
         return Array.from(result.values());
+    }
+
+    private getModelPromptName(modelId: string, modelName: string): string {
+        const candidates = [
+            `openharness-model-${normalizePromptKey(modelId)}`,
+            `openharness-model-${normalizePromptKey(modelName)}`,
+        ];
+        return candidates.find((name) => promptExists(name)) ?? 'openharness-model-default';
     }
 
     private userFileDir(user: UserAP): string {
