@@ -23,7 +23,11 @@ function canUse(req, res) {
   if (!adminizer?.accessRightsHelper?.hasPermission('ai-assistant-openharness', req.user)) {
     res.sendStatus(403); return false;
   }
-  return Boolean(adminizer.openHarnessAgentService);
+  if (!adminizer.openHarnessAgentService) {
+    res.status(503).json({ error: 'RestoApp Assistant is not configured.' });
+    return false;
+  }
+  return true;
 }
 
 function write(res, event, data, id) {
@@ -103,16 +107,46 @@ module.exports.default = async function (sails) {
       limits: { fileSize: MAX_FILE_SIZE, files: MAX_FILES, fieldSize: 1024 * 1024 },
     }).array('files', MAX_FILES);
 
-    adminizer.app.get(`${prefix}/api/openharness/meta`, (req, res) => {
+    adminizer.app.get(`${prefix}/api/openharness/meta`, async (req, res) => {
       if (!canUse(req, res)) return;
       const meta = adminizer.openHarnessAgentService.getSessionMeta(req.user);
-      res.json({ ...meta, maxFiles: MAX_FILES, maxFileSize: MAX_FILE_SIZE });
+      const availableModels = await adminizer.openHarnessAgentService.getModelChoices();
+      res.json({ ...meta, availableModels, maxFiles: MAX_FILES, maxFileSize: MAX_FILE_SIZE });
+    });
+
+    adminizer.app.post(`${prefix}/api/openharness/model`, async (req, res) => {
+      if (!canUse(req, res)) return;
+      const model = typeof req.body?.model === 'string' ? req.body.model.trim() : '';
+      if (!model) return res.status(400).json({ error: 'Model is required.' });
+      await adminizer.openHarnessAgentService.setCurrentModel(req.user, model);
+      const meta = adminizer.openHarnessAgentService.getSessionMeta(req.user);
+      const availableModels = await adminizer.openHarnessAgentService.getModelChoices();
+      res.json({ ...meta, availableModels, maxFiles: MAX_FILES, maxFileSize: MAX_FILE_SIZE });
     });
 
     adminizer.app.delete(`${prefix}/api/openharness/session`, (req, res) => {
       if (!canUse(req, res)) return;
       const reset = adminizer.openHarnessAgentService.resetSession(req.user);
       res.json({ reset });
+    });
+
+    // The server session is the source of truth for the dialog; the UI pulls
+    // it on page load so a reload restores exactly what the agent remembers.
+    adminizer.app.get(`${prefix}/api/openharness/history`, (req, res) => {
+      if (!canUse(req, res)) return;
+      const messages = adminizer.openHarnessAgentService.getSessionHistory(req.user);
+      res.json({ messages });
+    });
+
+    adminizer.app.post(`${prefix}/api/openharness/compact`, async (req, res) => {
+      if (!canUse(req, res)) return;
+      try {
+        const result = await adminizer.openHarnessAgentService.compactSession(req.user);
+        const meta = adminizer.openHarnessAgentService.getSessionMeta(req.user);
+        res.json({ ...result, meta });
+      } catch (error) {
+        res.status(500).json({ error: error?.message || 'Compaction failed' });
+      }
     });
 
     adminizer.app.post(`${prefix}/api/openharness/runs`, (req, res) => {

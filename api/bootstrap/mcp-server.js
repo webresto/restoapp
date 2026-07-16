@@ -60,7 +60,7 @@ module.exports.default = async function (sails) {
   sails.log.info(`Bootstrap > MCP Server ready. Tools: ${mcp.tools.size}. Endpoint: GET /mcp`);
 
   if (!process.env.MCP_ADMIN_KEY) {
-    sails.log.warn('Bootstrap > MCP: MCP_ADMIN_KEY is not set — protected tools are inaccessible');
+    sails.log.warn('Bootstrap > MCP: MCP_ADMIN_KEY is not set — protected tools are unavailable to external clients, but Adminpanel administrators still have access');
   }
 
   // Signal that mcp is ready — modules should listen to this event instead of

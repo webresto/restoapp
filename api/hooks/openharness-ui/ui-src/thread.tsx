@@ -17,10 +17,10 @@ import {
 } from './reasoning';
 import { ToolFallback } from './tool-fallback';
 import {
-  ToolGroupContent,
-  ToolGroupRoot,
-  ToolGroupTrigger,
-} from './tool-group';
+  ThoughtGroupContent,
+  ThoughtGroupRoot,
+  ThoughtGroupTrigger,
+} from './thought-group';
 import { TooltipIconButton } from './tooltip-icon-button';
 import { Button } from '@/components/ui/button';
 import { cn } from './utils';
@@ -33,7 +33,9 @@ import {
   groupPartByType,
   MessagePrimitive,
   ThreadPrimitive,
+  unstable_useSlashCommandAdapter,
   useAuiState,
+  useComposerRuntime,
 } from '@assistant-ui/react';
 import {
   ArrowDownIcon,
@@ -54,7 +56,14 @@ const SUGGESTIONS = [
 const isNewChatView = (s: AssistantState) =>
   s.thread.messages.length === 0 && (!s.thread.isLoading || s.threads.isLoading);
 
-export const Thread: FC = () => {
+export type ThreadProps = {
+  /** Wired to the header "New chat" reset; used by the /new slash command. */
+  onNewChat?: () => void;
+  /** Compacts the server session context; used by the /compact slash command. */
+  onCompact?: () => void;
+};
+
+export const Thread: FC<ThreadProps> = ({ onNewChat, onCompact }) => {
   const isEmpty = useAuiState(isNewChatView);
 
   return (
@@ -96,7 +105,7 @@ export const Thread: FC = () => {
             )}
           >
             <ThreadScrollToBottom />
-            <Composer />
+            <Composer onNewChat={onNewChat} onCompact={onCompact} />
             <AuiIf condition={(s) => isNewChatView(s) && s.composer.isEmpty}>
               <ThreadSuggestions />
             </AuiIf>
@@ -152,28 +161,108 @@ const ThreadSuggestions: FC = () => {
   );
 };
 
-const Composer: FC = () => {
+const HELP_PROMPT =
+  'What can you do? List the data models, admin pages and tools available to me.';
+
+const Composer: FC<{ onNewChat?: () => void; onCompact?: () => void }> = ({
+  onNewChat,
+  onCompact,
+}) => {
+  const composerRuntime = useComposerRuntime();
+  const slash = unstable_useSlashCommandAdapter({
+    commands: [
+      {
+        id: 'new',
+        label: '/new',
+        description: 'Start a new chat (clears the conversation)',
+        execute: () => onNewChat?.(),
+      },
+      {
+        id: 'compact',
+        label: '/compact',
+        description: 'Free up context: prune or summarize older messages',
+        execute: () => onCompact?.(),
+      },
+      {
+        id: 'model',
+        label: '/model',
+        description: 'Open the model selector',
+        execute: () => {
+          document
+            .querySelector<HTMLSelectElement>('select[aria-label="Select model"]')
+            ?.focus();
+        },
+      },
+      {
+        id: 'help',
+        label: '/help',
+        description: 'Ask the assistant what it can do',
+        // Deferred so the popover's own composer cleanup runs first and does
+        // not clobber the injected prompt.
+        execute: () => {
+          setTimeout(() => {
+            composerRuntime.setText(HELP_PROMPT);
+            composerRuntime.send();
+          }, 0);
+        },
+      },
+    ],
+    removeOnExecute: true,
+  });
+
   return (
-    <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
-      <ComposerPrimitive.AttachmentDropzone asChild>
-        <div
-          data-slot="aui_composer-shell"
-          className="border-border/60 data-[dragging=true]:border-ring focus-within:border-border dark:border-muted-foreground/15 dark:focus-within:border-muted-foreground/30 flex w-full flex-col gap-2 rounded-(--composer-radius) border bg-(--composer-bg) p-2 shadow-[0_4px_16px_-8px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.04)] transition-[border-color,box-shadow] focus-within:shadow-[0_6px_24px_-8px_rgba(0,0,0,0.12),0_1px_2px_rgba(0,0,0,0.05)] data-[dragging=true]:border-dashed dark:shadow-none"
+    <ComposerPrimitive.Unstable_TriggerPopoverRoot>
+      <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
+        <ComposerPrimitive.Unstable_TriggerPopover
+          char="/"
+          adapter={slash.adapter}
+          className="aui-composer-slash-popover border-border/60 bg-popover text-popover-foreground absolute inset-x-2 bottom-full z-20 mb-2 flex flex-col gap-0.5 overflow-hidden rounded-xl border p-1 shadow-lg"
         >
-          <ComposerAttachments />
-          <ComposerPrimitive.Input
-            placeholder="Ask about Restoapp data..."
-            className="aui-composer-input caret-primary placeholder:text-muted-foreground/80 max-h-32 min-h-10 w-full resize-none bg-transparent px-2.5 py-1 text-base outline-none"
-            rows={1}
-            autoFocus
-            addAttachmentOnPaste
-            enterKeyHint="send"
-            aria-label="Message input"
-          />
-          <ComposerAction />
-        </div>
-      </ComposerPrimitive.AttachmentDropzone>
-    </ComposerPrimitive.Root>
+          <ComposerPrimitive.Unstable_TriggerPopover.Action {...slash.action} />
+          <ComposerPrimitive.Unstable_TriggerPopoverItems>
+            {(items) =>
+              items.length === 0 ? (
+                <div className="text-muted-foreground px-2.5 py-1.5 text-xs">
+                  No matching commands
+                </div>
+              ) : (
+                items.map((item, index) => (
+                  <ComposerPrimitive.Unstable_TriggerPopoverItem
+                    key={item.id}
+                    item={item}
+                    index={index}
+                    className="data-[highlighted]:bg-accent hover:bg-accent flex w-full cursor-pointer items-baseline gap-2 rounded-lg px-2.5 py-1.5 text-start text-sm"
+                  >
+                    <span className="font-medium">{item.label}</span>
+                    {item.description && (
+                      <span className="text-muted-foreground text-xs">{item.description}</span>
+                    )}
+                  </ComposerPrimitive.Unstable_TriggerPopoverItem>
+                ))
+              )
+            }
+          </ComposerPrimitive.Unstable_TriggerPopoverItems>
+        </ComposerPrimitive.Unstable_TriggerPopover>
+        <ComposerPrimitive.AttachmentDropzone asChild>
+          <div
+            data-slot="aui_composer-shell"
+            className="border-border/60 data-[dragging=true]:border-ring focus-within:border-border dark:border-muted-foreground/15 dark:focus-within:border-muted-foreground/30 flex w-full flex-col gap-2 rounded-(--composer-radius) border bg-(--composer-bg) p-2 shadow-[0_4px_16px_-8px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.04)] transition-[border-color,box-shadow] focus-within:shadow-[0_6px_24px_-8px_rgba(0,0,0,0.12),0_1px_2px_rgba(0,0,0,0.05)] data-[dragging=true]:border-dashed dark:shadow-none"
+          >
+            <ComposerAttachments />
+            <ComposerPrimitive.Input
+              placeholder="Ask about Restoapp data… type / for commands"
+              className="aui-composer-input caret-primary placeholder:text-muted-foreground/80 max-h-32 min-h-10 w-full resize-none bg-transparent px-2.5 py-1 text-base outline-none"
+              rows={1}
+              autoFocus
+              addAttachmentOnPaste
+              enterKeyHint="send"
+              aria-label="Message input"
+            />
+            <ComposerAction />
+          </div>
+        </ComposerPrimitive.AttachmentDropzone>
+      </ComposerPrimitive.Root>
+    </ComposerPrimitive.Unstable_TriggerPopoverRoot>
   );
 };
 
@@ -238,22 +327,21 @@ const AssistantMessage: FC = () => {
       >
         <MessagePrimitive.GroupedParts
           groupBy={groupPartByType({
-            reasoning: ['group-reasoning'],
-            'tool-call': ['group-tool'],
+            reasoning: ['group-thought', 'group-reasoning'],
+            'tool-call': ['group-thought'],
             'standalone-tool-call': [],
           })}
         >
           {({ part, children }) => {
             switch (part.type) {
-              case 'group-tool':
+              case 'group-thought':
                 return (
-                  <ToolGroupRoot variant="ghost">
-                    <ToolGroupTrigger
-                      count={part.indices.length}
-                      active={part.status.type === 'running'}
-                    />
-                    <ToolGroupContent>{children}</ToolGroupContent>
-                  </ToolGroupRoot>
+                  <ThoughtGroupRoot
+                    requiresAction={part.status.type === 'requires-action'}
+                  >
+                    <ThoughtGroupTrigger active={part.status.type === 'running'} />
+                    <ThoughtGroupContent>{children}</ThoughtGroupContent>
+                  </ThoughtGroupRoot>
                 );
               case 'group-reasoning': {
                 const running = part.status.type === 'running';
