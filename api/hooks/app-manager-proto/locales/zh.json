@@ -23,5 +23,10 @@
   "No modules are available for installation": "没有可安装的模块",
   "Failed to load marketplace catalog": "无法加载 marketplace 目录",
   "Module installation failed": "模块安装失败",
-  "Installed. The application is restarting...": "已安装。应用正在重新启动..."
+  "Installed. The application is restarting...": "已安装。应用正在重新启动...",
+  "Remove": "删除",
+  "Removing...": "正在删除...",
+  "Removed": "已删除",
+  "Module removal failed": "模块删除失败",
+  "Remove module {{name}}? Its files and settings will be deleted.": "确定删除模块 {{name}}？其文件和设置将被删除。"
 }

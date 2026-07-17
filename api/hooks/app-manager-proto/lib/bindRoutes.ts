@@ -16,6 +16,7 @@ import _processInstallStep from '../actions/processInstallStep';
 import _processInstallFinalize from '../actions/processInstallFinalize';
 import _modulesVersions from '../actions/modulesVersions';
 const _upgrade = require('../actions/upgrade');
+const _remove = require('../actions/remove');
 const _exit = require('../actions/exit');
 const _restart = require('../actions/restart');
 import multer from 'multer';
@@ -68,6 +69,12 @@ export default function bindRoutes(sails: any) {
         adminizer.app.get(
             `${routePrefix}/modules/upgrade`,
             ...bind(_upgrade)
+        );
+
+        // Removal route for WebResto modules
+        adminizer.app.get(
+            `${routePrefix}/modules/remove`,
+            ...bind(_remove)
         );
 
         // Exit/reboot route

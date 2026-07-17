@@ -23,5 +23,10 @@
   "No modules are available for installation": "インストール可能なモジュールはありません",
   "Failed to load marketplace catalog": "マーケットプレイスのカタログを読み込めませんでした",
   "Module installation failed": "モジュールのインストールに失敗しました",
-  "Installed. The application is restarting...": "インストールされました。アプリケーションを再起動しています..."
+  "Installed. The application is restarting...": "インストールされました。アプリケーションを再起動しています...",
+  "Remove": "削除",
+  "Removing...": "削除中...",
+  "Removed": "削除しました",
+  "Module removal failed": "モジュールの削除に失敗しました",
+  "Remove module {{name}}? Its files and settings will be deleted.": "モジュール {{name}} を削除しますか？ファイルと設定が削除されます。"
 }

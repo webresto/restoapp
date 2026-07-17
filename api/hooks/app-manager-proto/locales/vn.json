@@ -23,5 +23,10 @@
   "No modules are available for installation": "Không có mô-đun nào sẵn sàng để cài đặt",
   "Failed to load marketplace catalog": "Không thể tải danh mục marketplace",
   "Module installation failed": "Cài đặt mô-đun thất bại",
-  "Installed. The application is restarting...": "Đã cài đặt. Ứng dụng đang khởi động lại..."
+  "Installed. The application is restarting...": "Đã cài đặt. Ứng dụng đang khởi động lại...",
+  "Remove": "Xóa",
+  "Removing...": "Đang xóa...",
+  "Removed": "Đã xóa",
+  "Module removal failed": "Không thể xóa mô-đun",
+  "Remove module {{name}}? Its files and settings will be deleted.": "Xóa mô-đun {{name}}? Các tệp và cài đặt của nó sẽ bị xóa."
 }

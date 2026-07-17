@@ -36,5 +36,10 @@
   "All groups": "Все группы",
   "Tags": "Теги",
   "Tags separated by commas": "Теги через запятую",
-  "Apply filters": "Найти"
+  "Apply filters": "Найти",
+  "Remove": "Удалить",
+  "Removing...": "Удаление...",
+  "Removed": "Удалено",
+  "Module removal failed": "Не удалось удалить модуль",
+  "Remove module {{name}}? Its files and settings will be deleted.": "Удалить модуль {{name}}? Его файлы и настройки будут удалены."
 }
