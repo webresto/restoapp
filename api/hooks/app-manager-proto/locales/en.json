@@ -36,5 +36,10 @@
   "All groups": "All groups",
   "Tags": "Tags",
   "Tags separated by commas": "Tags separated by commas",
-  "Apply filters": "Apply filters"
+  "Apply filters": "Apply filters",
+  "Remove": "Remove",
+  "Removing...": "Removing...",
+  "Removed": "Removed",
+  "Module removal failed": "Module removal failed",
+  "Remove module {{name}}? Its files and settings will be deleted.": "Remove module {{name}}? Its files and settings will be deleted."
 }

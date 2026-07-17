@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import axios from 'axios';
 import semver from 'semver';
+import ModuleHelper from '../helpers/moduleHelper';
 const restartScheduler = require('../helpers/restartScheduler');
 
 export default async function modulesVersions(req: any, res: any) {
@@ -171,6 +172,7 @@ export default async function modulesVersions(req: any, res: any) {
             });
         }
 
+        const systemModuleList = ModuleHelper.getSystemModuleList();
         const modules = await Promise.all((modulesFromDb || []).map(async (item: any) => {
             const currentVersion = item.version || '';
             let latestVersion = '';
@@ -200,7 +202,8 @@ export default async function modulesVersions(req: any, res: any) {
                 appId: item.appId || '',
                 version: currentVersion || t('unknown'),
                 latestVersion,
-                updateAvailable
+                updateAvailable,
+                canRemove: !systemModuleList.includes(item.appId)
             };
         }));
 
@@ -224,11 +227,17 @@ export default async function modulesVersions(req: any, res: any) {
                         restartNow: t('Restart now'),
                         restartingNow: t('Restarting...'),
                         restartFailed: t('Failed to restart'),
-                        addModule: t('Install module')
+                        addModule: t('Install module'),
+                        remove: t('Remove'),
+                        removing: t('Removing...'),
+                        removed: t('Removed'),
+                        removeFailed: t('Module removal failed'),
+                        removeConfirm: t('Remove module {{name}}? Its files and settings will be deleted.')
                     }
                 },
                 catalogUrl: `${routePrefix}/modules/catalog`,
                 updateUrl: `${routePrefix}/modules/upgrade`,
+                removeUrl: `${routePrefix}/modules/remove`,
                 restartUrl: `${routePrefix}/modules/restart`,
                 restartNotice: restartScheduler.getState()
             }

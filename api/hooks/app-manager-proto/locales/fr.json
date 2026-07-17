@@ -23,5 +23,10 @@
   "No modules are available for installation": "Aucun module n'est disponible à l'installation",
   "Failed to load marketplace catalog": "Échec du chargement du catalogue de la marketplace",
   "Module installation failed": "L'installation du module a échoué",
-  "Installed. The application is restarting...": "Installé. L'application redémarre..."
+  "Installed. The application is restarting...": "Installé. L'application redémarre...",
+  "Remove": "Supprimer",
+  "Removing...": "Suppression...",
+  "Removed": "Supprimé",
+  "Module removal failed": "Échec de la suppression du module",
+  "Remove module {{name}}? Its files and settings will be deleted.": "Supprimer le module {{name}} ? Ses fichiers et réglages seront effacés."
 }

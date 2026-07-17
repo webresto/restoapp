@@ -107,6 +107,10 @@ const styles = {
     border: '1px solid var(--border)', borderRadius: '6px', padding: '6px 10px',
     background: 'var(--primary)', color: 'var(--primary-foreground)', cursor: 'pointer'
   },
+  removeButton: {
+    border: '1px solid var(--destructive, #b3261e)', borderRadius: '6px', padding: '6px 10px',
+    background: 'transparent', color: 'var(--destructive, #b3261e)', cursor: 'pointer'
+  },
   empty: {
     fontSize: '14px',
     color: 'var(--muted-foreground)',
@@ -119,6 +123,7 @@ export default function ModulesVersions(props) {
   const translations = props?.data?.translations || {};
   const marketplaceBaseUrl = 'https://marketplace.restoapp.org/catalog/module/';
   const updateUrl = props?.updateUrl || '';
+  const removeUrl = props?.removeUrl || '';
   const catalogUrl = props?.catalogUrl || '';
   const versionsUrl = props?.versionsUrl || '';
   const restartUrl = props?.restartUrl || '';
@@ -161,6 +166,23 @@ export default function ModulesVersions(props) {
     } catch (error) {
       console.error(error);
       setStatuses((current) => ({ ...current, [appId]: 'failed' }));
+    }
+  };
+
+  const removeModule = async (appId, name) => {
+    const confirmText = (translations.removeConfirm || 'Remove module {{name}}?').replace('{{name}}', name || appId);
+    if (typeof window !== 'undefined' && !window.confirm(confirmText)) return;
+
+    setStatuses((current) => ({ ...current, [appId]: 'removing' }));
+    try {
+      const response = await fetch(`${removeUrl}?appId=${encodeURIComponent(appId)}`, { credentials: 'same-origin' });
+      const output = await response.text();
+      if (!response.ok) throw new Error(output || `HTTP ${response.status}`);
+      setStatuses((current) => ({ ...current, [appId]: 'removed' }));
+      setRestartScheduled(true);
+    } catch (error) {
+      console.error(error);
+      setStatuses((current) => ({ ...current, [appId]: 'removeFailed' }));
     }
   };
 
@@ -281,6 +303,17 @@ export default function ModulesVersions(props) {
           statuses[appId] === 'updating' ? translations.updating :
             statuses[appId] === 'done' ? translations.updated :
               statuses[appId] === 'failed' ? translations.updateFailed : translations.update
+        ),
+        item?.canRemove && removeUrl && createElement(
+          'button',
+          {
+            type: 'button', style: styles.removeButton,
+            disabled: statuses[appId] === 'removing' || statuses[appId] === 'removed',
+            onClick: () => removeModule(appId, name)
+          },
+          statuses[appId] === 'removing' ? translations.removing :
+            statuses[appId] === 'removed' ? translations.removed :
+              statuses[appId] === 'removeFailed' ? translations.removeFailed : translations.remove
         )
       )
     );

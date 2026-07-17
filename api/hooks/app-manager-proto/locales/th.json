@@ -23,5 +23,10 @@
   "No modules are available for installation": "ไม่มีโมดูลที่พร้อมให้ติดตั้ง",
   "Failed to load marketplace catalog": "ไม่สามารถโหลดแคตตาล็อก marketplace ได้",
   "Module installation failed": "การติดตั้งโมดูลล้มเหลว",
-  "Installed. The application is restarting...": "ติดตั้งแล้ว แอปพลิเคชันกำลังเริ่มต้นใหม่..."
+  "Installed. The application is restarting...": "ติดตั้งแล้ว แอปพลิเคชันกำลังเริ่มต้นใหม่...",
+  "Remove": "ลบ",
+  "Removing...": "กำลังลบ...",
+  "Removed": "ลบแล้ว",
+  "Module removal failed": "ลบโมดูลไม่สำเร็จ",
+  "Remove module {{name}}? Its files and settings will be deleted.": "ลบโมดูล {{name}} หรือไม่? ไฟล์และการตั้งค่าจะถูกลบ"
 }
