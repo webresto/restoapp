@@ -30,6 +30,28 @@ function canUse(req, res) {
   return true;
 }
 
+/** Admin UI language, resolved the same way other admin module pages do it. */
+function resolveLocale(req) {
+  const config = req.adminizer?.config;
+  const available = config?.translation?.locales || [];
+  const requested = String(req.user?.locale || req.locale || req.getLocale?.() || '');
+  const normalized = requested.replace('_', '-').split('-')[0];
+  if (available.includes(requested)) return requested;
+  if (available.includes(normalized)) return normalized;
+  return config?.translation?.defaultLocale || 'en';
+}
+
+/** Endpoints that talk to the LLM also require a resolved key (broker or manual). */
+function mustBeReady(req, res) {
+  const manager = req.adminizer?.openHarnessConnectionManager;
+  if (!manager || manager.isReady()) return true;
+  res.status(503).json({
+    error: 'RestoApp Assistant is not connected to an LLM endpoint yet.',
+    status: manager.getStatus(),
+  });
+  return false;
+}
+
 function write(res, event, data, id) {
   if (id !== undefined) res.write(`id: ${id}\n`);
   res.write(`event: ${event}\n`);
@@ -107,15 +129,52 @@ module.exports.default = async function (sails) {
       limits: { fileSize: MAX_FILE_SIZE, files: MAX_FILES, fieldSize: 1024 * 1024 },
     }).array('files', MAX_FILES);
 
-    adminizer.app.get(`${prefix}/api/openharness/meta`, async (req, res) => {
+    // Connection status for the admin UI loader: reports whether a key is
+    // available and, while the broker flow is retrying, when the next
+    // registration attempt happens. refresh() also re-reads the setting, so
+    // UI polling picks up admin edits without a restart.
+    adminizer.app.get(`${prefix}/api/openharness/status`, async (req, res) => {
       if (!canUse(req, res)) return;
-      const meta = adminizer.openHarnessAgentService.getSessionMeta(req.user);
+      const manager = adminizer.openHarnessConnectionManager;
+      const locale = resolveLocale(req);
+      if (!manager) return res.json({ state: 'ready', locale });
+      try {
+        res.json({ ...(await manager.refresh()), locale });
+      } catch (error) {
+        res.status(500).json({ error: error?.message || 'Status check failed' });
+      }
+    });
+
+    // Normalized budget / rate limits for the active key (LiteLLM adapter reads
+    // /key/info + /user/info with the agent's own key; OpenAI has no such API).
+    adminizer.app.get(`${prefix}/api/openharness/limits`, async (req, res) => {
+      if (!canUse(req, res) || !mustBeReady(req, res)) return;
+      const credentials = adminizer.openHarnessConnectionManager?.getCredentialsSync();
+      if (!credentials || !adminizer.openHarnessLimitsService) {
+        return res.status(503).json({ error: 'Limits are not available yet.' });
+      }
+      try {
+        const brokerLimits = adminizer.openHarnessConnectionManager?.getBrokerLimits?.() ?? null;
+        // An explicit UI refresh (?refresh=1) bypasses the short cache so the
+        // live spend and per-window reset times are read from LiteLLM again.
+        const forceRefresh = req.query.refresh === '1' || req.query.refresh === 'true';
+        res.json(await adminizer.openHarnessLimitsService.getLimits(credentials, brokerLimits, forceRefresh));
+      } catch (error) {
+        res.status(500).json({ error: error?.message || 'Failed to read limits' });
+      }
+    });
+
+    adminizer.app.get(`${prefix}/api/openharness/meta`, async (req, res) => {
+      if (!canUse(req, res) || !mustBeReady(req, res)) return;
+      // Warm the model catalogue first so a cold-start meta call reports a real
+      // discovered model instead of the unconfigured-OPENHARNESS_MODEL placeholder.
       const availableModels = await adminizer.openHarnessAgentService.getModelChoices();
+      const meta = adminizer.openHarnessAgentService.getSessionMeta(req.user);
       res.json({ ...meta, availableModels, maxFiles: MAX_FILES, maxFileSize: MAX_FILE_SIZE });
     });
 
     adminizer.app.post(`${prefix}/api/openharness/model`, async (req, res) => {
-      if (!canUse(req, res)) return;
+      if (!canUse(req, res) || !mustBeReady(req, res)) return;
       const model = typeof req.body?.model === 'string' ? req.body.model.trim() : '';
       if (!model) return res.status(400).json({ error: 'Model is required.' });
       await adminizer.openHarnessAgentService.setCurrentModel(req.user, model);
@@ -139,7 +198,7 @@ module.exports.default = async function (sails) {
     });
 
     adminizer.app.post(`${prefix}/api/openharness/compact`, async (req, res) => {
-      if (!canUse(req, res)) return;
+      if (!canUse(req, res) || !mustBeReady(req, res)) return;
       try {
         const result = await adminizer.openHarnessAgentService.compactSession(req.user);
         const meta = adminizer.openHarnessAgentService.getSessionMeta(req.user);
@@ -150,7 +209,7 @@ module.exports.default = async function (sails) {
     });
 
     adminizer.app.post(`${prefix}/api/openharness/runs`, (req, res) => {
-      if (!canUse(req, res)) return;
+      if (!canUse(req, res) || !mustBeReady(req, res)) return;
       upload(req, res, async (uploadError) => {
         if (uploadError) {
           const message = uploadError.code === 'LIMIT_FILE_SIZE'

@@ -1,0 +1,52 @@
+diff --git a/node_modules/@openharness/core/dist/agent.d.ts b/node_modules/@openharness/core/dist/agent.d.ts
+index 05a30d3..94949c3 100644
+--- a/node_modules/@openharness/core/dist/agent.d.ts
++++ b/node_modules/@openharness/core/dist/agent.d.ts
+@@ -81,6 +81,9 @@ export declare class Agent {
+     readonly instructions: boolean;
+     readonly maxSubagentDepth: number;
+     readonly approve?: ApproveFn;
++    readonly onError?: (event: {
++        error: unknown;
++    }) => void;
+     readonly onSubagentEvent?: SubagentEventFn;
+     /** Original subagent templates or catalog (stored for nested children). */
+     readonly subagents?: SubagentSource;
+@@ -116,6 +119,13 @@ export declare class Agent {
+          * When omitted, all tool calls are allowed.
+          */
+         approve?: ApproveFn;
++        /**
++         * Called for every streaming error. Replaces the ai-sdk default, which
++         * dumps the entire error object to the console.
++         */
++        onError?: (event: {
++            error: unknown;
++        }) => void;
+         /** Agents or a catalog available as subagents via the auto-generated `task` tool. */
+         subagents?: SubagentSource;
+         /** Optional stateful session layer for the auto-generated `task` tool. */
+diff --git a/node_modules/@openharness/core/dist/agent.js b/node_modules/@openharness/core/dist/agent.js
+index 47a3c6a..f956578 100644
+--- a/node_modules/@openharness/core/dist/agent.js
++++ b/node_modules/@openharness/core/dist/agent.js
+@@ -50,6 +50,7 @@ export class Agent {
+         this.instructions = options.instructions ?? true;
+         this.maxSubagentDepth = options.maxSubagentDepth ?? 1;
+         this.approve = options.approve;
++        this.onError = options.onError;
+         this.onSubagentEvent = options.onSubagentEvent;
+         this.subagents = options.subagents;
+         this.subagentSessions = options.subagentSessions;
+@@ -121,6 +122,11 @@ export class Agent {
+             temperature: this.temperature,
+             maxOutputTokens: this.maxTokens,
+             abortSignal: options?.signal,
++            // Without this the ai-sdk default onError dumps the whole APICallError
++            // (request body, headers, every retry) to the console with console.error.
++            // The error is also yielded as an "error" event, so the caller loses
++            // nothing by taking over the logging.
++            onError: this.onError ?? (() => { }),
+         });
+         let stepNumber = 0;
+         let stepText = "";
