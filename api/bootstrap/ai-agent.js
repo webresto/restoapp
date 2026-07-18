@@ -25,18 +25,33 @@ module.exports.default = async function (sails) {
         sails.log.info('Bootstrap > Enabling AI Assistant for OpenHarness model registration.');
       }
 
-      const {OpenHarnessDataAgentService} = require('../../lib/ai/OpenHarnessDataAgentService');
-      const openHarnessAgent = new OpenHarnessDataAgentService(adminizer);
+      // Connection manager: resolves setting/env keys or self-registers through
+      // the LiteLLM frontend broker (with retries) when no key exists yet.
+      const {OpenHarnessConnectionManager} = require('../../lib/ai/OpenHarnessConnectionManager');
+      const {LlmLimitsService} = require('../../lib/ai/LlmLimitsService');
+      const connectionManager = new OpenHarnessConnectionManager();
+      adminizer.openHarnessConnectionManager = connectionManager;
+      adminizer.openHarnessLimitsService = new LlmLimitsService();
 
-      if (openHarnessAgent.isEnabled()) {
-        adminizer.aiAssistantHandler.registerModel(openHarnessAgent);
-        adminizer.openHarnessAgentService = openHarnessAgent;
-        const declaredModels = new Set(adminizer.config.aiAssistant.models ?? []);
-        declaredModels.add(openHarnessAgent.id);
-        adminizer.config.aiAssistant.models = Array.from(declaredModels);
-        sails.log.debug(`Bootstrap > OpenHarness agent successfully registered with ID: ${openHarnessAgent.id}`);
+      const {OpenHarnessDataAgentService} = require('../../lib/ai/OpenHarnessDataAgentService');
+      const openHarnessAgent = new OpenHarnessDataAgentService(adminizer, connectionManager);
+
+      // The agent is registered even before a key is available: the admin page
+      // shows a registration loader (driven by /api/openharness/status) until
+      // the manager reports ready.
+      adminizer.aiAssistantHandler.registerModel(openHarnessAgent);
+      adminizer.openHarnessAgentService = openHarnessAgent;
+      const declaredModels = new Set(adminizer.config.aiAssistant.models ?? []);
+      declaredModels.add(openHarnessAgent.id);
+      adminizer.config.aiAssistant.models = Array.from(declaredModels);
+      sails.log.debug(`Bootstrap > OpenHarness agent registered with ID: ${openHarnessAgent.id}`);
+
+      await connectionManager.init();
+      const status = connectionManager.getStatus();
+      if (status.state === 'ready') {
+        sails.log.info(`Bootstrap > OpenHarness connected (${status.source} key, ${status.provider} @ ${status.baseUrl})`);
       } else {
-        sails.log.warn('Bootstrap > Skipping OpenHarness agent registration. Set OPENHARNESS_API_KEY, OPENHARNESS_MODEL, and OPENHARNESS_BASE_URL.');
+        sails.log.warn(`Bootstrap > OpenHarness is not connected yet (${status.state}${status.lastError ? `: ${status.lastError}` : ''}). Registration keeps retrying in the background.`);
       }
     } catch (error) {
       sails.log.error('Bootstrap > Failed to initialize AI Agent:', error);

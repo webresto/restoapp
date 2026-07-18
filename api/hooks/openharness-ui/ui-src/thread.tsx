@@ -45,7 +45,8 @@ import {
   CopyIcon,
   SquareIcon,
 } from 'lucide-react';
-import type { FC } from 'react';
+import type { FC, ReactNode } from 'react';
+import { t } from './i18n';
 
 const SUGGESTIONS = [
   'What MCP tools are available?',
@@ -61,9 +62,11 @@ export type ThreadProps = {
   onNewChat?: () => void;
   /** Compacts the server session context; used by the /compact slash command. */
   onCompact?: () => void;
+  /** Rendered directly under the composer (model / context / limits panels). */
+  belowComposer?: ReactNode;
 };
 
-export const Thread: FC<ThreadProps> = ({ onNewChat, onCompact }) => {
+export const Thread: FC<ThreadProps> = ({ onNewChat, onCompact, belowComposer }) => {
   const isEmpty = useAuiState(isNewChatView);
 
   return (
@@ -106,6 +109,7 @@ export const Thread: FC<ThreadProps> = ({ onNewChat, onCompact }) => {
           >
             <ThreadScrollToBottom />
             <Composer onNewChat={onNewChat} onCompact={onCompact} />
+            {belowComposer}
             <AuiIf condition={(s) => isNewChatView(s) && s.composer.isEmpty}>
               <ThreadSuggestions />
             </AuiIf>
@@ -120,7 +124,7 @@ const ThreadScrollToBottom: FC = () => {
   return (
     <ThreadPrimitive.ScrollToBottom asChild>
       <TooltipIconButton
-        tooltip="Scroll to bottom"
+        tooltip={t('Scroll to bottom')}
         variant="outline"
         className="aui-thread-scroll-to-bottom dark:border-border dark:bg-background dark:hover:bg-accent absolute -top-12 z-10 self-center rounded-full p-4 disabled:invisible"
       >
@@ -135,10 +139,10 @@ const ThreadWelcome: FC = () => {
     <div className="aui-thread-welcome-root mb-6 flex flex-col items-center px-4 text-center">
       <BotIcon className="text-muted-foreground mb-3 size-10" />
       <h1 className="aui-thread-welcome-message-inner fade-in slide-in-from-bottom-1 animate-in fill-mode-both text-2xl font-semibold duration-200">
-        How can I help you today?
+        {t('How can I help you today?')}
       </h1>
       <p className="text-muted-foreground mt-1 text-sm">
-        Ask about Restoapp data available to your account.
+        {t('Ask about Restoapp data available to your account.')}
       </p>
     </div>
   );
@@ -147,7 +151,7 @@ const ThreadWelcome: FC = () => {
 const ThreadSuggestions: FC = () => {
   return (
     <div className="aui-thread-welcome-suggestions flex w-full flex-wrap items-center justify-center gap-2 px-4">
-      {SUGGESTIONS.map((prompt) => (
+      {SUGGESTIONS.map((key) => t(key)).map((prompt) => (
         <ThreadPrimitive.Suggestion key={prompt} prompt={prompt} send asChild>
           <Button
             variant="ghost"
@@ -174,19 +178,19 @@ const Composer: FC<{ onNewChat?: () => void; onCompact?: () => void }> = ({
       {
         id: 'new',
         label: '/new',
-        description: 'Start a new chat (clears the conversation)',
+        description: t('Start a new chat (clears the conversation)'),
         execute: () => onNewChat?.(),
       },
       {
         id: 'compact',
         label: '/compact',
-        description: 'Free up context: prune or summarize older messages',
+        description: t('Free up context: prune or summarize older messages'),
         execute: () => onCompact?.(),
       },
       {
         id: 'model',
         label: '/model',
-        description: 'Open the model selector',
+        description: t('Open the model selector'),
         execute: () => {
           document
             .querySelector<HTMLSelectElement>('select[aria-label="Select model"]')
@@ -196,12 +200,12 @@ const Composer: FC<{ onNewChat?: () => void; onCompact?: () => void }> = ({
       {
         id: 'help',
         label: '/help',
-        description: 'Ask the assistant what it can do',
+        description: t('Ask the assistant what it can do'),
         // Deferred so the popover's own composer cleanup runs first and does
         // not clobber the injected prompt.
         execute: () => {
           setTimeout(() => {
-            composerRuntime.setText(HELP_PROMPT);
+            composerRuntime.setText(t(HELP_PROMPT));
             composerRuntime.send();
           }, 0);
         },
@@ -250,13 +254,13 @@ const Composer: FC<{ onNewChat?: () => void; onCompact?: () => void }> = ({
           >
             <ComposerAttachments />
             <ComposerPrimitive.Input
-              placeholder="Ask about Restoapp data… type / for commands"
+              placeholder={t('Ask about Restoapp data… type / for commands')}
               className="aui-composer-input caret-primary placeholder:text-muted-foreground/80 max-h-32 min-h-10 w-full resize-none bg-transparent px-2.5 py-1 text-base outline-none"
               rows={1}
               autoFocus
               addAttachmentOnPaste
               enterKeyHint="send"
-              aria-label="Message input"
+              aria-label={t('Message input')}
             />
             <ComposerAction />
           </div>
@@ -274,13 +278,13 @@ const ComposerAction: FC = () => {
         <AuiIf condition={(s) => !s.thread.isRunning}>
           <ComposerPrimitive.Send asChild>
             <TooltipIconButton
-              tooltip="Send message"
+              tooltip={t('Send message')}
               side="bottom"
               type="button"
               variant="default"
               size="icon"
               className="aui-composer-send size-7 rounded-full"
-              aria-label="Send message"
+              aria-label={t('Send message')}
             >
               <ArrowUpIcon className="aui-composer-send-icon size-4.5" />
             </TooltipIconButton>
@@ -293,7 +297,7 @@ const ComposerAction: FC = () => {
               variant="default"
               size="icon"
               className="aui-composer-cancel size-7 rounded-full"
-              aria-label="Stop generating"
+              aria-label={t('Stop generating')}
             >
               <SquareIcon className="aui-composer-cancel-icon size-3.5 fill-current" />
             </Button>
@@ -365,7 +369,7 @@ const AssistantMessage: FC = () => {
                   <span
                     data-slot="aui_assistant-message-indicator"
                     className="animate-pulse font-sans"
-                    aria-label="Assistant is working"
+                    aria-label={t('Assistant is working')}
                   >
                     {'●'}
                   </span>
@@ -396,7 +400,7 @@ const AssistantActionBar: FC = () => {
       className="aui-assistant-action-bar-root text-muted-foreground animate-in fade-in -ms-1 flex gap-1 duration-200"
     >
       <ActionBarPrimitive.Copy asChild>
-        <TooltipIconButton tooltip="Copy">
+        <TooltipIconButton tooltip={t('Copy')}>
           <AuiIf condition={(s) => s.message.isCopied}>
             <CheckIcon className="animate-in zoom-in-50 fade-in duration-200 ease-out" />
           </AuiIf>

@@ -18,6 +18,8 @@ export type SessionMeta = {
     contextWindow: number | null;
     maxOutputTokens: number | null;
     vision: boolean;
+    /** Relative spend multiplier (×1 = median-priced model); null if unknown. */
+    costCoefficient: number | null;
   }>;
   contextWindow: number;
   vision: boolean;
@@ -26,6 +28,51 @@ export type SessionMeta = {
   contextTokens: number;
   maxFiles: number;
   maxFileSize: number;
+};
+
+export type ConnectionStatus = {
+  state: 'ready' | 'registering' | 'waiting_retry' | 'setup_required' | 'error';
+  provider: 'litellm' | 'openai';
+  baseUrl: string;
+  source: 'setting' | 'env' | 'broker' | null;
+  nextAttemptAt: string | null;
+  lastError: string | null;
+  expiresAt: string | null;
+  /** Admin UI language for the bundled i18n dictionaries. */
+  locale?: string | null;
+};
+
+export type LlmBudgetWindow = {
+  kind: 'daily' | 'burst';
+  durationLabel: string;
+  durationSeconds: number | null;
+  maxBudgetUsd: number;
+  spentUsd: number | null;
+  remainingBudgetUsd: number | null;
+  resetAt: string | null;
+};
+
+export type LlmLimits = {
+  provider: string;
+  supported: boolean;
+  overBudget?: boolean;
+  message?: string;
+  userId?: string | null;
+  keyAlias?: string | null;
+  maxBudgetUsd: number | null;
+  spentUsd: number | null;
+  remainingBudgetUsd: number | null;
+  budgetResetAt: string | null;
+  /** Tighter short window (e.g. 4h): cap + reset only; spend is not exposed. */
+  burstMaxBudgetUsd: number | null;
+  burstSpentUsd: number | null;
+  burstRemainingBudgetUsd: number | null;
+  burstResetAt: string | null;
+  burstDurationLabel: string | null;
+  windows: LlmBudgetWindow[];
+  rpmLimit: number | null;
+  tpmLimit: number | null;
+  fetchedAt: string;
 };
 
 export function basePath(): string {
@@ -52,6 +99,27 @@ async function readError(response: Response): Promise<string> {
   } catch {
     return `HTTP ${response.status}`;
   }
+}
+
+export async function fetchStatus(): Promise<ConnectionStatus> {
+  const response = await fetch(`${basePath()}/api/openharness/status`, {
+    credentials: 'same-origin',
+    headers: { Accept: 'application/json' },
+  });
+  if (!response.ok) throw new Error(await readError(response));
+  return response.json();
+}
+
+export async function fetchLimits(forceRefresh = false): Promise<LlmLimits> {
+  // An explicit refresh asks the backend to re-read LiteLLM live (bypassing its
+  // short cache) so the spend and the 4h/24h window reset times are current.
+  const query = forceRefresh ? '?refresh=1' : '';
+  const response = await fetch(`${basePath()}/api/openharness/limits${query}`, {
+    credentials: 'same-origin',
+    headers: { Accept: 'application/json' },
+  });
+  if (!response.ok) throw new Error(await readError(response));
+  return response.json();
 }
 
 export async function fetchMeta(): Promise<SessionMeta> {

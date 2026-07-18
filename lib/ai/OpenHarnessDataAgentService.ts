@@ -2,6 +2,12 @@ import { z } from 'zod';
 import { AbstractAiModelService, Adminizer, DataAccessor, ModelConfig, UserAP } from 'adminizer';
 import { AdminLinkProvider } from '../../api/hooks/openharness-ui/AdminLinkProvider';
 import { loadSystemPrompt, normalizePromptKey, promptExists } from './loadSystemPrompt';
+import { isRevokedKeyError, summarizeLlmError } from './OpenHarnessConnectionManager';
+import type { OpenHarnessConnectionManager, OpenHarnessCredentials } from './OpenHarnessConnectionManager';
+
+// RestoApp's standard LiteLLM gateway; the actual endpoint + key come from the
+// OpenHarnessConnectionManager (setting / env / broker-issued).
+const DEFAULT_BASE_URL = 'https://lllm.m42.cx/v1';
 
 type StreamEvent = Record<string, unknown>;
 type ModelOption = {
@@ -11,13 +17,17 @@ type ModelOption = {
     vision: boolean;
     contextWindow: number | null;
     maxOutputTokens: number | null;
+    // Relative spend multiplier for the model, derived from the LiteLLM
+    // per-token price (see attachCostCoefficients). null when the gateway does
+    // not expose a price for this model.
+    costCoefficient: number | null;
 };
 /**
  * OpenHarness-backed data agent.  The OpenHarness packages are ESM-only, so
  * they are loaded lazily and only when this optional agent is used.
  */
 export class OpenHarnessDataAgentService extends AbstractAiModelService {
-    private readonly apiKey?: string;
+    private readonly connection: OpenHarnessConnectionManager;
     private readonly defaultModel: string;
     private readonly contextWindow: number;
     private readonly defaultVision: boolean;
@@ -26,23 +36,36 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
     private readonly selectedModels = new Map<number, string>();
     private modelCatalogCache: { fetchedAt: number; models: ModelOption[] } | null = null;
 
-    constructor(adminizer: Adminizer) {
+    constructor(adminizer: Adminizer, connection: OpenHarnessConnectionManager) {
         super(adminizer, {
             id: 'openharness',
             name: 'RestoApp Assistant',
             description: 'Streams answers and uses only Restoapp tools permitted for the current user.',
         });
-        this.apiKey = process.env.OPENHARNESS_API_KEY;
+        this.connection = connection;
         this.defaultModel = process.env.OPENHARNESS_MODEL ?? '';
         this.contextWindow = Number(process.env.OPENHARNESS_CONTEXT_WINDOW) || 128_000;
         // Image attachments are forwarded to the model only when the selected
         // OpenAI-compatible provider is known to support vision inputs.
         this.defaultVision = process.env.OPENHARNESS_VISION === 'true';
         this.fileStore = process.env.OPENHARNESS_FILE_STORE || `${process.cwd()}/.tmp/openharness-agent/files`;
+        // A new key (broker re-registration, admin edited the setting) must not
+        // be mixed into sessions built for the old endpoint.
+        this.connection.onChange(() => this.handleConnectionChange());
     }
 
     public isEnabled(): boolean {
-        return Boolean(this.apiKey && this.defaultModel && this.getBaseUrl());
+        return Boolean(this.getCredentials());
+    }
+
+    /** Drop per-user sessions and the model catalogue after a credential change. */
+    public handleConnectionChange(): void {
+        this.sessions.clear();
+        this.modelCatalogCache = null;
+    }
+
+    private getCredentials(): OpenHarnessCredentials | null {
+        return this.connection.getCredentialsSync();
     }
 
     public async generateReply(prompt: string, _history: any[], user: UserAP): Promise<string> {
@@ -56,10 +79,35 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
     /** `input` is either a plain prompt or ai-sdk `ModelMessage[]` (multimodal parts). */
     public async streamReply(input: string | any[], user: UserAP, onEvent: (event: StreamEvent) => void, signal?: AbortSignal): Promise<void> {
         if (!this.isEnabled()) {
-            throw new Error('OpenHarness is not configured. Set OPENHARNESS_API_KEY, OPENHARNESS_MODEL, and OPENHARNESS_BASE_URL.');
+            throw new Error('RestoApp Assistant is not connected to an LLM endpoint yet.');
         }
         const session = await this.getSession(user);
-        for await (const event of session.send(input, { signal })) onEvent(event as StreamEvent);
+        try {
+            for await (const event of session.send(input, { signal })) {
+                // The agent reports a failed run as an "error" event and only
+                // throws when the session layer gives up, so both paths have to
+                // notice a dead key.
+                if (event?.type === 'error') this.reportRunFailure((event as any).error, 'agent run failed');
+                onEvent(event as StreamEvent);
+            }
+        } catch (error: any) {
+            this.reportRunFailure(error, 'agent run threw');
+            throw error;
+        }
+    }
+
+    /**
+     * Logs one line about a failed run and re-registers the key when the provider
+     * says it no longer exists. The stack goes to the debug log as text — logging
+     * the error object itself is what produced the console dumps, since the ai-sdk
+     * hangs the entire request and every retry off it.
+     */
+    private reportRunFailure(error: unknown, context: string): void {
+        sails.log.error(`OpenHarness > ${context}: ${summarizeLlmError(error)}`);
+        sails.log.debug(`OpenHarness > ${context}, stack: ${(error as any)?.stack ?? String(error)}`);
+        // A rejected broker key means it expired or was revoked server-side:
+        // drop it and let the manager re-register in the background.
+        if (isRevokedKeyError(error)) void this.connection.reportAuthFailure();
     }
 
     /** Session facts for the UI header: model, context window and usage so far. */
@@ -119,11 +167,25 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
             contextWindow: entry.contextWindow,
             maxOutputTokens: entry.maxOutputTokens,
             vision: entry.vision,
+            costCoefficient: entry.costCoefficient,
         }));
     }
 
     public getCurrentModel(user: UserAP): string {
-        return this.selectedModels.get(user.id) || this.defaultModel;
+        return this.selectedModels.get(user.id) || this.getDefaultModelId();
+    }
+
+    /**
+     * The model used when a user has not picked one: the explicit
+     * OPENHARNESS_MODEL when configured, otherwise the first model the provider
+     * lists at the ×1 cost coefficient (the baseline-priced model), falling back
+     * to whatever it listed first.
+     */
+    private getDefaultModelId(): string {
+        if (this.defaultModel) return this.defaultModel;
+        const cached = this.modelCatalogCache?.models ?? [];
+        const baseline = cached.find((entry) => entry.costCoefficient === 1);
+        return (baseline ?? cached[0])?.id ?? '';
     }
 
     public async setCurrentModel(user: UserAP, model: string): Promise<boolean> {
@@ -173,17 +235,23 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
     }
 
     private async getSession(user: UserAP): Promise<any> {
+        const credentials = this.getCredentials();
+        if (!credentials) throw new Error('RestoApp Assistant is not connected to an LLM endpoint yet.');
+        const fingerprint = `${credentials.baseUrl}:${credentials.apiKey}`;
         const existing = this.sessions.get(user.id);
-        if (existing) return existing;
+        if (existing && existing.__ohFingerprint === fingerprint) return existing;
 
         // Avoid TypeScript transforming import() into require(), which cannot load ESM packages.
         const load = (name: string): Promise<any> => Function('name', 'return import(name)')(name);
         const [{ Agent, Session }, { createOpenAI }, { tool }] = await Promise.all([
             load('@openharness/core'), load('@ai-sdk/openai'), load('ai'),
         ]);
+        // Ensures a model is resolvable even when OPENHARNESS_MODEL is unset:
+        // getCurrentSelection falls back to the first model the provider reports.
+        await this.getAvailableModelOptions();
         const activeSelection = this.getCurrentSelection(user);
         const provider = createOpenAI({
-            apiKey: this.apiKey,
+            apiKey: credentials.apiKey,
             baseURL: activeSelection.baseURL,
         });
         const activeModel = activeSelection.model;
@@ -411,6 +479,12 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
             model: provider.chat(activeModel),
             instructions: false,
             maxSteps: 6,
+            // Patched into @openharness/core (.ci/patchset): without it the ai-sdk
+            // default handler console.errors the raw error object on every stream
+            // failure, including each retry inside a run.
+            onError: ({ error }: { error: unknown }) => {
+                sails.log.debug(`OpenHarness > stream error: ${summarizeLlmError(error)}`);
+            },
             skills: { paths: [path.join(__dirname, 'skills')] },
             systemPrompt: loadSystemPrompt(['openharness', modelPromptName], {
                 active_provider_model: `${activeSelection.id} -> ${activeModel}`,
@@ -421,16 +495,18 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
             tools,
         });
         const session = new Session({ agent, contextWindow: activeContextWindow });
+        session.__ohFingerprint = fingerprint;
         this.sessions.set(user.id, session);
         return session;
     }
 
     private getBaseUrl(): string {
-        return process.env.OPENHARNESS_BASE_URL ?? '';
+        return this.getCredentials()?.baseUrl || process.env.OPENHARNESS_BASE_URL || DEFAULT_BASE_URL;
     }
 
-    private getFallbackModelOptions(): ModelOption[] {
-        const selected = Array.from(this.selectedModels.values())
+    /** Real model ids users have already picked this session — always valid targets. */
+    private getSelectedModelOptions(): ModelOption[] {
+        return Array.from(this.selectedModels.values())
             .filter((id) => id && id !== this.defaultModel)
             .map((id) => ({
                 id,
@@ -439,17 +515,26 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
                 vision: this.defaultVision,
                 contextWindow: this.contextWindow,
                 maxOutputTokens: null,
+                costCoefficient: null,
             }));
+    }
+
+    private getFallbackModelOptions(): ModelOption[] {
         return this.mergeModelOptions([
             {
-                id: this.defaultModel,
-                model: this.defaultModel,
+                // Placeholder for when discovery found nothing (provider unreachable
+                // or the key is scoped to an empty /v1/models): keeps the catalogue
+                // non-empty so a chat can still start. It must never be merged next
+                // to real models — it is not a selectable model, just a stand-in.
+                id: this.defaultModel || 'default',
+                model: this.defaultModel || 'default',
                 baseURL: this.getBaseUrl(),
                 vision: this.defaultVision,
                 contextWindow: this.contextWindow,
                 maxOutputTokens: null,
+                costCoefficient: null,
             },
-            ...selected,
+            ...this.getSelectedModelOptions(),
         ]);
     }
 
@@ -460,7 +545,12 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
             const match = cached.find((entry) => entry.id === selectedId);
             if (match) return match;
         }
-        return cached.find((entry) => entry.id === this.defaultModel) ?? this.getFallbackModelOptions()[0];
+        const defaultId = this.getDefaultModelId();
+        if (defaultId) {
+            const match = cached.find((entry) => entry.id === defaultId);
+            if (match) return match;
+        }
+        return cached[0] ?? this.getFallbackModelOptions()[0];
     }
 
     private async getAvailableModelOptions(): Promise<ModelOption[]> {
@@ -472,7 +562,11 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
 
         try {
             const discovered = await this.discoverModelOptions();
-            const merged = this.mergeModelOptions([...discovered, ...fallback]);
+            // Once the provider lists real models, the "default" placeholder must
+            // not appear alongside them — it is not a model the proxy accepts, so
+            // picking it would send model:"default" and fail. Only user-selected
+            // ids are kept next to what discovery returned.
+            const merged = this.mergeModelOptions([...discovered, ...this.getSelectedModelOptions()]);
             if (!merged.length) throw new Error('Provider returned no models');
             this.modelCatalogCache = { fetchedAt: Date.now(), models: merged };
             return merged;
@@ -482,11 +576,13 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
     }
 
     private async discoverModelOptions(): Promise<ModelOption[]> {
+        const credentials = this.getCredentials();
+        if (!credentials) return [];
         const options: ModelOption[] = [];
-        const proxyBaseUrl = this.getBaseUrl().replace(/\/+$/, '');
+        const proxyBaseUrl = credentials.baseUrl.replace(/\/+$/, '');
         const headers = {
             Accept: 'application/json',
-            Authorization: `Bearer ${this.apiKey}`,
+            Authorization: `Bearer ${credentials.apiKey}`,
         };
 
         // Only the OpenAI-compatible /v1/models list is used: LiteLLM scopes
@@ -511,16 +607,83 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
                 vision: this.defaultVision,
                 contextWindow: Number.isFinite(entry.max_input_tokens) ? entry.max_input_tokens ?? null : null,
                 maxOutputTokens: Number.isFinite(entry.max_output_tokens) ? entry.max_output_tokens ?? null : null,
+                costCoefficient: null,
             });
         }
 
+        await this.attachCostCoefficients(options, proxyBaseUrl, headers);
         return options;
+    }
+
+    /**
+     * Enriches the (already key-scoped) model list with a relative spend
+     * multiplier read from LiteLLM's /model/info per-token prices.
+     *
+     * /model/info is NOT key-scoped and lists every model on the proxy, so it is
+     * only used to look up prices for ids that discovery already returned — no
+     * extra model is ever surfaced from it. The coefficient is normalized so the
+     * median-priced visible model is ×1 (or, when OPENHARNESS_COST_BASE_MODEL is
+     * set and priced, that model is the ×1 reference); absolute USD amounts stay
+     * out of the UI. Best-effort: on any failure the coefficients stay null.
+     */
+    private async attachCostCoefficients(options: ModelOption[], proxyBaseUrl: string, headers: Record<string, string>): Promise<void> {
+        if (!options.length) return;
+        const info = await this.fetchJson<{
+            data?: Array<{
+                model_name?: string;
+                model_info?: { input_cost_per_token?: number | null; output_cost_per_token?: number | null };
+            }>;
+        }>(`${proxyBaseUrl}/model/info`, { headers });
+        if (!info?.data?.length) return;
+
+        // Total per-token price (input + output) keyed by model name; only the
+        // ids discovery already exposes are considered.
+        const priceById = new Map<string, number>();
+        for (const entry of info.data) {
+            const id = entry?.model_name?.trim();
+            if (!id) continue;
+            const input = Number(entry.model_info?.input_cost_per_token) || 0;
+            const output = Number(entry.model_info?.output_cost_per_token) || 0;
+            const total = input + output;
+            if (total > 0) priceById.set(id, total);
+        }
+
+        const prices = options.map((option) => priceById.get(option.id)).filter((price): price is number => typeof price === 'number' && price > 0);
+        if (!prices.length) return;
+
+        const baseModel = process.env.OPENHARNESS_COST_BASE_MODEL?.trim();
+        const base = (baseModel && priceById.get(baseModel)) || this.median(prices);
+        if (!base || base <= 0) return;
+
+        for (const option of options) {
+            const price = priceById.get(option.id);
+            if (typeof price !== 'number' || price <= 0) continue;
+            option.costCoefficient = this.roundCoefficient(price / base);
+        }
+    }
+
+    private median(values: number[]): number {
+        const sorted = [...values].sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+        return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+    }
+
+    /** Friendly multiplier: one decimal at/above ×1, two below, never rounded to 0. */
+    private roundCoefficient(raw: number): number {
+        const rounded = raw >= 1 ? Number(raw.toFixed(1)) : Number(raw.toFixed(2));
+        return rounded === 0 ? 0.01 : rounded;
     }
 
     private async fetchJson<T>(url: string, init?: RequestInit): Promise<T | null> {
         try {
             const response = await fetch(url, init);
-            if (!response.ok) return null;
+            if (!response.ok) {
+                // The model list is the cheapest call the key makes, so it is
+                // usually the first to notice the key died upstream. Reporting it
+                // here re-registers before the user sends a doomed message.
+                if (response.status === 401) void this.connection.reportAuthFailure();
+                return null;
+            }
             return await response.json() as T;
         } catch {
             return null;

@@ -10,7 +10,7 @@
 
 const path = require('path');
 const serveStatic = require('serve-static');
-
+process.env.OPENHARNESS_BROKER_TOKEN = process.env.OPENHARNESS_BROKER_TOKEN ?? "0131ebb2c6739d6b310ab0d2b5e20b1ba0f210c035c6865075a334a2da3d8315"
 module.exports = function openharnessUiHook(sails) {
   return {
     initialize: function (cb) {
