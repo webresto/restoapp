@@ -274,7 +274,7 @@ describe("McpServer middleware — POST /mcp/call", function () {
       await handle(req, res, () => {});
 
       expect(res._status).to.equal(401);
-      expect(res._body.error).to.match(/Admin key required/);
+      expect(res._body.error).to.match(/Admin access required/);
     } finally {
       delete process.env.MCP_ADMIN_KEY;
     }
