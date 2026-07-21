@@ -8,6 +8,9 @@ import type { OpenHarnessConnectionManager, OpenHarnessCredentials } from './Ope
 // RestoApp's standard LiteLLM gateway; the actual endpoint + key come from the
 // OpenHarnessConnectionManager (setting / env / broker-issued).
 const DEFAULT_BASE_URL = 'https://lllm.m42.cx/v1';
+const MAX_MCP_TOOL_RESULT_CHARS = 64_000;
+const MAX_MCP_TOOL_ARRAY_ITEMS = 50;
+const MAX_MCP_TOOL_OBJECT_KEYS = 100;
 
 type StreamEvent = Record<string, unknown>;
 type ModelOption = {
@@ -22,6 +25,61 @@ type ModelOption = {
     // not expose a price for this model.
     costCoefficient: number | null;
 };
+
+function truncateText(value: string, maxChars: number): { text: string; truncated: boolean; originalChars: number } {
+    if (value.length <= maxChars) return { text: value, truncated: false, originalChars: value.length };
+    return {
+        text: `${value.slice(0, Math.max(0, maxChars - 1))}…`,
+        truncated: true,
+        originalChars: value.length,
+    };
+}
+
+function clampForAgentPayload(value: unknown, maxDepth = 5): unknown {
+    if (value === null || value === undefined) return value;
+    if (typeof value === 'string') return truncateText(value, MAX_MCP_TOOL_RESULT_CHARS).text;
+    if (typeof value === 'number' || typeof value === 'boolean') return value;
+    if (maxDepth <= 0) return '[truncated: max depth reached]';
+
+    if (Array.isArray(value)) {
+        const limited = value.slice(0, MAX_MCP_TOOL_ARRAY_ITEMS).map((entry) => clampForAgentPayload(entry, maxDepth - 1));
+        if (value.length > MAX_MCP_TOOL_ARRAY_ITEMS) {
+            limited.push(`[truncated: ${value.length - MAX_MCP_TOOL_ARRAY_ITEMS} more items]`);
+        }
+        return limited;
+    }
+
+    if (typeof value === 'object') {
+        const entries = Object.entries(value as Record<string, unknown>);
+        const limitedEntries = entries.slice(0, MAX_MCP_TOOL_OBJECT_KEYS);
+        const result: Record<string, unknown> = {};
+        for (const [key, entry] of limitedEntries) result[key] = clampForAgentPayload(entry, maxDepth - 1);
+        if (entries.length > MAX_MCP_TOOL_OBJECT_KEYS) {
+            result.__truncated__ = `${entries.length - MAX_MCP_TOOL_OBJECT_KEYS} more keys omitted`;
+        }
+        return result;
+    }
+
+    return String(value);
+}
+
+function summarizeMcpResult(toolName: string, result: unknown): Record<string, unknown> {
+    const limited = clampForAgentPayload(result);
+    const json = JSON.stringify(limited);
+    if (json.length <= MAX_MCP_TOOL_RESULT_CHARS) {
+        return { tool: toolName, result: limited };
+    }
+
+    const truncated = truncateText(json, MAX_MCP_TOOL_RESULT_CHARS);
+    return {
+        tool: toolName,
+        result: {
+            truncated: true,
+            originalChars: truncated.originalChars,
+            jsonPreview: truncated.text,
+        },
+    };
+}
 /**
  * OpenHarness-backed data agent.  The OpenHarness packages are ESM-only, so
  * they are loaded lazily and only when this optional agent is used.
@@ -348,7 +406,11 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
                             availableGroups: groups,
                         };
                     }
-                    return { group: input.group, count: tools.length, tools };
+                    return summarizeMcpResult('list_mcp_tools', {
+                        group: input.group,
+                        count: tools.length,
+                        tools,
+                    });
                 }
 
                 const groups = typeof mcp.listGroups === 'function' ? mcp.listGroups() : [];
@@ -358,7 +420,12 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
                     mode: entry.mode,
                     description: entry.shortDescription || entry.description,
                 }));
-                return { groupCount: groups.length, groups, toolCount: tools.length, tools };
+                return summarizeMcpResult('list_mcp_tools', {
+                    groupCount: groups.length,
+                    groups,
+                    toolCount: tools.length,
+                    tools,
+                });
             },
         });
 
@@ -384,7 +451,7 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
 
                 try {
                     const result = await mcp.callTool(input.tool_name, input.params ?? {}, { user });
-                    return { tool: input.tool_name, result };
+                    return summarizeMcpResult(input.tool_name, result);
                 } catch (error: any) {
                     return { error: error?.message || 'MCP tool call failed.' };
                 }
@@ -628,16 +695,18 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
      */
     private async attachCostCoefficients(options: ModelOption[], proxyBaseUrl: string, headers: Record<string, string>): Promise<void> {
         if (!options.length) return;
+        const modelInfoBaseUrl = this.modelInfoBaseUrl(proxyBaseUrl);
         const info = await this.fetchJson<{
             data?: Array<{
                 model_name?: string;
                 model_info?: { input_cost_per_token?: number | null; output_cost_per_token?: number | null };
             }>;
-        }>(`${proxyBaseUrl}/model/info`, { headers });
+        }>(`${modelInfoBaseUrl}/model/info`, { headers });
         if (!info?.data?.length) return;
 
-        // Total per-token price (input + output) keyed by model name; only the
-        // ids discovery already exposes are considered.
+        // Total per-token price (input + output) keyed by model name. Public
+        // LiteLLM aliases may intentionally have no synthetic price, while
+        // their internal target model carries the actual budget weight.
         const priceById = new Map<string, number>();
         for (const entry of info.data) {
             const id = entry?.model_name?.trim();
@@ -648,18 +717,42 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
             if (total > 0) priceById.set(id, total);
         }
 
-        const prices = options.map((option) => priceById.get(option.id)).filter((price): price is number => typeof price === 'number' && price > 0);
+        const prices = options
+            .map((option) => this.priceForModelOption(option.id, priceById))
+            .filter((price): price is number => typeof price === 'number' && price > 0);
         if (!prices.length) return;
 
         const baseModel = process.env.OPENHARNESS_COST_BASE_MODEL?.trim();
-        const base = (baseModel && priceById.get(baseModel)) || this.median(prices);
+        const base = (baseModel && this.priceForModelOption(baseModel, priceById)) || this.median(prices);
         if (!base || base <= 0) return;
 
         for (const option of options) {
-            const price = priceById.get(option.id);
+            const price = this.priceForModelOption(option.id, priceById);
             if (typeof price !== 'number' || price <= 0) continue;
             option.costCoefficient = this.roundCoefficient(price / base);
         }
+    }
+
+    private modelInfoBaseUrl(proxyBaseUrl: string): string {
+        return proxyBaseUrl.replace(/\/v1$/i, '');
+    }
+
+    private priceForModelOption(id: string, priceById: Map<string, number>): number | null {
+        const direct = priceById.get(id);
+        if (typeof direct === 'number' && direct > 0) return direct;
+
+        const aliases = this.pricingAliasCandidates(id);
+        for (const alias of aliases) {
+            const price = priceById.get(alias);
+            if (typeof price === 'number' && price > 0) return price;
+        }
+        return null;
+    }
+
+    private pricingAliasCandidates(id: string): string[] {
+        const normalized = id.trim().toLowerCase();
+        if (!normalized || normalized.startsWith('grs-base-')) return [];
+        return [`grs-base-${normalized}`];
     }
 
     private median(values: number[]): number {
