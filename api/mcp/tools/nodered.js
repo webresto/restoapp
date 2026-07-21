@@ -10,6 +10,8 @@ const MAX_FIND_LIMIT = 100;
 const DEFAULT_LOG_FILE = 'app.log';
 const MAX_LOG_LINES = 2000;
 const DEFAULT_LOG_LINES = 200;
+// Upper bound on how much of a log file is pulled into memory for a tail read.
+const MAX_LOG_TAIL_BYTES = 4 * 1024 * 1024;
 
 // Node-RED v2 Admin API: GET/POST /flows return and accept { rev, flows }.
 // Sending this header is required for `rev`-based optimistic locking to work.
@@ -144,6 +146,9 @@ function resolveBackupFile(name) {
 }
 
 // Reads the tail of a log file inside logs/. Guards against path traversal.
+// Only the last MAX_LOG_TAIL_BYTES are pulled into memory — app.log grows into
+// hundreds of megabytes in production, and reading it whole (plus the split)
+// costs several times the file size in heap.
 function readLogTail(fileName, lines) {
   const logsDir = path.resolve(path.join(getNodeRedConfig().appRoot, 'logs'));
   const resolved = path.resolve(logsDir, fileName);
@@ -154,10 +159,31 @@ function readLogTail(fileName, lines) {
     throw new Error(`Log file not found: ${resolved}`);
   }
   const limit = Math.min(Math.max(Number.parseInt(lines, 10) || DEFAULT_LOG_LINES, 1), MAX_LOG_LINES);
-  const all = fs.readFileSync(resolved, 'utf8').split(/\r?\n/);
+
+  const fileSize = fs.statSync(resolved).size;
+  const readBytes = Math.min(fileSize, MAX_LOG_TAIL_BYTES);
+  const buffer = Buffer.allocUnsafe(readBytes);
+  const fd = fs.openSync(resolved, 'r');
+  try {
+    fs.readSync(fd, buffer, 0, readBytes, fileSize - readBytes);
+  } finally {
+    fs.closeSync(fd);
+  }
+
+  const all = buffer.toString('utf8').split(/\r?\n/);
   // Drop trailing empty line produced by a final newline.
   if (all.length && all[all.length - 1] === '') all.pop();
-  return { path: resolved, totalLines: all.length, lines: all.slice(-limit) };
+  // The first line of a mid-file window is almost certainly cut in half.
+  if (readBytes < fileSize && all.length) all.shift();
+
+  return {
+    path: resolved,
+    fileSizeBytes: fileSize,
+    readBytes,
+    windowTruncated: readBytes < fileSize,
+    availableLines: all.length,
+    lines: all.slice(-limit),
+  };
 }
 
 function summarizeNode(node) {
@@ -694,7 +720,7 @@ module.exports = function register(mcp) {
 
   mcp.registerTool({
     name: 'nodered_logs_tail',
-    description: 'Returns the tail of an application log file from the logs/ directory (default app.log). Admin only.',
+    description: `Returns the tail of an application log file from the logs/ directory (default app.log). Only the last ${MAX_LOG_TAIL_BYTES / (1024 * 1024)} MB of the file are scanned — windowTruncated tells you whether the file is larger. Admin only.`,
     mode: 'protected',
     schema: {
       type: 'object',
@@ -705,7 +731,15 @@ module.exports = function register(mcp) {
     },
     handler: async ({ logFile = DEFAULT_LOG_FILE, lines = DEFAULT_LOG_LINES } = {}) => {
       const result = readLogTail(logFile, lines);
-      return { source: result.path, totalLines: result.totalLines, count: result.lines.length, lines: result.lines };
+      return {
+        source: result.path,
+        fileSizeBytes: result.fileSizeBytes,
+        readBytes: result.readBytes,
+        windowTruncated: result.windowTruncated,
+        availableLines: result.availableLines,
+        count: result.lines.length,
+        lines: result.lines,
+      };
     },
   });
 
