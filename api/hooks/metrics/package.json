@@ -1,0 +1,9 @@
+{
+  "name": "metrics",
+  "version": "1.0.0",
+  "description": "Prometheus metrics endpoint and collectors for restoapp",
+  "main": "index.js",
+  "dependencies": {
+    "prom-client": "^15.1.3"
+  }
+}
