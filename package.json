@@ -24,6 +24,7 @@
     "node-red": "^4.0.5",
     "node-schedule": "^2.1.1",
     "patch-package": "^6.5.1",
+    "prom-client": "^15.1.3",
     "rc": "^1.2.8",
     "sails": "1.5.11",
     "sails-adminpanel": "^4.7.0-build.190",
