@@ -96,6 +96,16 @@ module.exports.adminpanel = {
     allowMIME: ['image/*'],
     maxByteSize: 5 * 1024 * 1024,
   },
+  // sails-adminpanel 5 always enables NavigationApp, and its constructor has no
+  // defaults for these keys — without the block `setup()` throws on
+  // `config.items.map(...)`, which aborts hook init before the admin middleware
+  // is mounted (i.e. /admin silently falls through to the frontend SPA).
+  navigation: {
+    items: [],
+    groupField: [],
+    sections: [],
+    movingGroupsRootOnly: false,
+  },
   policies: [],
   brand: {
     link: {

@@ -17,6 +17,7 @@ module.exports.http = {
     middleware: {
         order: [
             'startRequestTimer',
+            'metrics',
             'bodyParser',
             'handleBodyParserError',
             'compress',
@@ -37,6 +38,21 @@ module.exports.http = {
                 // ... more Skipper options here ...
             });
             return middlewareFn;
+        })(),
+        // Prometheus exporter: serves /metrics and times every request that
+        // follows it. Wired here rather than through the api/hooks loader
+        // because the release image sets paths.hooks = "modules", so api/hooks
+        // is never scanned — see api/hooks/metrics/setup.js.
+        // Inert until METRICS_TOKEN is set. Monitoring must never be able to
+        // keep the app from booting, so a broken exporter degrades to a
+        // pass-through instead of throwing out of the config load.
+        metrics: (function _configureMetrics() {
+            try {
+                return require('../api/hooks/metrics/setup').middleware();
+            } catch (error) {
+                console.error('Metrics exporter failed to load, continuing without it:', error && error.message);
+                return function metricsDisabled(req, res, next) { return next(); };
+            }
         })(),
         // MCP Server middleware — always loaded so global.mcp is available everywhere.
         // HTTP routes are only active when MCP_ENABLED=true.

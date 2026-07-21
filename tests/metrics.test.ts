@@ -20,21 +20,38 @@ function makeRes() {
   return res;
 }
 
-function withEnv(vars: Record<string, string | undefined>, fn: () => void) {
+/** Runs `fn` with the given env, restoring it afterwards. Sync or async `fn`. */
+function withEnv(vars: Record<string, string | undefined>, fn: () => any) {
   const previous: Record<string, string | undefined> = {};
   for (const key of Object.keys(vars)) {
     previous[key] = process.env[key];
     if (vars[key] === undefined) delete process.env[key];
     else process.env[key] = vars[key] as string;
   }
-  try {
-    fn();
-  } finally {
+
+  const restore = () => {
     for (const key of Object.keys(previous)) {
       if (previous[key] === undefined) delete process.env[key];
       else process.env[key] = previous[key] as string;
     }
+  };
+
+  let result: any;
+  try {
+    result = fn();
+  } catch (error) {
+    restore();
+    throw error;
   }
+
+  if (result && typeof result.then === "function") {
+    return result.then(
+      (value: any) => { restore(); return value; },
+      (error: any) => { restore(); throw error; },
+    );
+  }
+  restore();
+  return result;
 }
 
 // 64 hex chars — comfortably above the entropy floor.
@@ -139,6 +156,84 @@ describe("metrics hook > endpoint auth", () => {
     let nexted = false;
     await middleware(req({}, "/graphql", "POST"), makeRes(), () => { nexted = true; });
     expect(nexted).to.equal(true);
+  });
+});
+
+// ---------- wiring ----------
+
+describe("metrics hook > wiring", () => {
+  const setup = require("../api/hooks/metrics/setup");
+
+  function resetWiring() {
+    delete (global as any).__restoappMetricsInstance;
+    delete (global as any).__restoappMetricsMounted;
+    delete (global as any).__restoappMetricsCollectorsStarted;
+    delete (global as any).__restoappMetrics;
+  }
+
+  beforeEach(resetWiring);
+  after(resetWiring);
+
+  it("claims the mount before any hook can initialize", () => {
+    // config/http.js builds the chain first; index.js must see that and skip
+    // mounting a second, double-counting copy.
+    expect(setup.isMounted()).to.equal(false);
+    setup.middleware();
+    expect(setup.isMounted()).to.equal(true);
+  });
+
+  it("stays a pass-through when no token is configured", async () => {
+    await withEnv({ METRICS_TOKEN: undefined }, async () => {
+      const middleware = setup.middleware();
+      let nexted = false;
+      await middleware({ method: "GET", url: "/metrics", headers: {} }, makeRes(), () => { nexted = true; });
+      expect(nexted).to.equal(true);
+    });
+  });
+
+  it("serves the exposition once a token is configured", async () => {
+    await withEnv({ METRICS_TOKEN: STRONG_TOKEN }, async () => {
+      const middleware = setup.middleware();
+
+      const anonymous = makeRes();
+      await middleware({ method: "GET", url: "/metrics", headers: {} }, anonymous, () => {
+        throw new Error("must not fall through");
+      });
+      expect(anonymous.statusCode).to.equal(401);
+
+      const authorised = makeRes();
+      await middleware(
+        { method: "GET", url: "/metrics", headers: { authorization: `Bearer ${STRONG_TOKEN}` } },
+        authorised,
+        () => { throw new Error("must not fall through"); },
+      );
+      expect(authorised.statusCode).to.equal(200);
+      expect(authorised.body).to.contain("restoapp_build_info");
+    });
+  });
+
+  it("instruments ordinary traffic and passes it on", async () => {
+    await withEnv({ METRICS_TOKEN: STRONG_TOKEN }, async () => {
+      const middleware = setup.middleware();
+      const res: any = makeRes();
+      const listeners: Record<string, Function> = {};
+      res.on = (event: string, fn: Function) => { listeners[event] = fn; return res; };
+      res.writableEnded = true;
+
+      let nexted = false;
+      await middleware({ method: "GET", url: "/healthz", headers: {} }, res, () => { nexted = true; });
+      expect(nexted).to.equal(true);
+
+      listeners.finish();
+      const exposition: string = await setup.getInstance().metrics.registry.metrics();
+      expect(exposition).to.contain('restoapp_http_requests_total{route="health"');
+    });
+  });
+
+  it("does not start collectors when the exporter is disabled", async () => {
+    await withEnv({ METRICS_TOKEN: undefined }, async () => {
+      expect(setup.startCollectors((global as any).sails)).to.equal(false);
+    });
   });
 });
 

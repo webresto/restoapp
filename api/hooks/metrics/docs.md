@@ -275,7 +275,8 @@ sum by (route) (rate(restoapp_http_client_disconnects_total[5m])) > 0
 
 ```
 api/hooks/metrics/
-  index.js                     hook: config → registry → middleware → collectors
+  setup.js                     wiring entry points shared by both loaders
+  index.js                     sails hook definition (only used if paths.hooks points here)
   lib/config.js                env/sails.config plus the token entropy gate
   lib/registry.js              prom-client Registry and the metric catalogue
   lib/endpoint.js              GET /metrics and its authorisation
@@ -286,11 +287,38 @@ api/hooks/metrics/
   lib/collectors/database.js   periodic aggregate queries
 ```
 
-Both middlewares are mounted **synchronously in `initialize`**: express runs
-middleware in registration order, and anything mounted later (from an event
-handler) ends up behind the `frontendRoutes` catch-all in `config/http.js` and
-never runs — see the infra journal entry
-`2026-07-06-gfcafe-admin-module-assets-shadowed.md`.
+### How it gets loaded
+
+The code lives under `api/hooks/`, but it is **not** loaded by the sails hook
+loader in a deployed container: the release image copies `.sailsrc.default`,
+which sets `paths.hooks = "modules"` (Dockerfile: `cp ./.sailsrc.default
+.sailsrc`), and sails scans exactly one hooks directory. Everything under
+`api/hooks/` is therefore invisible to the loader — `index.js` initialize()
+never runs there. Two files do the real wiring, the same way the MCP server is
+wired:
+
+| File | Responsibility |
+|---|---|
+| `config/http.js` | Adds `metrics` to `middleware.order` right after `startRequestTimer` → `setup.middleware()`. Serves `/metrics` and times every request behind it. |
+| `api/bootstrap/metrics.js` | Calls `setup.startCollectors(sails)` — bootstrap runs after the ORM, so the model globals and the datastore exist. |
+
+Middleware position matters twice over: it must sit **before** the
+`frontendRoutes` catch-all in `config/http.js` (otherwise a `GET /metrics` is
+answered with the SPA `index` view — the same trap described in the infra
+journal entry `2026-07-06-gfcafe-admin-module-assets-shadowed.md`), and putting
+it first in the chain makes the recorded duration the one the client actually
+experienced.
+
+`setup.middleware()` is called while the config file is being read, before the
+`sails` global exists, so it builds nothing at that point: config, registry and
+device tracker are created on the first request or when the collectors start,
+whichever comes first. A failure to load the exporter is caught in
+`config/http.js` and degrades to a pass-through — monitoring must never keep the
+app from booting.
+
+`index.js` remains a valid sails hook for installations that do point
+`paths.hooks` at `api/hooks`; it delegates to the same `setup.js` and refuses to
+mount a second copy of the middleware.
 
 The registry lives on `global` for the same reason `getEmitter()` does in the
 core: under `tsx` the same module can be instantiated twice, and a
