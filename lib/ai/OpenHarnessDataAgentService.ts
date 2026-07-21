@@ -85,6 +85,8 @@ function summarizeMcpResult(toolName: string, result: unknown): Record<string, u
  * they are loaded lazily and only when this optional agent is used.
  */
 export class OpenHarnessDataAgentService extends AbstractAiModelService {
+    // adminizer 5 dropped it from AbstractAiModelService, which now takes metadata only.
+    protected readonly adminizer: Adminizer;
     private readonly connection: OpenHarnessConnectionManager;
     private readonly defaultModel: string;
     private readonly contextWindow: number;
@@ -95,11 +97,12 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
     private modelCatalogCache: { fetchedAt: number; models: ModelOption[] } | null = null;
 
     constructor(adminizer: Adminizer, connection: OpenHarnessConnectionManager) {
-        super(adminizer, {
+        super({
             id: 'openharness',
             name: 'RestoApp Assistant',
             description: 'Streams answers and uses only Restoapp tools permitted for the current user.',
         });
+        this.adminizer = adminizer;
         this.connection = connection;
         this.defaultModel = process.env.OPENHARNESS_MODEL ?? '';
         this.contextWindow = Number(process.env.OPENHARNESS_CONTEXT_WINDOW) || 128_000;
