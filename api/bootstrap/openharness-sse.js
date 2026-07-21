@@ -5,6 +5,7 @@ const MAX_RUN_AGE_MS = 10 * 60 * 1000;
 
 const MAX_FILES = 5;
 const MAX_FILE_SIZE = 8 * 1024 * 1024;
+const MAX_EVENT_JSON_CHARS = 64 * 1024;
 // Inline cap per text attachment: roughly 64k tokens, half of the default
 // 128k context window, so a single file cannot immediately trigger compaction.
 const MAX_INLINE_TEXT_CHARS = 256 * 1024;
@@ -107,12 +108,21 @@ function buildInput(prompt, files, vision, savedFiles = []) {
 /** SSE payloads must be JSON-safe and lean; agent "done" carries the whole history. */
 function sanitizeEvent(event) {
   if (!event || typeof event !== 'object') return event;
+  let safe = event;
   if (event.type === 'done' && event.messages) {
     const { messages, ...rest } = event;
-    return rest;
+    safe = rest;
   }
-  if (event.error instanceof Error) return { ...event, error: event.error.message };
-  return event;
+  if (safe.error instanceof Error) safe = { ...safe, error: safe.error.message };
+  const json = JSON.stringify(safe);
+  if (json.length <= MAX_EVENT_JSON_CHARS) return safe;
+  return {
+    type: safe.type || 'event',
+    truncated: true,
+    originalChars: json.length,
+    message: `${safe.type || 'event'} payload was truncated to keep SSE memory bounded.`,
+    preview: `${json.slice(0, MAX_EVENT_JSON_CHARS - 1)}…`,
+  };
 }
 
 module.exports.default = async function (sails) {
