@@ -11,8 +11,8 @@
  *   - the business state the operator actually reacts to: order funnel, stuck
  *     orders, payments, RMS sync freshness, notification failures.
  *
- * Nothing in @webresto/core is patched — the business numbers come from events
- * the core already emits and from read-only aggregate queries.
+ * Business numbers come from core emitter events and read-only aggregate
+ * queries.
  *
  * Configuration lives in lib/config.js; the metric catalogue in docs.md.
  */

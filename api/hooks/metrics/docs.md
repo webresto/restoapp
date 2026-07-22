@@ -1,9 +1,9 @@
 # metrics — Prometheus exporter
 
 The hook serves `GET /metrics` in the Prometheus text exposition format
-(`prom-client`). `@webresto/core` is not patched: every business number comes
-from events the core already emits (`emitter`) and from read-only aggregate
-queries.
+(`prom-client`). Business numbers come from core emitter events and read-only
+aggregate queries; notification channel attempts use an explicit core event so
+channel/result labels stay stable.
 
 ---
 
@@ -143,7 +143,9 @@ cannot grow without bound. A process restart resets the count.
 | Metric | Meaning |
 |---|---|
 | `restoapp_orders_created_total` / `restoapp_orders_checkout_total` / `restoapp_orders_placed_total{self_service,platform}` | The funnel: cart → checkout → order. A broken conversion shows up as the rates diverging. |
+| `restoapp_orders_created_today` / `restoapp_orders_checkout_today` / `restoapp_orders_placed_today{self_service,platform}` | Same funnel for the current server-local day. Reset automatically at 00:00 server time. |
 | `restoapp_orders_amount_total{platform}` | Order totals at placement → revenue per minute via `rate()`. |
+| `restoapp_orders_amount_today{platform}` | Order totals since 00:00 server time. |
 | `restoapp_order_state_transitions_total{from,to}` | State transitions, including `to="REJECT"`. |
 | `restoapp_order_log_total{level,module}` | Volume of order log entries (all levels). |
 | `restoapp_orders_in_state{state}` | Orders per state inside the window. |
@@ -155,8 +157,10 @@ cannot grow without bound. A process restart resets the count.
 | Metric | Meaning |
 |---|---|
 | `restoapp_order_errors_total{level,module,op}` | Every `error`/`warn` entry in an order log. `op` is the operation taken from the core's message prefix: `check`, `countCart`, `addDish`, `order`, `payment`, `doPaid`, `populate`, `setTag`. |
+| `restoapp_order_errors_today{level,module,op}` | Same error count for the current server-local day. Reset automatically at 00:00 server time. |
 | `restoapp_order_errors_total{op="money_in_no_order"}` | Dedicated label for `!!! CRITICAL: MONEY-IN, ORDER-NOT-PLACED !!!` — money arrived, no order placed. Alert at zero. |
 | `restoapp_order_rejects_total{reason}` | Refusals the core handles silently (they never reach a log line): `add_dish_amount` (out of stock), `set_count_amount`, `remove_dish_missing`, `set_count_missing`, `set_comment_missing`, `dopaid_failed`. |
+| `restoapp_order_rejects_today{reason}` | Same refusal count for the current server-local day. |
 | `restoapp_notification_log_total{level,module}` | Notification delivery trace; `level="error"` is a channel refusing the message (SMS 400, FCM "no channel"). |
 
 Reading `op` — where it broke: `check` — checkout fails validation, `countCart`
@@ -195,6 +199,11 @@ exceeds an hour.
 ### Notifications
 
 `restoapp_notifications_created_total{type}`,
+`restoapp_notifications_created_by_event_total{type,event}`,
+`restoapp_notifications_created_today{type,event}` (reset at 00:00 server time),
+`restoapp_notification_delivery_attempts_total{type,event,channel,result}` (`result="success"`/`"failed"`),
+`restoapp_notification_delivery_attempts_today{type,event,channel,result}` (reset at 00:00 server time),
+`restoapp_notification_log_today{level,module}` (reset at 00:00 server time),
 `restoapp_notifications_in_status{status}` (`pending`/`processing`/`sent`/`failed`/`read`/`cancelled`),
 `restoapp_notifications_cost_window` — sum of `spentCost` over the window (SMS costs real money).
 
