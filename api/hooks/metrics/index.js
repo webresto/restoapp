@@ -12,8 +12,8 @@
  *     failures, stuck orders, payments, sales channels, RMS sync freshness,
  *     notification failures.
  *
- * Nothing in @webresto/core is patched — the business numbers come from events
- * the core already emits and from read-only aggregate queries.
+ * Business numbers come from core emitter events and read-only aggregate
+ * queries.
  *
  * NOTE: in a deployed container this file is normally NOT executed. The release
  * image sets `paths.hooks = "modules"` in .sailsrc, so sails never scans
