@@ -284,7 +284,7 @@ describe("metrics hook > db error classification", () => {
 // ---------- order failures ----------
 
 describe("metrics hook > order error attribution", () => {
-  const { operationFromMessage } = require("../api/hooks/metrics/lib/collectors/emitter");
+  const { operationFromMessage, msUntilNextLocalMidnight } = require("../api/hooks/metrics/lib/collectors/emitter");
 
   it("labels an order error with the operation that failed", () => {
     // Core writes order logs as "<operation>: <what happened>".
@@ -304,6 +304,11 @@ describe("metrics hook > order error attribution", () => {
     expect(operationFromMessage("order 6bb5587c-da6f-494f-b8b0-22e8a0c3a310 failed")).to.equal("other");
     expect(operationFromMessage("")).to.equal("other");
     expect(operationFromMessage(undefined)).to.equal("other");
+  });
+
+  it("resets daily gauges at local server midnight", () => {
+    const noon = new Date(2026, 6, 22, 12, 0, 0, 0);
+    expect(msUntilNextLocalMidnight(noon)).to.equal(12 * 60 * 60 * 1000);
   });
 });
 
@@ -397,5 +402,40 @@ describe("metrics hook > registry", () => {
       .map((line) => line.split(" ")[2]);
     expect(names.length).to.be.greaterThan(0);
     for (const name of names) expect(name).to.match(/^restoapp_/);
+  });
+
+  it("exports notification success/failure attempts by channel and trigger", async () => {
+    const { getRegistry } = freshRegistry();
+    const metrics = getRegistry({
+      defaultLabels: {},
+      collectDefaultMetrics: false,
+      buildInfo: { version: "", commit: "", branch: "", node: "", staging: "0" },
+    });
+    metrics.notificationsCreatedByEvent.inc({ type: "order-paid", event: "order:paid" });
+    metrics.notificationDeliveryAttempts.inc({ type: "order-paid", event: "order:paid", channel: "fcm-web", result: "success" });
+    metrics.notificationDeliveryAttempts.inc({ type: "order-paid", event: "order:paid", channel: "sms", result: "failed" });
+
+    const exposition: string = await metrics.registry.metrics();
+    expect(exposition).to.contain('restoapp_notifications_created_by_event_total{type="order-paid",event="order:paid"} 1');
+    expect(exposition).to.contain('restoapp_notification_delivery_attempts_total{type="order-paid",event="order:paid",channel="fcm-web",result="success"} 1');
+    expect(exposition).to.contain('restoapp_notification_delivery_attempts_total{type="order-paid",event="order:paid",channel="sms",result="failed"} 1');
+  });
+
+  it("keeps resettable daily gauges separate from lifetime counters", async () => {
+    const { getRegistry } = freshRegistry();
+    const { resetDailyGauges } = require("../api/hooks/metrics/lib/collectors/emitter");
+    const metrics = getRegistry({
+      defaultLabels: {},
+      collectDefaultMetrics: false,
+      buildInfo: { version: "", commit: "", branch: "", node: "", staging: "0" },
+    });
+    const labels = { type: "order-paid", event: "order:paid", channel: "sms", result: "failed" };
+    metrics.notificationDeliveryAttempts.inc(labels);
+    metrics.notificationDeliveryAttemptsToday.inc(labels);
+
+    resetDailyGauges(metrics);
+    const exposition: string = await metrics.registry.metrics();
+    expect(exposition).to.contain('restoapp_notification_delivery_attempts_total{type="order-paid",event="order:paid",channel="sms",result="failed"} 1');
+    expect(exposition).not.to.contain('restoapp_notification_delivery_attempts_today{type="order-paid",event="order:paid",channel="sms",result="failed"}');
   });
 });

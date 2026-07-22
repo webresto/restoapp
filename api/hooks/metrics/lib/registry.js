@@ -97,15 +97,21 @@ function getRegistry(config) {
 
     // ─── Order funnel (event-driven counters) ────────────────────────────
     ordersCreated: counter('orders_created_total', 'Carts created.'),
+    ordersCreatedToday: gauge('orders_created_today', 'Carts created since local server midnight.'),
     ordersCheckout: counter('orders_checkout_total', 'Checkouts initiated (core:order-init-checkout).'),
+    ordersCheckoutToday: gauge('orders_checkout_today', 'Checkouts initiated since local server midnight.'),
     ordersPlaced: counter('orders_placed_total', 'Orders successfully placed.', ['self_service', 'platform']),
+    ordersPlacedToday: gauge('orders_placed_today', 'Orders successfully placed since local server midnight.', ['self_service', 'platform']),
     ordersAmount: counter('orders_amount_total', 'Sum of order totals at placement, in store currency.', ['platform']),
+    ordersAmountToday: gauge('orders_amount_today', 'Sum of order totals at placement since local server midnight, in store currency.', ['platform']),
     orderTransitions: counter('order_state_transitions_total', 'Order state transitions observed.', ['from', 'to']),
     orderLog: counter('order_log_total', 'Entries written to the per-order log, by level and module.', ['level', 'module']),
 
     // ─── Order failures (what to actually react to) ──────────────────────
     orderErrors: counter('order_errors_total', 'Error/warning entries in order logs, by the operation that failed.', ['level', 'module', 'op']),
+    orderErrorsToday: gauge('order_errors_today', 'Error/warning entries in order logs since local server midnight.', ['level', 'module', 'op']),
     orderRejects: counter('order_rejects_total', 'Cart operations the core refused, by reason.', ['reason']),
+    orderRejectsToday: gauge('order_rejects_today', 'Cart operations the core refused since local server midnight, by reason.', ['reason']),
 
     // ─── Order gauges (from the database) ────────────────────────────────
     ordersInState: gauge('orders_in_state', 'Orders per state inside the metrics window.', ['state']),
@@ -143,7 +149,12 @@ function getRegistry(config) {
 
     // ─── Notifications ───────────────────────────────────────────────────
     notificationsCreated: counter('notifications_created_total', 'Notifications created, by type.', ['type']),
+    notificationsCreatedByEvent: counter('notifications_created_by_event_total', 'Notifications created, by type and business trigger.', ['type', 'event']),
+    notificationsCreatedToday: gauge('notifications_created_today', 'Notifications created since local server midnight, by type and business trigger.', ['type', 'event']),
+    notificationDeliveryAttempts: counter('notification_delivery_attempts_total', 'Notification channel send attempts by result.', ['type', 'event', 'channel', 'result']),
+    notificationDeliveryAttemptsToday: gauge('notification_delivery_attempts_today', 'Notification channel send attempts since local server midnight, by result.', ['type', 'event', 'channel', 'result']),
     notificationLog: counter('notification_log_total', 'Entries written to the per-notification delivery log, by level.', ['level', 'module']),
+    notificationLogToday: gauge('notification_log_today', 'Entries written to the per-notification delivery log since local server midnight.', ['level', 'module']),
     notificationsInStatus: gauge('notifications_in_status', 'Notifications per status inside the metrics window.', ['status']),
     notificationsCost: gauge('notifications_cost_window', 'Sum of spentCost for notifications inside the metrics window.'),
 

@@ -3,9 +3,8 @@
 /**
  * Business counters, fed from the core AwaitEmitter.
  *
- * Nothing in @webresto/core is patched: every number here comes from events the
- * core already emits, so a core upgrade cannot break the app and, at worst,
- * makes a counter go flat.
+ * Labels are kept bounded here so a bad payload cannot create unbounded
+ * Prometheus series.
  *
  * All handlers are synchronous on purpose — AwaitEmitter runs a handler that
  * returns a promise in parallel and applies its timeout bookkeeping to it, so a
@@ -14,6 +13,19 @@
 
 /** Subscriber id: re-subscribing with the same id replaces, never duplicates. */
 const SUBSCRIBER_ID = 'metrics';
+const DAILY_RESET_GLOBAL_KEY = '__restoappMetricsDailyResetTimer';
+
+const DAILY_GAUGES = [
+  'ordersCreatedToday',
+  'ordersCheckoutToday',
+  'ordersPlacedToday',
+  'ordersAmountToday',
+  'orderErrorsToday',
+  'orderRejectsToday',
+  'notificationsCreatedToday',
+  'notificationDeliveryAttemptsToday',
+  'notificationLogToday',
+];
 
 /** Bounded label sanitiser for values that originate outside our code. */
 const SAFE_LABEL = /^[A-Za-z0-9_.:-]{1,40}$/;
@@ -36,6 +48,36 @@ function operationFromMessage(message) {
   if (/CRITICAL: MONEY-IN/i.test(raw)) return 'money_in_no_order';
   const prefix = raw.split(':')[0].trim();
   return SAFE_LABEL.test(prefix) ? prefix : 'other';
+}
+
+function msUntilNextLocalMidnight(now = new Date()) {
+  const next = new Date(now);
+  next.setHours(24, 0, 0, 0);
+  return Math.max(1, next.getTime() - now.getTime());
+}
+
+function resetDailyGauges(metrics) {
+  for (const name of DAILY_GAUGES) {
+    if (metrics[name] && typeof metrics[name].reset === 'function') metrics[name].reset();
+  }
+}
+
+function scheduleDailyReset(metrics, sails) {
+  const existing = global[DAILY_RESET_GLOBAL_KEY];
+  if (existing) clearTimeout(existing);
+
+  const schedule = () => {
+    global[DAILY_RESET_GLOBAL_KEY] = setTimeout(() => {
+      resetDailyGauges(metrics);
+      sails.log.info('Metrics > reset daily gauges at local server midnight');
+      schedule();
+    }, msUntilNextLocalMidnight());
+    if (typeof global[DAILY_RESET_GLOBAL_KEY].unref === 'function') {
+      global[DAILY_RESET_GLOBAL_KEY].unref();
+    }
+  };
+
+  schedule();
 }
 
 /**
@@ -62,24 +104,32 @@ function rememberState(orderId, state) {
  */
 function subscribe(metrics, sails) {
   const emitter = global.emitter;
+  scheduleDailyReset(metrics, sails);
 
   // ── Order funnel ────────────────────────────────────────────────────────
   emitter.on('core:order-after-create', SUBSCRIBER_ID, function (order) {
     metrics.ordersCreated.inc();
+    metrics.ordersCreatedToday.inc();
     if (order && order.id) rememberState(order.id, order.state || 'NEW');
   });
 
   emitter.on('core:order-init-checkout', SUBSCRIBER_ID, function () {
     metrics.ordersCheckout.inc();
+    metrics.ordersCheckoutToday.inc();
   });
 
   emitter.on('core:order-after-order', SUBSCRIBER_ID, function (order) {
     // orderedOnPlatform is the sales-channel signal carried by the order itself
     // (SalesChannel.platforms maps these values onto a configured channel).
     const platform = safeLabel(order && order.orderedOnPlatform, 'unknown');
-    metrics.ordersPlaced.inc({ self_service: order && order.selfService ? 'true' : 'false', platform });
+    const labels = { self_service: order && order.selfService ? 'true' : 'false', platform };
+    metrics.ordersPlaced.inc(labels);
+    metrics.ordersPlacedToday.inc(labels);
     const total = order && Number(order.total);
-    if (Number.isFinite(total) && total > 0) metrics.ordersAmount.inc({ platform }, total);
+    if (Number.isFinite(total) && total > 0) {
+      metrics.ordersAmount.inc({ platform }, total);
+      metrics.ordersAmountToday.inc({ platform }, total);
+    }
   });
 
   // The core does not publish the previous state, so it is tracked here.
@@ -101,7 +151,9 @@ function subscribe(metrics, sails) {
     const module = safeLabel(entry.module, 'unknown');
     metrics.orderLog.inc({ level, module });
     if (level === 'error' || level === 'warn') {
-      metrics.orderErrors.inc({ level, module, op: operationFromMessage(entry.message) });
+      const labels = { level, module, op: operationFromMessage(entry.message) };
+      metrics.orderErrors.inc(labels);
+      metrics.orderErrorsToday.inc(labels);
     }
   });
 
@@ -115,12 +167,16 @@ function subscribe(metrics, sails) {
     'core:order-set-comment-reject-no-orderdish': 'set_comment_missing',
   };
   for (const [event, reason] of Object.entries(rejects)) {
-    emitter.on(event, SUBSCRIBER_ID, () => metrics.orderRejects.inc({ reason }));
+    emitter.on(event, SUBSCRIBER_ID, () => {
+      metrics.orderRejects.inc({ reason });
+      metrics.orderRejectsToday.inc({ reason });
+    });
   }
 
   // Money in, order not placed — the one failure the core itself calls critical.
   emitter.on('core:order-after-dopaid-error', SUBSCRIBER_ID, function () {
     metrics.orderRejects.inc({ reason: 'dopaid_failed' });
+    metrics.orderRejectsToday.inc({ reason: 'dopaid_failed' });
   });
 
   // ── Payments ────────────────────────────────────────────────────────────
@@ -172,9 +228,31 @@ function subscribe(metrics, sails) {
 
   // ── Notifications ───────────────────────────────────────────────────────
   emitter.on('core:notification-created', SUBSCRIBER_ID, function (notification) {
+    const type = safeLabel(notification && notification.notificationTypeKey, 'unknown');
+    const event = safeLabel(notification && notification.eventKey, 'unknown');
     metrics.notificationsCreated.inc({
-      type: safeLabel(notification && notification.notificationTypeKey, 'unknown'),
+      type,
     });
+    metrics.notificationsCreatedByEvent.inc({
+      type,
+      event,
+    });
+    metrics.notificationsCreatedToday.inc({
+      type,
+      event,
+    });
+  });
+
+  emitter.on('core:notification-delivery-attempt', SUBSCRIBER_ID, function (notification, attempt) {
+    if (!attempt) return;
+    const labels = {
+      type: safeLabel(notification && notification.notificationTypeKey, 'unknown'),
+      event: safeLabel(notification && notification.eventKey, 'unknown'),
+      channel: safeLabel(attempt.channel, 'unknown'),
+      result: attempt.result === 'success' ? 'success' : 'failed',
+    };
+    metrics.notificationDeliveryAttempts.inc(labels);
+    metrics.notificationDeliveryAttemptsToday.inc(labels);
   });
 
   // Delivery waterfall trace: level="error" here is a channel that refused the
@@ -182,6 +260,10 @@ function subscribe(metrics, sails) {
   emitter.on('core:notification-log', SUBSCRIBER_ID, function (notification, entry) {
     if (!entry) return;
     metrics.notificationLog.inc({
+      level: safeLabel(entry.level, 'unknown'),
+      module: safeLabel(entry.module, 'unknown'),
+    });
+    metrics.notificationLogToday.inc({
       level: safeLabel(entry.level, 'unknown'),
       module: safeLabel(entry.module, 'unknown'),
     });
@@ -237,4 +319,4 @@ function start(sails, metrics) {
   return () => { if (timer) clearInterval(timer); };
 }
 
-module.exports = { start, subscribe, operationFromMessage };
+module.exports = { start, subscribe, operationFromMessage, msUntilNextLocalMidnight, resetDailyGauges };
