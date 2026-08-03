@@ -85,6 +85,16 @@ docker build -t ghcr.io/webresto/restoapp:latest .
 ## Setup
 We currently only support installation via docker. Look at this image [ghcr.io/webresto/restoapp](https://github.com/webresto/restoapp/pkgs/container/restoapp)
 
+### Running from Source
+
+If you run the app directly (e.g. `npx tsx restoapp.js`) instead of via Docker, you must build the admin panel's Vite bundle for `local_modules/core` yourself — the Dockerfile does this during image build (`npm run build:adminizer`), but a plain source checkout does not build it automatically:
+
+```bash
+cd local_modules/core && npm run build:adminizer
+```
+
+Without this step, admin panel pages that load widgets from `local_modules/core` (e.g. `/admin/setup-checklist`) will fail silently in the browser console with `Failed to load module script: ... MIME type of "text/html"`, because the missing static asset falls through to the frontend's catch-all route instead of returning a 404.
+
 ## Usage
 
 
