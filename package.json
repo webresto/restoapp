@@ -47,7 +47,7 @@
     "test3": "npx mocha -r ts-node/register/transpile-only \"tests/**/*.test.ts\" --exit",
     "test": "TS_NODE_SKIP_IGNORE=true TS_NODE_COMPILER_OPTIONS='{\"module\":\"commonjs\",\"esModuleInterop\":true}' ./node_modules/.bin/mocha -r ts-node/register/transpile-only \"tests/**/*.test.ts\" --exit",
     "migrate": "db-migrate up:all --env prod",
-    "postinstall": "patch-package --patch-dir=.ci/patchset",
+    "postinstall": "patch-package --patch-dir=.ci/patchset && npm run build:adminizer --prefix local_modules/core",
     "tslint": "npx eslint .",
     "build:openharness-ui": "vite build -c api/hooks/openharness-ui/vite.config.js",
     "start": "npx tsx restoapp.js"
