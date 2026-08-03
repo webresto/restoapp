@@ -106,6 +106,7 @@ module.exports.adminpanel = {
     sections: [],
     movingGroupsRootOnly: false,
   },
+  middlewares: [],
   policies: [],
   brand: {
     link: {

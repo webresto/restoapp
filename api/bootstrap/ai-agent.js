@@ -12,17 +12,14 @@ module.exports.default = async function (sails) {
     try {
       const adminizer = sails.hooks.adminpanel.adminizer;
 
-      // OpenHarness is configured independently from the legacy OpenAI agent.
-      // Do not let the legacy OpenAI toggle prevent Adminizer from creating
-      // aiAssistantHandler for later model registration.
       if (!adminizer.config.aiAssistant?.enabled) {
-        adminizer.config.aiAssistant = {
-          ...(adminizer.config.aiAssistant ?? {}),
-          enabled: true,
-          models: adminizer.config.aiAssistant?.models ?? [],
-          defaultModel: adminizer.config.aiAssistant?.defaultModel ?? 'openharness',
-        };
-        sails.log.info('Bootstrap > Enabling AI Assistant for OpenHarness model registration.');
+        sails.log.info('Bootstrap > AI Assistant disabled in config; skipping OpenHarness initialization.');
+        return;
+      }
+
+      if (!adminizer.aiAssistantHandler) {
+        sails.log.warn('Bootstrap > AI Assistant handler is unavailable; skipping OpenHarness initialization.');
+        return;
       }
 
       // Connection manager: resolves setting/env keys or self-registers through
