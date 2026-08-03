@@ -27,6 +27,7 @@ module.exports = function openharnessUiHook(sails) {
       sails.on('Adminpanel:loaded', () => {
         const adminizer = sails.hooks.adminpanel?.adminizer;
         if (!adminizer) return;
+        if (!adminizer.config.aiAssistant?.enabled) return;
         const prefix = adminizer.config.routePrefix;
 
         const navbarEntry = {

@@ -7,8 +7,7 @@ declare const sails: any;
 export default function() {
 
     const installStepperPolicy = function (req: any, res: any, proceed: ()=>void) {
-        if (!req.user && !req.user) {
-            // console.log("No UserAP session and no req.user, proceeding");
+        if (!req.user) {
             return proceed();
         }
 
@@ -39,15 +38,13 @@ export default function() {
 		return res.redirect(redirectUrl);
     };
 
-    if (Array.isArray(sails.config.adminpanel.policies) && typeof sails.config.adminpanel.policies[0] !== "string") {
+    if (Array.isArray(sails.config.adminpanel.middlewares) && typeof sails.config.adminpanel.middlewares[0] !== "string") {
         if (!sails.config.modulemanager.state.installStepperPolicyBound) {
-            // @ts-ignore
-			// console.log(">>>>>", sails.config.adminpanel.policies)
-            sails.config.adminpanel.policies.push(installStepperPolicy);
+            sails.config.adminpanel.middlewares.push(installStepperPolicy);
             sails.config.modulemanager.state.installStepperPolicyBound = true;
         }
     } else {
-        sails.log.error("Can not bind install stepper. Policies is not array");
+        sails.log.error("Can not bind install stepper. Middlewares is not array");
     }
 };
 

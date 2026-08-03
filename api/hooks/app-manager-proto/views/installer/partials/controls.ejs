@@ -7,9 +7,22 @@
             <%= __("Skip") %>
         </button>
     </div>
+    <div id="installer-error" class="text-sm text-red-600" hidden></div>
 </div>
 
 <script>
+    function setInstallerError(message) {
+        const errorNode = document.getElementById("installer-error");
+        if (!errorNode) return;
+        if (!message) {
+            errorNode.textContent = "";
+            errorNode.setAttribute("hidden", true);
+            return;
+        }
+        errorNode.textContent = message;
+        errorNode.removeAttribute("hidden");
+    }
+
     let skipButton = document.getElementById("skip");
     if (!currentStepData.canBeSkipped) {
         skipButton.setAttribute("hidden", true);
@@ -45,9 +58,8 @@
             const formElements = form.elements;
             let inputData = {}; // object to collect form fields
             let filesCounter = 0;
-
-            let hasFiles = false;
             
+            data = new FormData();
             for (let i = 0; i < formElements.length; i++) {
                 const element = formElements[i];
 
@@ -55,8 +67,15 @@
                     const files = element.files;
 
                     if (files.length > 0) {
-                        hasFiles = true;
                         filesCounter += files.length;
+                        for (let j = 0; j < files.length; j++) {
+                            const file = files[j];
+                            data.append(
+                                `files_${i}_${j}`,
+                                file,
+                                `${element.name || 'file'}_${j}_${file.name.replace(/\s+/g, '')}`
+                            );
+                        }
                     }
 
                 } else {
@@ -66,37 +85,11 @@
                 }
             }
 
-            if (hasFiles) {
-                // Use FormData for file uploads
-                console.log('Files detected, using FormData instead of JSON');
-                
-                data = new FormData();
-                data.append('inputData', JSON.stringify(inputData));
-                data.append('action', 'next');
-                data.append('currentStepId', currentStepData.id);
-                data.append('filesCounter', filesCounter);
-
-                // Add files to FormData
-                let fileIndex = 0;
-                for (let i = 0; i < formElements.length; i++) {
-                    const element = formElements[i];
-                    if (element.tagName === 'INPUT' && element.type === 'file' && element.files.length > 0) {
-                        for (let j = 0; j < element.files.length; j++) {
-                            const file = element.files[j];
-                            data.append(`files_${fileIndex}`, file, `${element.name}_${fileIndex}_${file.name.replace(/\s+/g, '')}`);
-                            fileIndex++;
-                        }
-                    }
-                }
-            } else {
-                // No files, use JSON
-                data.inputData = inputData;
-                data.action = 'next';
-                data.currentStepId = currentStepData.id;
-                data.filesCounter = 0;
-            }
-
-            console.log('Data to send:', hasFiles ? 'FormData with files' : data);
+            data.append('inputData', JSON.stringify(inputData));
+            data.append('action', 'next');
+            data.append('currentStepId', currentStepData.id);
+            data.append('filesCounter', String(filesCounter));
+            console.log('Data to send:', 'FormData');
         }
 
         // Get CSRF token from cookie
@@ -119,21 +112,28 @@
             headers['x-xsrf-token'] = csrfToken;
         }
 
+        setInstallerError("");
         fetch(`/admin/install/<%=stepperId%>`, {
             method: 'POST',
             headers: headers,
             body: isFormData ? data : JSON.stringify(data)
         })
-            .then(response => {
+            .then(async response => {
                 if (!response.ok) {
-                    throw new Error('Network response was not ok');
+                    const errorText = await response.text();
+                    throw new Error(errorText || 'Network response was not ok');
                 } else {
+                    if (response.redirected && response.url) {
+                        window.location.href = response.url;
+                        return;
+                    }
                     location.reload();
                     console.log('Data sent successfully:', data);
                 }
             })
             .catch(error => {
                 console.error('Error sending data:', error);
+                setInstallerError(error?.message || 'Failed to save step');
             });
     }
 
@@ -158,21 +158,28 @@
             headers['x-xsrf-token'] = csrfToken;
         }
 
+        setInstallerError("");
         fetch(`/admin/install/<%=stepperId%>`, {
             method: 'POST',
             headers: headers,
             body: JSON.stringify(data)
         })
-            .then(response => {
+            .then(async response => {
                 if (!response.ok) {
-                    throw new Error('Network response was not ok');
+                    const errorText = await response.text();
+                    throw new Error(errorText || 'Network response was not ok');
                 } else {
+                    if (response.redirected && response.url) {
+                        window.location.href = response.url;
+                        return;
+                    }
                     location.reload();
                     console.log('Data sent successfully');
                 }
             })
             .catch(error => {
                 console.error('Error sending data:', error);
+                setInstallerError(error?.message || 'Failed to skip step');
             });
 
     }

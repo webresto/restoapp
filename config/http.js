@@ -16,12 +16,9 @@ if (process.env.OPENHARNESS_MCP_TOOLS !== 'false') {
 module.exports.http = {
     middleware: {
         order: [
-            'startRequestTimer',
             'metrics',
             'bodyParser',
-            'handleBodyParserError',
             'compress',
-            'methodOverride',
             'cookieParser',
             'session',
             'poweredBy',
