@@ -1,9 +1,11 @@
 import { z } from 'zod';
 import { AbstractAiModelService, Adminizer, DataAccessor, ModelConfig, UserAP } from 'adminizer';
+import type { AiAgentLimits, AiAgentUiHints } from 'adminizer';
 import { AdminLinkProvider } from '../../api/hooks/openharness-ui/AdminLinkProvider';
 import { loadSystemPrompt, normalizePromptKey, promptExists } from './loadSystemPrompt';
 import { isRevokedKeyError, summarizeLlmError } from './OpenHarnessConnectionManager';
-import type { OpenHarnessConnectionManager, OpenHarnessCredentials } from './OpenHarnessConnectionManager';
+import type { ConnectionStatus, OpenHarnessConnectionManager, OpenHarnessCredentials } from './OpenHarnessConnectionManager';
+import type { LlmLimitsService } from './LlmLimitsService';
 
 // RestoApp's standard LiteLLM gateway; the actual endpoint + key come from the
 // OpenHarnessConnectionManager (setting / env / broker-issued).
@@ -25,6 +27,30 @@ type ModelOption = {
     // not expose a price for this model.
     costCoefficient: number | null;
 };
+
+const BROKER_WAITING_DESCRIPTION = 'The assistant registers itself with the LLM gateway. The broker issues at most one key per hour, so this can take a while — the page keeps retrying automatically.';
+const BROKER_ERROR_DESCRIPTION = 'The assistant registers itself with the LLM gateway. The page will retry automatically.';
+
+// Only the agent-owned copy lives here; everything else in the panel is
+// translated by the shared UI bundle.
+const HINTS_RU: Record<string, string> = {
+    'Ask about the RestoApp data available to your account.': 'Спросите о данных RestoApp, доступных вашей учётной записи.',
+    'Ask about your data… type / for commands': 'Спросите о своих данных… введите / для команд',
+    'What can you do? List the data models, admin pages and tools available to me.': 'Что ты умеешь? Перечисли доступные мне модели данных, страницы админки и инструменты.',
+    'Connecting the assistant…': 'Подключение ассистента…',
+    'Waiting for the next registration slot': 'Ожидание следующего окна регистрации',
+    'Next attempt at': 'Следующая попытка в',
+    'Server setup required': 'Требуется завершить настройку сервера',
+    'Set the PROJECT_NAME setting to finish the server setup — the assistant needs it to register.': 'Заполните настройку PROJECT_NAME, чтобы завершить настройку сервера — она нужна ассистенту для регистрации.',
+    'Registration attempt failed': 'Попытка регистрации не удалась',
+    'Open settings': 'Открыть настройки',
+    'Set a key manually': 'Указать ключ вручную',
+    [BROKER_WAITING_DESCRIPTION]: 'Ассистент регистрируется на LLM-шлюзе. Брокер выдаёт не более одного ключа в час, поэтому это может занять время — страница повторяет попытки автоматически.',
+    [BROKER_ERROR_DESCRIPTION]: 'Ассистент регистрируется на LLM-шлюзе. Страница повторит попытку автоматически.',
+};
+
+const translateHint = (locale: string | undefined, text: string): string =>
+    locale?.toLowerCase().split(/[-_]/)[0] === 'ru' ? HINTS_RU[text] ?? text : text;
 
 function truncateText(value: string, maxChars: number): { text: string; truncated: boolean; originalChars: number } {
     if (value.length <= maxChars) return { text: value, truncated: false, originalChars: value.length };
@@ -88,6 +114,7 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
     // adminizer 5 dropped it from AbstractAiModelService, which now takes metadata only.
     protected readonly adminizer: Adminizer;
     private readonly connection: OpenHarnessConnectionManager;
+    private readonly limits: LlmLimitsService | null;
     private readonly defaultModel: string;
     private readonly contextWindow: number;
     private readonly defaultVision: boolean;
@@ -96,7 +123,7 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
     private readonly selectedModels = new Map<number, string>();
     private modelCatalogCache: { fetchedAt: number; models: ModelOption[] } | null = null;
 
-    constructor(adminizer: Adminizer, connection: OpenHarnessConnectionManager) {
+    constructor(adminizer: Adminizer, connection: OpenHarnessConnectionManager, limits?: LlmLimitsService) {
         super({
             id: 'openharness',
             name: 'RestoApp Assistant',
@@ -104,6 +131,7 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
         });
         this.adminizer = adminizer;
         this.connection = connection;
+        this.limits = limits ?? null;
         this.defaultModel = process.env.OPENHARNESS_MODEL ?? '';
         this.contextWindow = Number(process.env.OPENHARNESS_CONTEXT_WINDOW) || 128_000;
         // Image attachments are forwarded to the model only when the selected
@@ -127,6 +155,72 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
 
     private getCredentials(): OpenHarnessCredentials | null {
         return this.connection.getCredentialsSync();
+    }
+
+    /**
+     * Connection state for the assistant panel. `refresh()` (not `getStatus()`)
+     * so that UI polling also re-reads the setting: an admin who pastes a key
+     * gets a working assistant without restarting the server.
+     */
+    public async getConnectionStatus(): Promise<ConnectionStatus> {
+        return this.connection.refresh();
+    }
+
+    /**
+     * Budget / rate limits of the active key. null hides the block in the panel
+     * (no key yet, or the limits service was not wired up).
+     */
+    public async getLimits(forceRefresh: boolean): Promise<AiAgentLimits | null> {
+        const credentials = this.getCredentials();
+        if (!credentials || !this.limits) return null;
+        return await this.limits.getLimits(credentials, this.connection.getBrokerLimits(), forceRefresh);
+    }
+
+    /**
+     * Panel copy owned by this agent: RestoApp wording plus the screens shown
+     * while the broker registration is still running.
+     */
+    public getUiHints(locale?: string): AiAgentUiHints {
+        const text = (value: string) => translateHint(locale, value);
+        const settingsUrl = (setting: string) => `${this.adminizer.config.routePrefix}/settings-manager#${setting}`;
+        const retryDetails = [
+            { field: 'nextAttemptAt', label: text('Next attempt at'), format: 'local-time' as const },
+            { field: 'lastError', tone: 'error' as const },
+        ];
+        return {
+            title: this.name,
+            welcomeHint: text('Ask about the RestoApp data available to your account.'),
+            composerPlaceholder: text('Ask about your data… type / for commands'),
+            suggestions: [text('What can you do? List the data models, admin pages and tools available to me.')],
+            setupSetting: 'OPENHARNESS_CONNECTION',
+            setupUrl: settingsUrl('OPENHARNESS_CONNECTION'),
+            connectionScreens: {
+                registering: {
+                    title: text('Connecting the assistant…'),
+                    description: text(BROKER_WAITING_DESCRIPTION),
+                    icon: 'spinner',
+                },
+                waiting_retry: {
+                    title: text('Waiting for the next registration slot'),
+                    description: text(BROKER_WAITING_DESCRIPTION),
+                    icon: 'spinner',
+                    details: retryDetails,
+                },
+                setup_required: {
+                    title: text('Server setup required'),
+                    description: text('Set the PROJECT_NAME setting to finish the server setup — the assistant needs it to register.'),
+                    icon: 'bot',
+                    action: { label: text('Open settings'), href: settingsUrl('PROJECT_NAME') },
+                },
+                error: {
+                    title: text('Registration attempt failed'),
+                    description: text(BROKER_ERROR_DESCRIPTION),
+                    icon: 'error',
+                    details: retryDetails,
+                    action: { label: text('Set a key manually'), href: settingsUrl('OPENHARNESS_CONNECTION') },
+                },
+            },
+        };
     }
 
     public async generateReply(prompt: string, _history: any[], user: UserAP): Promise<string> {
