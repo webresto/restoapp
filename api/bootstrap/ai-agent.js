@@ -27,11 +27,14 @@ module.exports.default = async function (sails) {
       const {OpenHarnessConnectionManager} = require('../../lib/ai/OpenHarnessConnectionManager');
       const {LlmLimitsService} = require('../../lib/ai/LlmLimitsService');
       const connectionManager = new OpenHarnessConnectionManager();
+      const limitsService = new LlmLimitsService();
       adminizer.openHarnessConnectionManager = connectionManager;
-      adminizer.openHarnessLimitsService = new LlmLimitsService();
+      adminizer.openHarnessLimitsService = limitsService;
 
       const {OpenHarnessDataAgentService} = require('../../lib/ai/OpenHarnessDataAgentService');
-      const openHarnessAgent = new OpenHarnessDataAgentService(adminizer, connectionManager);
+      // The agent owns the connection + limits readouts the assistant panel
+      // polls (getConnectionStatus / getLimits), so both are handed to it.
+      const openHarnessAgent = new OpenHarnessDataAgentService(adminizer, connectionManager, limitsService);
 
       // The agent is registered even before a key is available: the admin page
       // shows a registration loader (driven by /api/openharness/status) until

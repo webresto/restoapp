@@ -190,19 +190,31 @@ export class OpenHarnessConnectionManager {
         this.changeListeners.push(listener);
     }
 
-    /** Declare settings, seed the connection setting, and start resolution. */
+    /**
+     * Declare settings, seed the connection setting, and start resolution.
+     *
+     * Never throws: a failure here (unavailable Settings model, unreachable
+     * datastore) used to leave the manager stuck in `registering` forever, with
+     * the agent answering "not connected" and nothing retrying. It is recorded
+     * as an error state with a retry instead, so the panel can show the reason.
+     */
     public async init(): Promise<void> {
-        const SettingsModel = (globalThis as any).Settings;
-        SettingsModel.setDeclaredSetting(CONNECTION_SETTING);
-        SettingsModel.setDeclaredSetting(BROKER_STATE_SETTING);
-        if (await SettingsModel.get(CONNECTION_SETTING) === undefined) {
-            await SettingsModel.set(CONNECTION_SETTING, {
-                value: { provider: 'auto', baseUrl: '', apiKey: '' },
-                type: 'json',
-                jsonSchema: CONNECTION_JSON_SCHEMA,
-                name: 'OpenHarness LLM connection',
-                description: 'Endpoint + API key for the RestoApp Assistant. Empty apiKey = auto-register through the LiteLLM frontend broker.',
-            });
+        try {
+            const SettingsModel = (globalThis as any).Settings;
+            SettingsModel.setDeclaredSetting(CONNECTION_SETTING);
+            SettingsModel.setDeclaredSetting(BROKER_STATE_SETTING);
+            if (await SettingsModel.get(CONNECTION_SETTING) === undefined) {
+                await SettingsModel.set(CONNECTION_SETTING, {
+                    value: { provider: 'auto', baseUrl: '', apiKey: '' },
+                    type: 'json',
+                    jsonSchema: CONNECTION_JSON_SCHEMA,
+                    name: 'OpenHarness LLM connection',
+                    description: 'Endpoint + API key for the RestoApp Assistant. Empty apiKey = auto-register through the LiteLLM frontend broker.',
+                });
+            }
+        } catch (error: any) {
+            this.failWithRetry(error, 'settings are unavailable');
+            return;
         }
         await this.refresh();
     }
@@ -238,10 +250,18 @@ export class OpenHarnessConnectionManager {
         };
     }
 
-    /** Re-read config, resolve credentials, and (re)start registration if needed. */
+    /**
+     * Re-read config, resolve credentials, and (re)start registration if needed.
+     *
+     * Resolution failures are reported as an error state with a scheduled retry
+     * rather than thrown: this is called from the panel's status polling, which
+     * must keep describing the problem instead of turning into a 500.
+     */
     public async refresh(): Promise<ConnectionStatus> {
         if (!this.resolving) {
-            this.resolving = this.resolve().finally(() => { this.resolving = null; });
+            this.resolving = this.resolve()
+                .catch((error: any) => this.failWithRetry(error, 'credential resolution failed'))
+                .finally(() => { this.resolving = null; });
         }
         await this.resolving;
         return this.getStatus();
@@ -404,6 +424,14 @@ export class OpenHarnessConnectionManager {
             this.scheduleNextAttempt(NETWORK_RETRY_MS);
             sails.log.warn(`OpenHarness > broker registration attempt failed: ${this.lastError}`);
         }
+    }
+
+    /** Record an unexpected failure so the UI can show it, and try again later. */
+    private failWithRetry(error: unknown, context: string): void {
+        this.state = 'error';
+        this.lastError = `${context}: ${(error as any)?.message ?? String(error)}`;
+        sails.log.error(`OpenHarness > ${this.lastError}`);
+        this.scheduleNextAttempt(NETWORK_RETRY_MS);
     }
 
     private setReady(credentials: OpenHarnessCredentials, previousKey: string | null): void {
