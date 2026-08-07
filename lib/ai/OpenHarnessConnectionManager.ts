@@ -494,6 +494,8 @@ export class OpenHarnessConnectionManager {
             name: 'OpenHarness broker state',
             description: 'Runtime state: key issued by the LiteLLM frontend broker. Managed automatically.',
             readOnly: true,
+            // Holds the issued API key — DB-only, never rendered in the UI or exported.
+            secret: true,
         });
     }
 
