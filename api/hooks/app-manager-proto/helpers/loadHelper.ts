@@ -3,6 +3,7 @@ const fs = require("fs");
 let config: any = {};
 const defaults = require("../lib/defaults");
 import * as path from "path";
+import { createHash } from "crypto";
 import * as semver from "semver";
 import RuntimeModule from "../types/RuntimeModule";
 
@@ -119,12 +120,17 @@ export async function loadModule(modulePath: string, repository?: string): Promi
           const settingsFilePath = `${modulePath}/settings/${settingFile}`;
           sails.log.silly(`MM: Reading settings file: ${settingsFilePath}`);
           // Read and parse JSON explicitly to avoid require() caching issues and improve errors
-          const raw = fs.readFileSync(settingsFilePath, { encoding: 'utf-8', flag: 'r' });
+          const raw = fs.readFileSync(settingsFilePath);
+          // Fingerprint the exact file, including whitespace. SettingsHelper uses
+          // this to skip DB writes when the manifest has not changed.
+          const manifestChecksum = createHash("sha256").update(raw).digest("hex");
           let setting: Partial<Settings>;
           try {
             // Strip BOM if present, then parse
-            const text = raw.charCodeAt(0) === 0xFEFF ? raw.slice(1) : raw;
+            const rawText = raw.toString("utf8");
+            const text = rawText.charCodeAt(0) === 0xFEFF ? rawText.slice(1) : rawText;
             setting = JSON.parse(text);
+            setting.manifestChecksum = manifestChecksum;
           } catch (e) {
             throw new Error(`Invalid JSON in settings file ${settingsFilePath}: ${e.message}`);
           }

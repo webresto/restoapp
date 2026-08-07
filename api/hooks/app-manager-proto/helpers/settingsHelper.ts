@@ -38,13 +38,24 @@ export default class SettingsHelper {
 					defaultValue: settingFields.defaultValue,
 					uiSchema: settingFields.uiSchema,
 					readOnly: settingFields.readOnly,
-					isRequired: settingFields.isRequired
+					isRequired: settingFields.isRequired,
+					secret: settingFields.secret,
+					restartRequired: settingFields.restartRequired,
+					manifestChecksum: settingFields.manifestChecksum
+				}
+
+				const origSetting = await Settings.findOne({key: settingKey});
+
+				// An unchanged manifest has already been applied. Avoid Settings.set(),
+				// which otherwise updates the row and invokes hooks on every boot.
+				if (settingsSetInput.manifestChecksum && origSetting?.manifestChecksum === settingsSetInput.manifestChecksum) {
+					SettingsHelper.setDeclaredSetting(origSetting.key);
+					continue;
 				}
 
 				// If exist value we should check in Model
 				// Data from database is origin and we should not rewrite them even if type was changed, because the priority is to keep data safe
 				if (settingsSetInput.value !== undefined) {
-					let origSetting = await Settings.findOne({key: settingKey});
 					if (origSetting && origSetting.value !== undefined) {
 
 						// here we made unvalid value by schema if setting not match
