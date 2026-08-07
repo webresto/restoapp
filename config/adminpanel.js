@@ -6,7 +6,16 @@ module.exports.adminpanel = {
   filters: {
     enabled: true
   },
-  auth: true,
+  auth: {
+    enable: true,
+    // PoW CAPTCHA on the admin login form. Solving it in the browser needs
+    // `crypto.subtle`, which exists only in a secure context (https or
+    // localhost), so over plain http on an IP/hostname login is impossible.
+    // Set ENABLE_ADMIN_CAPTCHA=false to turn it off. See Readme "Admin panel CAPTCHA".
+    // Only an explicit "false" disables it, so a typo cannot silently drop the
+    // brute-force protection.
+    captcha: (process.env.ENABLE_ADMIN_CAPTCHA ?? "true").toLowerCase() !== 'false',
+  },
   translation: {
     locales: [
     "en",

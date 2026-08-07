@@ -102,6 +102,21 @@ Without this step, admin panel pages that load widgets from `local_modules/core`
 
 Environment variables are loaded into the container from the `.env` file (case-sensitive).
 
+### Admin panel CAPTCHA (`ENABLE_ADMIN_CAPTCHA`)
+
+The admin login form is protected by a proof-of-work CAPTCHA that the browser has to solve before the form is submitted. It is enabled by default; set `ENABLE_ADMIN_CAPTCHA=false` to turn it off (see `config/adminpanel.js`, key `adminpanel.auth.captcha`). Only the exact value `false` (case-insensitive) disables it — any other value leaves it on, so a typo cannot silently drop the protection. The value is read at boot, so restart the app after changing it. No frontend rebuild is needed: with the CAPTCHA off the server sends an empty task and the login page submits immediately.
+
+**Known problem — login is impossible over plain `http://` on a non-local host.** The CAPTCHA is solved with `crypto.subtle`, which browsers expose only in a *secure context*: `https://`, or `http://localhost` / `http://127.0.0.1`. When the panel is opened over `http://` on a LAN IP or a domain without TLS, `crypto.subtle` is `undefined`, solving fails, and the login button just shows:
+
+```
+Error solving CAPTCHA. Try again.
+```
+
+No amount of retrying helps, and the server logs show no failed login attempt at all, because the request is never sent. If you hit this, pick one:
+
+1. serve the panel over https (the normal fix for production);
+2. open it as `http://localhost:<port>` — e.g. through an SSH tunnel: `ssh -L 8080:localhost:8080 user@server`;
+3. set `ENABLE_ADMIN_CAPTCHA=false` — acceptable for local development, but it removes brute-force protection from the login form, so do not leave it off on a publicly reachable installation.
 
 ### ENV_LIST
 
