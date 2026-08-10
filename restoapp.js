@@ -24,6 +24,20 @@ try {
 }
 
 const fs = require('fs');
+const path = require('path');
+
+// If `.sailsrc` is missing (e.g. first run, fresh clone), seed it from `.sailsrc.default`
+// so `rc('sails')` below has a config file to read.
+try {
+  const sailsrcPath = path.join(__dirname, '.sailsrc');
+  const sailsrcDefaultPath = path.join(__dirname, '.sailsrc.default');
+  if (!fs.existsSync(sailsrcPath) && fs.existsSync(sailsrcDefaultPath)) {
+    fs.copyFileSync(sailsrcDefaultPath, sailsrcPath);
+    console.log('.sailsrc not found, copied default from .sailsrc.default');
+  }
+} catch (error) {
+  console.error('Failed to copy .sailsrc from .sailsrc.default', error);
+}
 
 Error.stackTraceLimit = 50;
 
@@ -125,5 +139,5 @@ try {
   config.hooks['openharness-ui'] = require('./api/hooks/openharness-ui/index.js')
   sails.lift(config);
 } catch (error) {
-  console.log.error(error);
+  console.error(error);
 }
