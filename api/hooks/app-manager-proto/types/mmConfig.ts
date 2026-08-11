@@ -24,6 +24,7 @@ export interface ModuleManagerConfig {
 	}
 	tempDirPath?: string
 	modulesPath?: string
+	modulesListFile?: string
 	secret?: string
 	migrationsConfigPath?: string
 	navbarHelper?: () => NavbarItem[]

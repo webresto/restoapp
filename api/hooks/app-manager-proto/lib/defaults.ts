@@ -14,6 +14,9 @@ module.exports = {
         },
         modules: {},
         modulesPath: process.env.MODULES_PATH ? process.env.MODULES_PATH : `${sailsRoot}/modules`,
+        modulesListFile: process.env.WEBRESTO_MODULES_LISTFILE
+            ? process.env.WEBRESTO_MODULES_LISTFILE
+            : `${sailsRoot}/webresto-modules.list`,
         tempDirPath: process.env.TEMP_DIR_PATH ? process.env.TEMP_DIR_PATH : `${sailsRoot}/.tmp`,
         migrationsConfigPath: process.env.MIGRATIONS_CONFIG_PATH ? process.env.MIGRATIONS_CONFIG_PATH : `${sailsRoot}/database.json`,
         navbar: [

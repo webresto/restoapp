@@ -212,6 +212,7 @@ export async function loadModule(modulePath: string, repository?: string): Promi
     await Module.update({appId: appId}, {
       name: moduleInfo.name, version: moduleInfo.version,
       directoryName: path.basename(modulePath), dependencies: Object.keys(mmDependencies), hookName: hookName,
+      isDeleted: false,
       ...systemModuleList.includes(appId) && {enable: true}
     }).fetch();
     moduleFromDB = await Module.findOne({appId: appId});

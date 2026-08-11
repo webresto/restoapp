@@ -209,7 +209,7 @@ export default function ModulesVersions(props) {
       createElement('span', null,
         createElement('span', { style: styles.rowName }, item.name),
         item.teaser && createElement('div', { style: styles.catalogDescription }, item.teaser),
-        (item.group || item.tags?.length) && createElement(
+        Boolean(item.group || item.tags?.length) && createElement(
           'div', { style: styles.catalogMeta },
           [item.group, ...(item.tags || []).map((tag) => `#${tag}`)].filter(Boolean).join(' · ')
         )
