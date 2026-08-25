@@ -30,11 +30,15 @@ WORKDIR /app
 COPY . .
 
 # Configure Yarn and install dependencies using lock file
-RUN printf "nodeLinker: node-modules\nnpmMinimalAgeGate: 0\n" > .yarnrc.yml
+# enableScripts=false: skip the default "postinstall" (it builds adminizer,
+# which needs core's devDependencies that aren't installed at this stage) —
+# we run "docker:postinstall" explicitly afterwards instead.
+RUN printf "nodeLinker: node-modules\nnpmMinimalAgeGate: 0\nenableScripts: false\n" > .yarnrc.yml
 RUN yarn set version berry || true
 RUN yarn --immutable workspaces focus --production \
  || (echo "yarn.lock is out of sync with package.json — reinstalling without immutable and refreshing the lock" \
      && yarn workspaces focus --production)
+RUN yarn run docker:postinstall
 RUN rm -rf ./local_modules
 
 ###################################
