@@ -210,7 +210,10 @@ function checkAdminKey(req) {
   const adminKey = process.env.MCP_ADMIN_KEY;
   if (!adminKey) return false;
 
-  const provided = req.headers['x-mcp-key'] || req.query['mcp_key'];
+  // `req` may be a bare/virtual request object: neither headers nor query are guaranteed.
+  const headers = (req && req.headers) || {};
+  const query = (req && req.query) || {};
+  const provided = headers['x-mcp-key'] || query['mcp_key'];
   return provided === adminKey;
 }
 
@@ -354,12 +357,16 @@ function toolList(req) {
  * Mount it in sails.config.http.middleware before 'router'.
  */
 function middleware() {
-  return async function mcpMiddleware(req, res, next) {
+  const handle = async function (req, res, next) {
     if (process.env.NODE_ENV !== 'test' && process.env.MCP_ENABLED !== 'true') return next();
 
-    const url = req.url.split('?')[0];
+    const url = (req.url || '').split('?')[0];
+    // Everything below is MCP-only. Bail out before touching `req` any further so
+    // that unrelated routes (/admin/login & co) never depend on this middleware.
+    if (url !== MCP_PATH && !url.startsWith(MCP_PATH + '/')) return next();
+
     const isAdmin = hasProtectedAccess(req);
-    const baseUrl = `${req.protocol}://${req.headers.host}`;
+    const baseUrl = `${req.protocol}://${req.headers && req.headers.host}`;
 
     // GET /mcp — server info + group catalogue (or legacy flat list with ?flat=1)
     if (req.method === 'GET' && url === MCP_PATH) {
@@ -468,6 +475,12 @@ function middleware() {
     }
 
     return next();
+  };
+
+  // Express does not await middleware, so a rejected promise would leave the
+  // request hanging forever (proxy 504) instead of erroring out. Funnel it to next().
+  return function mcpMiddleware(req, res, next) {
+    Promise.resolve(handle(req, res, next)).catch(next);
   };
 }
 
