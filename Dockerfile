@@ -32,6 +32,12 @@ COPY . .
 # Configure Yarn and install dependencies using lock file
 RUN printf "nodeLinker: node-modules\nnpmMinimalAgeGate: 0\n" > .yarnrc.yml
 RUN yarn set version berry || true
+# Yarn always runs the workspace root's own "postinstall" during install
+# (unlike enableScripts, which only gates scripts of fetched dependencies),
+# and the default "postinstall" builds adminizer — which needs core's
+# devDependencies that aren't installed at this stage. Swap it for
+# "docker:postinstall" (just patch-package) before install runs.
+RUN node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));p.scripts.postinstall=p.scripts['docker:postinstall'];fs.writeFileSync('package.json',JSON.stringify(p,null,2));"
 RUN yarn --immutable workspaces focus --production \
  || (echo "yarn.lock is out of sync with package.json — reinstalling without immutable and refreshing the lock" \
      && yarn workspaces focus --production)
