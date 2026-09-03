@@ -58,16 +58,12 @@ module.exports = function register(mcp) {
     },
     handler: async ({ id, slug }) => {
       try {
-        if (id) {
-          const { groups, errors } = await Group.getGroup(id);
-          if (Object.keys(errors).length) sails.log.warn('MCP > [group] errors:', errors);
-          return groups[0] || null;
-        }
-        if (slug) {
-          const { groups, errors } = await Group.getGroupBySlug(slug);
-          if (Object.keys(errors).length) sails.log.warn('MCP > [group] errors:', errors);
-          return groups[0] || null;
-        }
+        // Both return the group itself, or null when it exists but is not
+        // currently servable. They used to be destructured as `{ groups, errors }`
+        // — the shape `Group.getGroups` returns, one level further in — so this
+        // handler threw on `Object.keys(undefined)` for every call it ever got.
+        if (id) return await Group.getGroup(id);
+        if (slug) return await Group.getGroupBySlug(slug);
         throw new Error('Provide either id or slug');
       } catch (error) {
         sails.log.error('MCP > [group]', error);
