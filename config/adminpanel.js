@@ -129,7 +129,8 @@ module.exports.adminpanel = {
   aiAssistant: {
     // This must be enabled before Adminizer starts, otherwise it never creates
     // aiAssistantHandler for model registration.
-    enabled: (process.env.ENABLE_AI_ASSISTANT ?? "true") === 'true',
+    // enabled: (process.env.ENABLE_AI_ASSISTANT ?? "true") === 'true',
+    enabled: false,
     defaultModel: 'openharness',
     models: ['openharness'],
   },
