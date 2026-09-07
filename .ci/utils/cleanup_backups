@@ -2,7 +2,7 @@
 # Cleanup old PostgreSQL backups using a GFS (grandfather-father-son) retention policy.
 #
 # Backups are produced by .ci/bootstrap with the name pattern:
-#   ${PROJECT_NAME}_${DEPLOY_TIME}.dump.sql
+#   ${BACKUP_PREFIX}_${DEPLOY_TIME}.dump.sql
 # where DEPLOY_TIME = date '+%d_%m_%Y_%H_%M' (e.g. restoapp_08_06_2026_14_30.dump.sql).
 #
 # Retention buckets (configurable via env, see defaults below):
@@ -19,7 +19,7 @@
 #   BACKUP_KEEP_MONTHLY      - number of monthly backups to keep (default: 6)
 #   BACKUP_KEEP_YEARLY       - number of yearly backups to keep  (default: 3)
 #   POSTGRES_BACKUP_PATH     - directory holding the backups     (default: /backup)
-#   PROJECT_NAME             - backup filename prefix            (default: restoapp)
+#   BACKUP_PREFIX            - backup filename prefix            (default: $PROJECT_NAME, else restoapp)
 #   BACKUP_CLEANUP_DRY_RUN   - set to true to only log what would be deleted (default: false)
 
 set -e
@@ -29,7 +29,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/helpers"
 
 # --- Configuration with defaults ---
-PROJECT_NAME=${PROJECT_NAME:-restoapp}
+BACKUP_PREFIX=${BACKUP_PREFIX:-${PROJECT_NAME:-restoapp}}
 POSTGRES_BACKUP_PATH=${POSTGRES_BACKUP_PATH:-/backup}
 
 KEEP_DAILY=${BACKUP_KEEP_DAILY:-7}
@@ -50,7 +50,7 @@ if [[ ! -d "$POSTGRES_BACKUP_PATH" ]]; then
     exit 0
 fi
 
-log_info "Starting backup cleanup in '$POSTGRES_BACKUP_PATH' (prefix='${PROJECT_NAME}')"
+log_info "Starting backup cleanup in '$POSTGRES_BACKUP_PATH' (prefix='${BACKUP_PREFIX}')"
 log_info "Retention: daily=$KEEP_DAILY weekly=$KEEP_WEEKLY monthly=$KEEP_MONTHLY yearly=$KEEP_YEARLY (dry_run=$DRY_RUN)"
 
 # Convert a DEPLOY_TIME token (DD_MM_YYYY_HH_MM) into an epoch timestamp.
@@ -71,11 +71,11 @@ parse_backup_epoch() {
 # Collect candidate backups as "epoch<TAB>filepath", sorted newest-first.
 declare -a entries=()
 shopt -s nullglob
-for file in "$POSTGRES_BACKUP_PATH"/${PROJECT_NAME}_*.dump.sql; do
+for file in "$POSTGRES_BACKUP_PATH"/${BACKUP_PREFIX}_*.dump.sql; do
     [[ -f "$file" ]] || continue
     base=$(basename "$file")
-    # strip prefix "${PROJECT_NAME}_" and suffix ".dump.sql" -> DEPLOY_TIME token
-    token="${base#${PROJECT_NAME}_}"
+    # strip prefix "${BACKUP_PREFIX}_" and suffix ".dump.sql" -> DEPLOY_TIME token
+    token="${base#${BACKUP_PREFIX}_}"
     token="${token%.dump.sql}"
     epoch=$(parse_backup_epoch "$token")
     if [[ -z "$epoch" ]]; then
