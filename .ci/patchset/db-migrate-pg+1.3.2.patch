@@ -1,0 +1,45 @@
+diff --git a/node_modules/db-migrate-pg/index.js b/node_modules/db-migrate-pg/index.js
+index 6d3dc65..6e723bf 100644
+--- a/node_modules/db-migrate-pg/index.js
++++ b/node_modules/db-migrate-pg/index.js
+@@ -127,19 +127,27 @@ var PgDriver = Base.extend({
+   },
+ 
+   switchDatabase: function (options, callback) {
+-    if (typeof options === 'object') {
+-      if (typeof options.database === 'string') {
+-        this.log.info(
+-          'Ignore database option, not available with postgres. Use schema instead!'
+-        );
+-        this.runSql(
+-          util.format('SET search_path TO `%s`', options.database),
+-          callback
+-        );
+-      }
+-    } else if (typeof options === 'string') {
+-      this.runSql(util.format('SET search_path TO `%s`', options), callback);
+-    } else callback(null);
++    var schema =
++      typeof options === 'object' && options !== null &&
++      typeof options.schema === 'string'
++        ? options.schema
++        : null;
++
++    if (schema) {
++      this.schema = schema;
++      this.runSql(util.format('SET search_path TO "%s"', schema), callback);
++    } else {
++      // В postgres нет переключения БД внутри соединения, а db-migrate зовёт
++      // switchDatabase(config.database) на каждый вход в scope. Апстрим шлёт
++      // при этом MySQL-бэктики (syntax error), а с 1.4.0 - неэкранированное
++      // имя БД как схему (search_path уезжает в несуществующую схему).
++      // Правильное поведение - no-op; search_path ставится ALTER DATABASE
++      // в .ci/bootstrap.
++      this.log.info(
++        'Ignore database option, not available with postgres. Use schema instead!'
++      );
++      callback(null);
++    }
+   },
+ 
+   dropSequence: function (dbName, options, callback) {
