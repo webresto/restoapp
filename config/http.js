@@ -60,14 +60,19 @@ module.exports.http = {
             return next();
         },
         frontendRoutes: function (req, res, next) {
+            // HEAD обслуживается наравне с GET: HTTP/1.1 требует тот же статус и
+            // заголовки, что у GET, но без тела, а внешние health-check и
+            // мониторинги по умолчанию ходят именно HEAD-запросом. Тело срезает
+            // сам Express в res.send, поэтому рендер вьюхи здесь безопасен.
+            var isPageRequest = req.method === 'GET' || req.method === 'HEAD';
             switch (req.url) {
                 case '/':
-                    if (req.method === 'GET') {
+                    if (isPageRequest) {
                         return res.view('index');
                     }
                     break;
                 default:
-                    if (req.method === 'GET' && !req.isSocket) {
+                    if (isPageRequest && !req.isSocket) {
                         return res.view('index');
                     }
             }

@@ -150,7 +150,9 @@ export default async function processInstallStep(req: any, res: any): Promise<vo
 
 		} catch (error) {
 			console.error("Error processing step:", error);
-			res.status(500).send("Error processing step");
+			// The installer renders this body in its error area, so pass the reason through:
+			// a step rejects input (bad setting value) far more often than it breaks internally.
+			res.status(500).send(error?.message || "Error processing step");
 			return
 		}
 	}
