@@ -394,7 +394,7 @@ describe("metrics hook > registry", () => {
       collectDefaultMetrics: false,
       buildInfo: { version: "", commit: "", branch: "", node: "", staging: "0" },
     });
-    metrics.ordersPlaced.inc({ self_service: "false" });
+    metrics.ordersPlaced.inc({ service_type: "delivery" });
     const exposition: string = await metrics.registry.metrics();
     const names = exposition
       .split("\n")
