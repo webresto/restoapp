@@ -45,6 +45,7 @@
     "dev": "npx tsx ./restoapp",
     "dev:hmr": "node scripts/dev-hmr.mjs",
     "dev:seed": "MULTI_KITCHEN_DEMO_SEED=recreate npm run dev",
+    "dev:e2e": "node scripts/dev-e2e.mjs",
     "db:dev": "db-migrate up:all --env dev",
     "test": "mocha -r tsx/cjs \"tests/**/*.test.ts\" --exit",
     "migrate": "db-migrate up:all --env prod",
