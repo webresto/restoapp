@@ -1,23 +1,25 @@
 /**
- * `npm run dev:e2e` — стенд для сквозных сценариев Playwright.
+ * `npm run dev:e2e` — the stand for the Playwright end-to-end scenarios.
  *
- * Стенд с пересозданием демо-сида (`MULTI_KITCHEN_DEMO_SEED=recreate`) плюс
- * две переменные, без которых спеки не проходят:
+ * The stand recreates the demo seed (`MULTI_KITCHEN_DEMO_SEED=recreate`) and
+ * adds two variables the specs cannot pass without:
  *
- *   ENABLE_ADMIN_CAPTCHA=false   PoW-капча на входе в админку выключается,
- *                                иначе в форму входа не попасть скриптом;
- *   ADMIN_FRONTEND_RECIPE={}     оба шага мастера установки от модуля
- *                                admin-frontend отсеиваются своим check().
- *                                Иначе последний из них заказывает сборку
- *                                витрины канала main на внешней фабрике
- *                                (FDS), ждёт её минуты и кладёт результат
- *                                поверх views/index.ejs. Сценарии тестируют
- *                                локальный ng serve из base_layouts, а не её.
+ *   ENABLE_ADMIN_CAPTCHA=false   turns off the PoW captcha on the admin login,
+ *                                otherwise a script cannot reach the form;
+ *   ADMIN_FRONTEND_RECIPE={}     makes both install-wizard steps of the
+ *                                admin-frontend module drop out in their own
+ *                                check(). Otherwise the last one orders a build
+ *                                of the main channel storefront from an
+ *                                external factory (FDS), waits minutes for it
+ *                                and writes the result over views/index.ejs.
+ *                                The scenarios test the local ng serve from
+ *                                base_layouts, not that build.
  *
- * Отдельный файл, а не префикс переменных в самом скрипте: на Windows npm
- * запускает скрипты через cmd, и форма `VAR=value npm run …` там не работает.
+ * A separate file rather than a variable prefix inside the script itself: on
+ * Windows npm runs scripts through cmd, where `VAR=value npm run …` does not
+ * work.
  *
- * Подробности — dev-docs/Сквозной-сценарий/Как-прогонять.md.
+ * Details — dev-docs/Сквозной-сценарий/Как-прогонять.md.
  */
 import { spawn } from 'node:child_process'
 import path from 'node:path'
