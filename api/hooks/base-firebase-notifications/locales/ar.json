@@ -73,5 +73,15 @@
   "Web config must contain vapidKey.": "يجب أن يحتوي web config على vapidKey.",
   "What must be done outside WebResto": "ما يجب عمله خارج WebResto",
   "You can paste the full object from Firebase Console as one file - fields will be filled automatically.": "يمكنك لصق الكائن الكامل من Firebase Console كملف واحد - سيتم ملء الحقول تلقائيا.",
-  "not set": "غير محدد"
+  "not set": "غير محدد",
+  "Optional user confirmation that an APNs key or certificate is uploaded to Firebase for iOS push delivery.": "تأكيد اختياري من المستخدم بأن مفتاح أو شهادة APNs مرفوعة إلى Firebase لتسليم إشعارات iOS.",
+  "Not verified automatically and does not block the channel. Without a correct APNs key in Firebase, iOS push may not be delivered.": "لا يتم التحقق منه تلقائيًا ولا يمنع عمل القناة. بدون مفتاح APNs صحيح في Firebase قد لا تصل إشعارات iOS.",
+  "Legacy compatibility flag for mobile push. Actual readiness is determined by a filled FCM_SERVICE_ACCOUNT_KEY and the channel state in the notification manager.": "علامة توافق قديمة لإشعارات الأجهزة المحمولة. الجاهزية الفعلية تُحدد بتعبئة FCM_SERVICE_ACCOUNT_KEY وحالة القناة في مدير الإشعارات.",
+  "An unconfigured fcm-mobile channel does not take part in the delivery queue.": "قناة fcm-mobile غير المُعدّة لا تشارك في طابور الإرسال.",
+  "Secret Firebase Admin SDK JSON file. Download it in Firebase Console: Project Settings -> Service accounts -> Generate new private key. Do not expose this key to the frontend.": "ملف JSON سري خاص بـ Firebase Admin SDK. يتم تنزيله من Firebase Console: Project Settings -> Service accounts -> Generate new private key. لا تُرسل هذا المفتاح إلى الواجهة الأمامية.",
+  "The Firebase Push page can upload the whole file at once. At minimum project_id, client_email and private_key are required.": "تتيح صفحة Firebase Push رفع الملف بالكامل دفعة واحدة. الحد الأدنى المطلوب: project_id و client_email و private_key.",
+  "Public Firebase config for browser push notifications. The values come from the Firebase web app config and the Web Push certificates.": "إعدادات Firebase العامة لإشعارات المتصفح. تُؤخذ القيم من إعدادات تطبيق الويب في Firebase ومن شهادات Web Push.",
+  "At minimum apiKey, projectId, messagingSenderId, appId and vapidKey are required. These values are safe to send to the client.": "الحد الأدنى المطلوب: apiKey و projectId و messagingSenderId و appId و vapidKey. يمكن إرسال هذه القيم إلى العميل بأمان.",
+  "Legacy compatibility flag for web push. Actual readiness is determined by filled FCM_SERVICE_ACCOUNT_KEY and FCM_WEB_CONFIG values and the channel state in the notification manager.": "علامة توافق قديمة لإشعارات الويب. الجاهزية الفعلية تُحدد بتعبئة FCM_SERVICE_ACCOUNT_KEY و FCM_WEB_CONFIG وبحالة القناة في مدير الإشعارات.",
+  "An unconfigured fcm-web channel does not take part in the delivery queue.": "قناة fcm-web غير المُعدّة لا تشارك في طابور الإرسال."
 }

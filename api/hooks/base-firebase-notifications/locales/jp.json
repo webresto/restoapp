@@ -73,5 +73,15 @@
   "Web config must contain vapidKey.": "Web config には vapidKey が必要です。",
   "What must be done outside WebResto": "WebResto 外で必要な作業",
   "You can paste the full object from Firebase Console as one file - fields will be filled automatically.": "Firebase Console の完全なオブジェクトを 1 つのファイルとして貼り付けることができます - フィールドは自動入力されます。",
-  "not set": "未設定"
+  "not set": "未設定",
+  "Optional user confirmation that an APNs key or certificate is uploaded to Firebase for iOS push delivery.": "iOS プッシュ配信のために APNs キーまたは証明書を Firebase にアップロード済みであることの、ユーザーによる任意の確認です。",
+  "Not verified automatically and does not block the channel. Without a correct APNs key in Firebase, iOS push may not be delivered.": "自動では検証されず、チャネルをブロックすることもありません。Firebase に正しい APNs キーがない場合、iOS のプッシュは配信されないことがあります。",
+  "Legacy compatibility flag for mobile push. Actual readiness is determined by a filled FCM_SERVICE_ACCOUNT_KEY and the channel state in the notification manager.": "モバイルプッシュ用の旧互換フラグです。実際の利用可否は、FCM_SERVICE_ACCOUNT_KEY の設定内容と通知マネージャー上のチャネル状態で決まります。",
+  "An unconfigured fcm-mobile channel does not take part in the delivery queue.": "設定されていない fcm-mobile チャネルは送信キューに参加しません。",
+  "Secret Firebase Admin SDK JSON file. Download it in Firebase Console: Project Settings -> Service accounts -> Generate new private key. Do not expose this key to the frontend.": "Firebase Admin SDK の秘密 JSON ファイルです。Firebase Console の Project Settings -> Service accounts -> Generate new private key からダウンロードします。このキーをフロントエンドに渡さないでください。",
+  "The Firebase Push page can upload the whole file at once. At minimum project_id, client_email and private_key are required.": "Firebase Push のページではファイルをまるごとアップロードできます。最低限 project_id、client_email、private_key が必要です。",
+  "Public Firebase config for browser push notifications. The values come from the Firebase web app config and the Web Push certificates.": "ブラウザープッシュ通知用の公開 Firebase 設定です。値は Firebase のウェブアプリ設定と Web Push 証明書から取得します。",
+  "At minimum apiKey, projectId, messagingSenderId, appId and vapidKey are required. These values are safe to send to the client.": "最低限 apiKey、projectId、messagingSenderId、appId、vapidKey が必要です。これらの値はクライアントに渡しても安全です。",
+  "Legacy compatibility flag for web push. Actual readiness is determined by filled FCM_SERVICE_ACCOUNT_KEY and FCM_WEB_CONFIG values and the channel state in the notification manager.": "ウェブプッシュ用の旧互換フラグです。実際の利用可否は、FCM_SERVICE_ACCOUNT_KEY と FCM_WEB_CONFIG の設定内容、および通知マネージャー上のチャネル状態で決まります。",
+  "An unconfigured fcm-web channel does not take part in the delivery queue.": "設定されていない fcm-web チャネルは送信キューに参加しません。"
 }

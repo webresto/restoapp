@@ -73,5 +73,15 @@
   "Web config must contain vapidKey.": "Web config 必须包含 vapidKey。",
   "What must be done outside WebResto": "需要在 WebResto 外部完成的操作",
   "You can paste the full object from Firebase Console as one file - fields will be filled automatically.": "可以将 Firebase Console 中的完整对象作为一个文件粘贴 - 字段会自动填充。",
-  "not set": "未设置"
+  "not set": "未设置",
+  "Optional user confirmation that an APNs key or certificate is uploaded to Firebase for iOS push delivery.": "用户可选确认：已将 APNs 密钥或证书上传到 Firebase，用于 iOS 推送投递。",
+  "Not verified automatically and does not block the channel. Without a correct APNs key in Firebase, iOS push may not be delivered.": "不会自动校验，也不会阻塞通道。Firebase 中若没有正确的 APNs 密钥，iOS 推送可能无法送达。",
+  "Legacy compatibility flag for mobile push. Actual readiness is determined by a filled FCM_SERVICE_ACCOUNT_KEY and the channel state in the notification manager.": "移动端推送的旧版兼容开关。实际可用性取决于已填写的 FCM_SERVICE_ACCOUNT_KEY 以及通知管理器中的通道状态。",
+  "An unconfigured fcm-mobile channel does not take part in the delivery queue.": "未配置的 fcm-mobile 通道不会参与发送队列。",
+  "Secret Firebase Admin SDK JSON file. Download it in Firebase Console: Project Settings -> Service accounts -> Generate new private key. Do not expose this key to the frontend.": "Firebase Admin SDK 的私密 JSON 文件。在 Firebase Console 中下载：Project Settings -> Service accounts -> Generate new private key。请勿将该密钥下发到前端。",
+  "The Firebase Push page can upload the whole file at once. At minimum project_id, client_email and private_key are required.": "Firebase Push 页面可以一次性上传整个文件。至少需要 project_id、client_email 和 private_key。",
+  "Public Firebase config for browser push notifications. The values come from the Firebase web app config and the Web Push certificates.": "用于浏览器推送通知的公开 Firebase 配置。取值来自 Firebase 网页应用配置和 Web Push 证书。",
+  "At minimum apiKey, projectId, messagingSenderId, appId and vapidKey are required. These values are safe to send to the client.": "至少需要 apiKey、projectId、messagingSenderId、appId 和 vapidKey。这些值可以安全地下发给客户端。",
+  "Legacy compatibility flag for web push. Actual readiness is determined by filled FCM_SERVICE_ACCOUNT_KEY and FCM_WEB_CONFIG values and the channel state in the notification manager.": "网页推送的旧版兼容开关。实际可用性取决于已填写的 FCM_SERVICE_ACCOUNT_KEY、FCM_WEB_CONFIG 以及通知管理器中的通道状态。",
+  "An unconfigured fcm-web channel does not take part in the delivery queue.": "未配置的 fcm-web 通道不会参与发送队列。"
 }

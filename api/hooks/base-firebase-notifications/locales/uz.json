@@ -73,5 +73,15 @@
   "Web config must contain vapidKey.": "Web config vapidKey ni o'z ichiga olishi kerak.",
   "What must be done outside WebResto": "WebResto tashqarisida nima qilish kerak",
   "You can paste the full object from Firebase Console as one file - fields will be filled automatically.": "Firebase Console'dan to'liq obyektni bitta fayl sifatida joylashtirishingiz mumkin - maydonlar avtomatik to'ldiriladi.",
-  "not set": "ko'rsatilmagan"
+  "not set": "ko'rsatilmagan",
+  "Optional user confirmation that an APNs key or certificate is uploaded to Firebase for iOS push delivery.": "Foydalanuvchining ixtiyoriy tasdig'i: iOS push yetkazish uchun APNs kaliti yoki sertifikati Firebase'ga yuklangan.",
+  "Not verified automatically and does not block the channel. Without a correct APNs key in Firebase, iOS push may not be delivered.": "Avtomatik tekshirilmaydi va kanal ishini to'xtatmaydi. Firebase'da to'g'ri APNs kaliti bo'lmasa, iOS push yetkazilmasligi mumkin.",
+  "Legacy compatibility flag for mobile push. Actual readiness is determined by a filled FCM_SERVICE_ACCOUNT_KEY and the channel state in the notification manager.": "Mobil push uchun eskirgan moslik bayrog'i. Haqiqiy tayyorlik to'ldirilgan FCM_SERVICE_ACCOUNT_KEY va bildirishnomalar menejeridagi kanal holati bilan aniqlanadi.",
+  "An unconfigured fcm-mobile channel does not take part in the delivery queue.": "Sozlanmagan fcm-mobile kanali yuborish navbatida qatnashmaydi.",
+  "Secret Firebase Admin SDK JSON file. Download it in Firebase Console: Project Settings -> Service accounts -> Generate new private key. Do not expose this key to the frontend.": "Firebase Admin SDK ning maxfiy JSON fayli. Firebase Console'dan yuklab olinadi: Project Settings -> Service accounts -> Generate new private key. Bu kalitni frontendga uzatmang.",
+  "The Firebase Push page can upload the whole file at once. At minimum project_id, client_email and private_key are required.": "Firebase Push sahifasida faylni butunligicha yuklash mumkin. Kamida project_id, client_email va private_key kerak.",
+  "Public Firebase config for browser push notifications. The values come from the Firebase web app config and the Web Push certificates.": "Brauzer push-bildirishnomalari uchun ochiq Firebase konfiguratsiyasi. Qiymatlar Firebase web app config va Web Push sertifikatlaridan olinadi.",
+  "At minimum apiKey, projectId, messagingSenderId, appId and vapidKey are required. These values are safe to send to the client.": "Kamida apiKey, projectId, messagingSenderId, appId va vapidKey kerak. Bu qiymatlarni mijozga berish xavfsiz.",
+  "Legacy compatibility flag for web push. Actual readiness is determined by filled FCM_SERVICE_ACCOUNT_KEY and FCM_WEB_CONFIG values and the channel state in the notification manager.": "Web push uchun eskirgan moslik bayrog'i. Haqiqiy tayyorlik to'ldirilgan FCM_SERVICE_ACCOUNT_KEY va FCM_WEB_CONFIG qiymatlari hamda bildirishnomalar menejeridagi kanal holati bilan aniqlanadi.",
+  "An unconfigured fcm-web channel does not take part in the delivery queue.": "Sozlanmagan fcm-web kanali yuborish navbatida qatnashmaydi."
 }
