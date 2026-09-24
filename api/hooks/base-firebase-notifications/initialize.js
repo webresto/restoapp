@@ -2,7 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.tryInitFCM = tryInitFCM;
 
-const { NotificationManager } = require("@webresto/core/libs/NotificationManager");
+const { NotificationManager } = require("@webresto/core/lib/notifications/NotificationManager");
 const { initFirebaseAdmin } = require("./firebaseAdmin");
 const { FCMMobileChannel } = require("./channels/FCMMobileChannel");
 const { FCMWebChannel } = require("./channels/FCMWebChannel");

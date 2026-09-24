@@ -210,10 +210,16 @@ function checkAdminKey(req) {
   const adminKey = process.env.MCP_ADMIN_KEY;
   if (!adminKey) return false;
 
-  // `req` may be a bare/virtual request object: neither headers nor query are guaranteed.
+  // `req` may be a bare/virtual request object: neither headers nor query are
+  // guaranteed. On top of that, this middleware is mounted before Sails' router,
+  // so `req.query` is not necessarily initialized yet — the raw URL is parsed as
+  // a fallback so the documented `?mcp_key=` form works at this point in the
+  // pipeline.
   const headers = (req && req.headers) || {};
   const query = (req && req.query) || {};
-  const provided = headers['x-mcp-key'] || query['mcp_key'];
+  const rawQuery = req && typeof req.url === 'string' && req.url.split('?')[1];
+  const urlKey = rawQuery && new URLSearchParams(rawQuery).get('mcp_key');
+  const provided = headers['x-mcp-key'] || query['mcp_key'] || urlKey;
   return provided === adminKey;
 }
 

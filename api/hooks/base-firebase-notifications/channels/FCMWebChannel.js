@@ -2,7 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.FCMWebChannel = void 0;
 
-const { Channel } = require("@webresto/core/libs/NotificationManager");
+const { Channel } = require("@webresto/core/lib/notifications/NotificationManager");
 const { getFirebaseAdmin, isFirebaseAdminInitialized } = require("../firebaseAdmin");
 
 class FCMWebChannel extends Channel {
@@ -42,13 +42,13 @@ class FCMWebChannel extends Channel {
   async send(badge, message, user, subject, data, priorityDevice) {
     let devices;
     if (user?.id) {
-      // Обычная адресация: все устройства пользователя с токеном
+      // Normal addressing: every device of the user that has a token
       devices = await UserDevice.find({
         user: user.id,
         notificationToken: { "!=": null },
       });
     } else if (priorityDevice?.id || priorityDevice?.notificationToken) {
-      // Гостевая корзина без user: шлём только на устройство, с которого она обрабатывалась
+      // Guest cart with no user: send only to the device it was handled from
       const dev = priorityDevice.notificationToken
         ? priorityDevice
         : await UserDevice.findOne({ id: priorityDevice.id, notificationToken: { "!=": null } });

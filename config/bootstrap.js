@@ -36,10 +36,10 @@ module.exports.bootstrap = async function (cb) {
     sails.log.error("Unhandled promise rejection (safety net):", reason);
   });
 
-  // Node-RED — опциональная фича. Слабый/невалидный NODE_RED_TOKEN отключает
-  // только Node-RED, но НЕ должен прерывать остальной bootstrap (загрузку
-  // модульных config/bootstrap.js, регистрацию MCP-tools и т.д.). Поэтому здесь
-  // gate лишь ПРОПУСКАЕТ блок Node-RED, а не делает return cb() из всего bootstrap.
+  // Node-RED is optional. A weak or invalid NODE_RED_TOKEN disables Node-RED
+  // alone; it must NOT abort the rest of bootstrap (module config/bootstrap.js
+  // files, MCP tool registration and so on). So the gate below only SKIPS the
+  // Node-RED block instead of returning cb() out of the whole bootstrap.
   const nodeRedTokenCheck =
     process.env.NODE_RED_TOKEN !== undefined
       ? require("../lib/bindNodeRed").NodeRedToken.gate()
@@ -88,8 +88,8 @@ module.exports.bootstrap = async function (cb) {
       sails.log.error("Nodered init error:",error);
     }
   } else if (process.env.NODE_RED_TOKEN !== undefined) {
-    // Токен задан, но не прошёл проверку — Node-RED (и его MCP-tools) выключен,
-    // bootstrap продолжается дальше.
+    // The token is set but failed the check: Node-RED (and its MCP tools) stays
+    // off and bootstrap carries on.
     sails.log.error(`Nodered NOT started: ${nodeRedTokenCheck.reason}. Set a strong NODE_RED_TOKEN to enable Node-RED (and its MCP tools).`);
   }
 

@@ -237,11 +237,22 @@ async function collect(sails, metrics, config) {
 
   // ── Menu: a sync that wipes the catalogue must be visible immediately ──
   await guard(sails, metrics, 'menu', async () => {
+    // Stock is no longer a column of `dish`: it belongs to the pair
+    // "product + cooking point" in `dish_place`. A product counts as out of
+    // stock once it is stopped at any enabled cooking point — switched off
+    // there, or holding a zero from either source. Products with no row are
+    // unlimited everywhere, which is why this is an EXISTS and not a join.
     const result = await datastore.sendNativeQuery(
       `SELECT
-         count(*) FILTER (WHERE "isDeleted" = false)                                       AS total,
-         count(*) FILTER (WHERE "isDeleted" = false AND visible = true)                    AS visible,
-         count(*) FILTER (WHERE "isDeleted" = false AND visible = true AND balance = 0)    AS out_of_stock
+         count(*) FILTER (WHERE "isDeleted" = false)                     AS total,
+         count(*) FILTER (WHERE "isDeleted" = false AND visible = true)  AS visible,
+         count(*) FILTER (WHERE "isDeleted" = false AND visible = true AND EXISTS (
+           SELECT 1 FROM dish_place pp
+             JOIN place p ON p.id = pp.place
+           WHERE pp.dish = dish.id
+             AND p."isCookingPoint" = TRUE AND p.enable = TRUE
+             AND (pp.enable = FALSE OR pp."localBalance" = 0 OR pp."rmsBalance" = 0)
+         ))                                                             AS out_of_stock
        FROM dish
        WHERE coalesce(modifier, false) = false`,
     );
