@@ -97,7 +97,7 @@ module.exports = function register(mcp) {
       try {
         const criteria = { parentGroup: groupId };
         if (concept) criteria.concept = concept;
-        return await Dish.getDishes(criteria, await (await Menu.getAdapter()).resolveContext({}));
+        return await Dish.getDishes(criteria, await (await Adapter.get("menu")).resolveContext({}));
       } catch (error) {
         sails.log.error('MCP > [dishes]', error, { groupId, concept });
         throw error;
@@ -138,7 +138,7 @@ module.exports = function register(mcp) {
 
         if (!dish) return null;
 
-        const withModifiers = await Dish.getDishModifiers(dish, await (await Menu.getAdapter()).resolveContext({}));
+        const withModifiers = await Dish.getDishModifiers(dish, await (await Adapter.get("menu")).resolveContext({}));
         return { ...dish, modifiers: withModifiers };
       } catch (error) {
         sails.log.error('MCP > [dish]', error, { id, slug });
