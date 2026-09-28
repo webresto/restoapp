@@ -1,7 +1,7 @@
 import { QueryBuilder, WaterlinePromise, CRUDBuilder, Model, UpdateBuilder, Callback } from "waterline";
 
 /**
- * Описывает ORM представление
+ * Describes the ORM representation
  */
 export default interface ORMModel<T> {
   create?(params: any): CRUDBuilder<T>;

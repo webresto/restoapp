@@ -122,7 +122,7 @@ function subscribe(metrics, sails) {
     // orderedOnPlatform is the sales-channel signal carried by the order itself
     // (SalesChannel.platforms maps these values onto a configured channel).
     const platform = safeLabel(order && order.orderedOnPlatform, 'unknown');
-    const labels = { self_service: order && order.selfService ? 'true' : 'false', platform };
+    const labels = { service_type: safeLabel(order && order.serviceType, 'delivery'), platform };
     metrics.ordersPlaced.inc(labels);
     metrics.ordersPlacedToday.inc(labels);
     const total = order && Number(order.total);

@@ -1,4 +1,4 @@
-/// <reference path="../../@webresto/core/interfaces/globalTypes.d.ts" />
+/// <reference path="../../node_modules/@webresto/core/interfaces/globalTypes.ts" />
 
 import sails from "@42pub/typed-sails";
 

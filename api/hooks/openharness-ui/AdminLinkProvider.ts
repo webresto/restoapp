@@ -1,4 +1,4 @@
-import { createEmitterCollector } from "@webresto/core/libs/EmitterCollector";
+import { createEmitterCollector } from "@webresto/core/lib/EmitterCollector";
 
 /**
  * What a module returns from the `admin-panel:collect-links` event.
@@ -35,7 +35,7 @@ declare global {
 
 /**
  * String contract with the providers, so they stay decoupled from this file.
- * Core declares the same event in @webresto/core libs/AwaitEmitter.ts.
+ * Core declares the same event in @webresto/core lib/AwaitEmitter.ts.
  */
 const EVENT = "admin-panel:collect-links";
 

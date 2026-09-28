@@ -1,6 +1,6 @@
 import { expect } from "chai";
-import { Channel, NotificationManager } from "@webresto/core/libs/NotificationManager";
-import { NotificationDispatcher } from "@webresto/core/libs/NotificationDispatcher";
+import { Channel, NotificationManager } from "@webresto/core/lib/notifications/NotificationManager";
+import { NotificationDispatcher } from "@webresto/core/lib/notifications/NotificationDispatcher";
 
 /**
  * Covers Channel.stopEscalation end to end against the real dispatcher, with the Waterline
