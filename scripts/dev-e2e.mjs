@@ -1,7 +1,8 @@
 /**
  * `npm run dev:e2e` — the stand for the Playwright end-to-end scenarios.
  *
- * The stand recreates the demo seed (`MULTI_KITCHEN_DEMO_SEED=recreate`) and
+ * The stand recreates the demo seed of `modules/dev-demo-seed`
+ * (`MULTI_KITCHEN_DEMO_SEED=recreate`) and
  * adds two variables the specs cannot pass without:
  *
  *   ENABLE_ADMIN_CAPTCHA=false   turns off the PoW captcha on the admin login,
@@ -18,8 +19,6 @@
  * A separate file rather than a variable prefix inside the script itself: on
  * Windows npm runs scripts through cmd, where `VAR=value npm run …` does not
  * work.
- *
- * Details — dev-docs/Сквозной-сценарий/Как-прогонять.md.
  */
 import { spawn } from 'node:child_process'
 import path from 'node:path'

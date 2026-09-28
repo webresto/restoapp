@@ -1,4 +1,4 @@
-<!-- Ваш ejs-файл -->
+<!-- Install stepper page -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -14,7 +14,7 @@
 <p>Step <%= totalStepCount - leftStepsCount + 1 %> of <%= totalStepCount %></p>
 
 <% if (currentStep.payload.type === 'single') { %>
-    <!-- Если тип single -->
+    <!-- Type single -->
     <h2><%= currentStep.title %></h2>
     <p><%= currentStep.description %></p>
     <label for="<%= 'input0' %>"><%= currentStep.payload.data.name %>:</label>
@@ -105,7 +105,7 @@
                 <small><%= currentStep.payload.data[i].key %> - <%= currentStep.payload.data[i].description %> (<%= currentStep.payload.data[i].tooltip %>)</small>
             </div>
         <% } %>
-        <!-- Кнопки "Next" и "Skip" -->
+        <!-- "Next" and "Skip" buttons -->
         <button id="nextButton">Next</button>
         <button id="skipButton" <% if (!currentStep.canBeSkipped) { %> style="display: none;" <% } %>>Skip</button>
     </div>
@@ -118,7 +118,7 @@
 			console.log("Next Button was clicked");
 			let inputData = {};
 
-			// Сбор значений с полей ввода
+			// Collect the input values
 			for (let i = 0; i < currentStepData.payload.data.length; i++) {
 				const inputId = `input${i}`;
 				let value;
