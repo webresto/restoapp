@@ -16,6 +16,9 @@
  *                                The scenarios test the local ng serve from
  *                                base_layouts, not that build.
  *
+ * And the store's language, SAILS_DEFAULT_LOCALE=ru: what is sent without the
+ * reader's own — subscriptions, dialogs, notifications — is in Russian.
+ *
  * A separate file rather than a variable prefix inside the script itself: on
  * Windows npm runs scripts through cmd, where `VAR=value npm run …` does not
  * work.
@@ -32,6 +35,7 @@ const child = spawn(process.execPath, ['--import', 'tsx', path.join(root, 'resto
   env: {
     ...process.env,
     MULTI_KITCHEN_DEMO_SEED: 'recreate',
+    SAILS_DEFAULT_LOCALE: 'ru',
     ENABLE_ADMIN_CAPTCHA: 'false',
     ADMIN_FRONTEND_RECIPE: '{}',
   },
