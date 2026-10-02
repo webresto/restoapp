@@ -269,6 +269,21 @@ function subscribe(metrics, sails) {
     });
   });
 
+  // ── Auth ────────────────────────────────────────────────────────────────
+  // The denominator: refusals mean nothing without the traffic they came out of.
+  emitter.on('core:auth-send', SUBSCRIBER_ID, function (send) {
+    metrics.authSends.inc({
+      adapter: safeLabel(send && send.adapter, 'unknown'),
+      offer: safeLabel(send && send.offer, 'unknown'),
+    });
+  });
+
+  // reason comes from a closed set in core; safeLabel is the belt to that
+  // suspenders, since a metric label is the one place a bad string is expensive.
+  emitter.on('core:auth-send-refused', SUBSCRIBER_ID, function (refusal) {
+    metrics.authSendRefusals.inc({ reason: safeLabel(refusal && refusal.reason, 'unknown') });
+  });
+
   // ── Maintenance ─────────────────────────────────────────────────────────
   emitter.on('core:maintenance-enabled', SUBSCRIBER_ID, () => metrics.maintenanceEnabled.set(1));
   emitter.on('core:maintenance-disabled', SUBSCRIBER_ID, () => metrics.maintenanceEnabled.set(0));

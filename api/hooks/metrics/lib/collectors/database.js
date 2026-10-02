@@ -258,6 +258,19 @@ async function collect(sails, metrics, config) {
     metrics.menuGroups.set(num(result.rows && result.rows[0] && result.rows[0].cnt));
   });
 
+  // ── Auth spend ─────────────────────────────────────────────────────────
+  // The counters above only move while this process is up; the ledger is the
+  // shared truth across workers and restarts, and it is what the global hourly
+  // cap is actually measured against. Read it so the approach to the ceiling is
+  // visible before anybody is refused.
+  await guard(sails, metrics, 'auth_sends', async () => {
+    const result = await datastore.sendNativeQuery(
+      'SELECT count(*)::int AS cnt FROM "authsendlog" WHERE "at" >= $1',
+      [since],
+    );
+    metrics.authSendsWindow.set(num(result.rows && result.rows[0] && result.rows[0].cnt));
+  });
+
   // ── Database itself ────────────────────────────────────────────────────
   await guard(sails, metrics, 'db_size', async () => {
     const result = await datastore.sendNativeQuery('SELECT pg_database_size(current_database()) AS size');
