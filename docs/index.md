@@ -31,6 +31,7 @@ This setup covers a wide range of products suitable for local trade. Theoretical
 - Order tracking is available:
   - On the order status page.
   - In the personal account under order history.
+- Optionally the cart can be limited to signed-in users (`REQUIRE_AUTH_FOR_CART` setting): a guest is asked to log in before the first item, and a cart built before login is moved into the account.
 
 ### 3. User Account and Notifications
 - Users can log in to their personal account on the website.
