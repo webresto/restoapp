@@ -1,0 +1,6 @@
+{
+  "name": "bg-jobs",
+  "version": "1.0.0",
+  "description": "One-shot background jobs gated by the @webresto/core version (BackgroundJob-style background migrations)",
+  "main": "index.js"
+}

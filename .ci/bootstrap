@@ -297,6 +297,20 @@ if [[ "${DATASTORE}" == "postgres" ]]; then
           ALTER DATABASE "$PG_DATABASE" SET search_path TO public;
 EOSQL
         
+        # BackgroundJob-style upgrade stop (api/hooks/bg-jobs): refuse to migrate while
+        # the bgjobs table holds unfinished jobs whose core-version gate is behind
+        # the version being deployed - their backups have not happened yet, and the
+        # new migrations could destroy the user data they were meant to preserve.
+        # Bypass at your own risk: BGJOBS_UNSAFE_IGNORE=YES.
+        "$SCRIPT_DIR/utils/update_maintenance_status" "Checking background jobs"
+        log_info "bg-jobs guard: checking for unfinished background jobs"
+        if node "$SCRIPT_DIR/../api/hooks/bg-jobs/scripts/premigrate-guard.js"; then
+            log_info "bg-jobs guard passed"
+        else
+            log_error "bg-jobs guard: unfinished background jobs require an earlier core version - refusing to migrate to protect user data"
+            exit_or_sleep 1
+        fi
+
         log_info "Running database migrations"
         if npm run migrate; then
             log_info "Migrations completed successfully"
