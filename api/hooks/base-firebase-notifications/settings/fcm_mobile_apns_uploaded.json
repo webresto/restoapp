@@ -2,8 +2,8 @@
   "key": "FCM_MOBILE_APNS_UPLOADED",
   "type": "boolean",
   "name": "FCM Mobile APNs Uploaded",
-  "description": "Необязательное подтверждение пользователя, что APNs key или certificate загружен в Firebase для доставки iOS push.",
-  "tooltip": "Не проверяется автоматически и не блокирует работу канала. Без корректного APNs в Firebase push на iOS может не доставляться.",
+  "description": "Optional user confirmation that an APNs key or certificate is uploaded to Firebase for iOS push delivery.",
+  "tooltip": "Not verified automatically and does not block the channel. Without a correct APNs key in Firebase, iOS push may not be delivered.",
   "defaultValue": false,
   "isRequired": false,
   "module": "base-firebase-notifications"

@@ -52,6 +52,15 @@ module.exports = async function (req, res) {
     try {
         if (fs.existsSync(moduleDir)) fs.rmSync(moduleDir, { recursive: true, force: true });
         await Module.update({ appId }, { isDeleted: true, enable: false }).fetch();
+        // Sales channels of this provider go with it (core decides which ones). Called before
+        // the restart, while the provider's channel adapter is still loaded. Older cores lack it.
+        if (typeof SalesChannel !== 'undefined' && typeof SalesChannel.removeProviderChannels === 'function') {
+            try {
+                await SalesChannel.removeProviderChannels(appId);
+            } catch (error) {
+                sails.log.warn(`MM: could not clean up sales channels of ${appId}`, error);
+            }
+        }
         ModuleHelper.deleteModule(appId);
         removeModuleFromList(modulesListFile, appId);
         restartScheduler.scheduleRestart();

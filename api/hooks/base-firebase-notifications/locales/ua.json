@@ -73,5 +73,15 @@
   "Web config must contain vapidKey.": "Web config має містити vapidKey.",
   "What must be done outside WebResto": "Що потрібно зробити поза WebResto",
   "You can paste the full object from Firebase Console as one file - fields will be filled automatically.": "Можна вставити повний об'єкт з Firebase Console одним файлом - поля заповняться автоматично.",
-  "not set": "не задано"
+  "not set": "не задано",
+  "Optional user confirmation that an APNs key or certificate is uploaded to Firebase for iOS push delivery.": "Необов'язкове підтвердження користувача, що APNs key або certificate завантажено у Firebase для доставки iOS push.",
+  "Not verified automatically and does not block the channel. Without a correct APNs key in Firebase, iOS push may not be delivered.": "Не перевіряється автоматично і не блокує роботу каналу. Без коректного APNs у Firebase push на iOS може не доставлятися.",
+  "Legacy compatibility flag for mobile push. Actual readiness is determined by a filled FCM_SERVICE_ACCOUNT_KEY and the channel state in the notification manager.": "Застарілий прапорець сумісності для mobile push. Фактична готовність визначається заповненим FCM_SERVICE_ACCOUNT_KEY і станом каналу в менеджері сповіщень.",
+  "An unconfigured fcm-mobile channel does not take part in the delivery queue.": "Неналаштований канал fcm-mobile не бере участі в черзі відправлення.",
+  "Secret Firebase Admin SDK JSON file. Download it in Firebase Console: Project Settings -> Service accounts -> Generate new private key. Do not expose this key to the frontend.": "Секретний JSON-файл Firebase Admin SDK. Завантажується у Firebase Console: Project Settings -> Service accounts -> Generate new private key. Не передавайте цей ключ на фронтенд.",
+  "The Firebase Push page can upload the whole file at once. At minimum project_id, client_email and private_key are required.": "У зручній формі Firebase Push можна завантажити файл цілком. Мінімально потрібні project_id, client_email і private_key.",
+  "Public Firebase config for browser push notifications. The values come from the Firebase web app config and the Web Push certificates.": "Публічний Firebase config для браузерних push-сповіщень. Значення беруться з Firebase web app config і Web Push certificates.",
+  "At minimum apiKey, projectId, messagingSenderId, appId and vapidKey are required. These values are safe to send to the client.": "Мінімально потрібні apiKey, projectId, messagingSenderId, appId і vapidKey. Ці дані можна віддавати клієнту.",
+  "Legacy compatibility flag for web push. Actual readiness is determined by filled FCM_SERVICE_ACCOUNT_KEY and FCM_WEB_CONFIG values and the channel state in the notification manager.": "Застарілий прапорець сумісності для web push. Фактична готовність визначається заповненими FCM_SERVICE_ACCOUNT_KEY, FCM_WEB_CONFIG і станом каналу в менеджері сповіщень.",
+  "An unconfigured fcm-web channel does not take part in the delivery queue.": "Неналаштований канал fcm-web не бере участі в черзі відправлення."
 }

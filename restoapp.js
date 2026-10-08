@@ -134,6 +134,7 @@ process.on('uncaughtException', (error) => {
 try {
   var config = rc("sails");
   config.hooks = config.hooks || {};
+  config.hooks['bg-jobs'] = require('./api/hooks/bg-jobs/index.js')
   config.hooks['app-manager-proto'] = require('./api/hooks/app-manager-proto/index.js')
   config.hooks['base-firebase-notifications'] = require('./api/hooks/base-firebase-notifications/index.js')
   config.hooks['openharness-ui'] = require('./api/hooks/openharness-ui/index.js')

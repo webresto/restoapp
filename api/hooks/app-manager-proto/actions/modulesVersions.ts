@@ -91,6 +91,9 @@ export default async function modulesVersions(req: any, res: any) {
             const search = queryValue(req.query?.search);
             const group = queryValue(req.query?.group);
             const tags = queryValue(req.query?.tags);
+            // Exact module id: deep links from Sales Channels ("Install provider") must open one
+            // module, not every module that mentions it in the description.
+            const appIdFilter = queryValue(req.query?.appId);
             const requestedTags = tags.split(/[;,]/).map((tag) => tag.trim().toLowerCase()).filter(Boolean);
             try {
                 const response = await axios.get('https://marketplace.restoapp.org/getRecommendedModules', {
@@ -113,7 +116,8 @@ export default async function modulesVersions(req: any, res: any) {
                         ].filter(Boolean).join(' ').toLowerCase().includes(normalizedSearch);
                         const matchesGroup = !group || String(item.category || '').toLowerCase() === group.toLowerCase();
                         const matchesTags = !requestedTags.length || requestedTags.every((tag) => itemTags.includes(tag));
-                        return matchesSearch && matchesGroup && matchesTags;
+                        const matchesAppId = !appIdFilter || item.id === appIdFilter;
+                        return matchesSearch && matchesGroup && matchesTags && matchesAppId;
                     })
                     .map((item: any) => ({
                         appId: item.id,
@@ -125,7 +129,9 @@ export default async function modulesVersions(req: any, res: any) {
                         canInstall: item.purchased !== false
                     }))
                     .sort((a: any, b: any) => a.name.localeCompare(b.name))
-                    .slice(0, 10);
+                    // Free-text search stays capped; a tag or exact-id query is a curated list
+                    // (e.g. tags=sales-channel) and is shown in full.
+                    .slice(0, requestedTags.length || appIdFilter ? 100 : 10);
             } catch (error) {
                 catalogError = t('Failed to load marketplace catalog');
                 sails.log.warn('MM: could not load marketplace catalog', error);
@@ -139,7 +145,7 @@ export default async function modulesVersions(req: any, res: any) {
                         view: 'catalog',
                         catalog,
                         catalogError,
-                        filters: { search, group, tags, availableGroups, availableTags },
+                        filters: { search, group, tags, appId: appIdFilter, availableGroups, availableTags },
                         translations: {
                             catalogTitle: t('Add module'),
                             catalogSubtitle: t('Choose a module from marketplace'),

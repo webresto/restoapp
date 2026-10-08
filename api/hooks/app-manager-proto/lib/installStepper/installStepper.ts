@@ -126,7 +126,9 @@ export class InstallStepper {
 
         } catch (e) {
             sails.log.error(`Error processing step: ${e}`);
-            throw new Error(e);
+            // Keep the original message readable: wrapping an Error in new Error(e) would
+            // stringify it into "Error: ...", and the installer shows this text to the user.
+            throw e instanceof Error ? e : new Error(String(e));
         }
     }
 

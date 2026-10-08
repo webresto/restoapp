@@ -55,6 +55,15 @@
 
         } else {
             const form = document.getElementsByTagName('form')[0];
+
+            // Next is a plain button, so submitting never runs constraint validation on its own.
+            // Do it here so an invalid value shows the browser's own message instead of silently
+            // reaching the server, which would reject it against the setting's jsonSchema.
+            if (form && typeof form.checkValidity === "function" && !form.checkValidity()) {
+                form.reportValidity();
+                return;
+            }
+
             const formElements = form.elements;
             let inputData = {}; // object to collect form fields
             let filesCounter = 0;
@@ -200,7 +209,9 @@
         let inputs = document.querySelectorAll('input[required], textarea[required], select[required]');
 
         for (let input of inputs) {
-            if (!input.value.trim()) {
+            // Non-empty is not enough: pattern/minlength/type constraints are declared on the
+            // inputs, but Next is a plain button (not a submit), so nothing else enforces them.
+            if (!input.value.trim() || (typeof input.checkValidity === "function" && !input.checkValidity())) {
                 submitButton.setAttribute("disabled", true);
                 return;
             }

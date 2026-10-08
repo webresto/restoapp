@@ -210,6 +210,31 @@ exceeds an hour.
 React when: the `failed` share grows, messages pile up in `pending`/`processing`,
 or the cost jumps.
 
+### Auth — "who is spending our SMS budget"
+
+`restoapp_auth_sends_total{adapter,offer}` — deliveries that actually went out
+(SMS, flash-call, dial-in reservation, bot message), the denominator for
+everything below.
+`restoapp_auth_send_refused_total{reason}` — deliveries a cap refused, by which
+cap: `interval` (the pause between two codes for one login), `target_hour` /
+`target_day` (that login's own ceilings), `global_hour` (the installation-wide
+hourly ceiling, `AUTH_SEND_MAX_GLOBAL_HOUR`), `country`
+(`AUTH_SEND_ALLOWED_COUNTRIES` — a number outside the region you serve),
+`live_attempts` (one device holding too many unfinished attempts).
+`restoapp_auth_sends_window` — rows in the send ledger inside
+`METRICS_WINDOW_HOURS`, straight from the database, so the approach to the
+ceiling is visible across workers and restarts.
+
+The client is told a plain `rate_limited` whichever ceiling fired, on purpose —
+which one it was is more use to an attacker than to a user. These metrics and the
+log are the only place that distinction exists, which is why an alert on them is
+not optional.
+
+React when: `global_hour` appears at all (sign-in is degrading for everybody —
+decide whether it is an attack or a peak, and recalibrate the cap if it is a
+peak); `country` appears in a burst (somebody is probing with foreign numbers,
+the classic IRSF opening); or sends approach the cap before it fires.
+
 ### Readiness and housekeeping
 
 `restoapp_ready` (the `/readyz` check: at least one enabled sales channel),
@@ -276,6 +301,16 @@ sum(rate(restoapp_device_requests_total[5m])) / restoapp_active_devices{window="
 
 # clients giving up before the response arrives
 sum by (route) (rate(restoapp_http_client_disconnects_total[5m])) > 0
+
+# the installation-wide auth cap fired: nobody can sign in until the hour rolls
+increase(restoapp_auth_send_refused_total{reason="global_hour"}[5m]) > 0
+
+# foreign numbers being probed — IRSF, or a market you forgot to allow
+increase(restoapp_auth_send_refused_total{reason="country"}[10m]) > 20
+
+# warning before the refusals start (0.7 of AUTH_SEND_MAX_GLOBAL_HOUR — put the
+# configured value in, this metric knows the traffic and not the setting)
+rate(restoapp_auth_sends_total[1h]) * 3600 > 0.7 * 300
 ```
 
 ---

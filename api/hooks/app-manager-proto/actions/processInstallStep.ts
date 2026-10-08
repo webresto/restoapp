@@ -85,9 +85,7 @@ export default async function processInstallStep(req: any, res: any): Promise<vo
 	if (req.method.toUpperCase() === 'POST') {
 
 		try {
-			console.log("POST REQUEST TO PROCESS INSTALL STEP", req.body)
-			console.log("Request headers:", req.headers)
-			console.log("Request action:", req.body.action)
+			console.log("POST REQUEST TO PROCESS INSTALL STEP", { stepId: req.body?.currentStepId, action: req.body?.action })
 			let installStepper = InstallStepper.getStepper(req.params.id);
 
 			const currentStepId = req.body.currentStepId;
@@ -152,13 +150,15 @@ export default async function processInstallStep(req: any, res: any): Promise<vo
 
 		} catch (error) {
 			console.error("Error processing step:", error);
-			res.status(500).send("Error processing step");
+			// The installer renders this body in its error area, so pass the reason through:
+			// a step rejects input (bad setting value) far more often than it breaks internally.
+			res.status(500).send(error?.message || "Error processing step");
 			return
 		}
 	}
 
 	if (req.method.toUpperCase() === 'DELETE') {
-		console.log("DELETE REQUEST TO PROCESS INSTALL STEP", req.body)
+		console.log("DELETE REQUEST TO PROCESS INSTALL STEP", { stepperId: req.params.id })
 
 		try {
 			InstallStepper.deleteStepper(req.params.id);

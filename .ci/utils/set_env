@@ -16,6 +16,16 @@ if [[ -z "$KEY" || -z "$VALUE" ]]; then
     exit 1
 fi
 
+# KEY goes into a regexp and VALUE into a sed replacement, so both must be sane
+if [[ ! "$KEY" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+    log_error "Invalid KEY '$KEY': expected [A-Za-z_][A-Za-z0-9_]*"
+    exit 1
+fi
+if [[ "$VALUE" == *$'\n'* ]]; then
+    log_error "Invalid VALUE for '$KEY': multiline values are not supported"
+    exit 1
+fi
+
 # Create the .env file if it does not exist
 if [[ ! -f "$ENV_FILE" ]]; then
     log_info "ENV file '$ENV_FILE' not found - creating"
@@ -26,10 +36,26 @@ fi
 # Update the variable if it exists, otherwise add it
 if grep -q "^$KEY=" "$ENV_FILE"; then
     log_info "Updating existing key '$KEY' in $ENV_FILE"
-    sed -i "s/^$KEY=.*/$KEY=$VALUE/" "$ENV_FILE"
+    # Escape the characters that are special in a sed replacement (\ / &), otherwise
+    # a value like webresto/restoapp:commit-abc123 breaks the expression itself
+    ESCAPED_VALUE=$(printf '%s' "$VALUE" | sed -e 's/[&/\]/\\&/g')
+    if ! sed -i "s/^$KEY=.*/$KEY=$ESCAPED_VALUE/" "$ENV_FILE"; then
+        log_error "Failed to update $KEY in $ENV_FILE"
+        exit 1
+    fi
 else
     log_info "Adding new key '$KEY' to $ENV_FILE"
+    # A file without a trailing newline would glue the new key onto the last line
+    if [[ -s "$ENV_FILE" && -n "$(tail -c1 "$ENV_FILE")" ]]; then
+        echo >> "$ENV_FILE"
+    fi
     echo "$KEY=$VALUE" >> "$ENV_FILE"
+fi
+
+# Do not report success unless the value really landed in the file
+if ! grep -qxF "$KEY=$VALUE" "$ENV_FILE"; then
+    log_error "Verification failed: $KEY was not written to $ENV_FILE"
+    exit 1
 fi
 
 log_info "The variable $KEY has been updated to $VALUE in $ENV_FILE."

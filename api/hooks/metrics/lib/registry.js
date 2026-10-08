@@ -158,6 +158,15 @@ function getRegistry(config) {
     notificationsInStatus: gauge('notifications_in_status', 'Notifications per status inside the metrics window.', ['status']),
     notificationsCost: gauge('notifications_cost_window', 'Sum of spentCost for notifications inside the metrics window.'),
 
+    // ─── Auth ────────────────────────────────────────────────────────────
+    // Sends cost real money and a refusal means somebody could not sign in, so
+    // both sides are counted. No number, device id or country here on purpose:
+    // the refusal reason is a closed set the core owns (@webresto/core
+    // libs/AuthService.ts, AuthSendRefusal).
+    authSends: counter('auth_sends_total', 'Auth codes/calls actually delivered, by method.', ['adapter', 'offer']),
+    authSendRefusals: counter('auth_send_refused_total', 'Auth deliveries refused by a cap, by which cap: interval, target_hour, target_day, global_hour, country, live_attempts.', ['reason']),
+    authSendsWindow: gauge('auth_sends_window', 'Rows in the auth send ledger inside the metrics window — how close the installation is to AUTH_SEND_MAX_GLOBAL_HOUR before it starts refusing.'),
+
     // ─── Database ────────────────────────────────────────────────────────
     dbUp: gauge('db_up', '1 when a trivial query against the default datastore succeeds.'),
     dbPingDuration: gauge('db_ping_duration_seconds', 'Duration of the datastore health query.'),
