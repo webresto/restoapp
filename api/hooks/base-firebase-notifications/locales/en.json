@@ -78,5 +78,15 @@
   "Failed to save Firebase push settings": "Failed to save Firebase push settings",
   "Failed to save settings": "Failed to save settings",
   "Settings saved": "Settings saved",
-  "Unknown error": "Unknown error"
+  "Unknown error": "Unknown error",
+  "Optional user confirmation that an APNs key or certificate is uploaded to Firebase for iOS push delivery.": "Optional user confirmation that an APNs key or certificate is uploaded to Firebase for iOS push delivery.",
+  "Not verified automatically and does not block the channel. Without a correct APNs key in Firebase, iOS push may not be delivered.": "Not verified automatically and does not block the channel. Without a correct APNs key in Firebase, iOS push may not be delivered.",
+  "Legacy compatibility flag for mobile push. Actual readiness is determined by a filled FCM_SERVICE_ACCOUNT_KEY and the channel state in the notification manager.": "Legacy compatibility flag for mobile push. Actual readiness is determined by a filled FCM_SERVICE_ACCOUNT_KEY and the channel state in the notification manager.",
+  "An unconfigured fcm-mobile channel does not take part in the delivery queue.": "An unconfigured fcm-mobile channel does not take part in the delivery queue.",
+  "Secret Firebase Admin SDK JSON file. Download it in Firebase Console: Project Settings -> Service accounts -> Generate new private key. Do not expose this key to the frontend.": "Secret Firebase Admin SDK JSON file. Download it in Firebase Console: Project Settings -> Service accounts -> Generate new private key. Do not expose this key to the frontend.",
+  "The Firebase Push page can upload the whole file at once. At minimum project_id, client_email and private_key are required.": "The Firebase Push page can upload the whole file at once. At minimum project_id, client_email and private_key are required.",
+  "Public Firebase config for browser push notifications. The values come from the Firebase web app config and the Web Push certificates.": "Public Firebase config for browser push notifications. The values come from the Firebase web app config and the Web Push certificates.",
+  "At minimum apiKey, projectId, messagingSenderId, appId and vapidKey are required. These values are safe to send to the client.": "At minimum apiKey, projectId, messagingSenderId, appId and vapidKey are required. These values are safe to send to the client.",
+  "Legacy compatibility flag for web push. Actual readiness is determined by filled FCM_SERVICE_ACCOUNT_KEY and FCM_WEB_CONFIG values and the channel state in the notification manager.": "Legacy compatibility flag for web push. Actual readiness is determined by filled FCM_SERVICE_ACCOUNT_KEY and FCM_WEB_CONFIG values and the channel state in the notification manager.",
+  "An unconfigured fcm-web channel does not take part in the delivery queue.": "An unconfigured fcm-web channel does not take part in the delivery queue."
 }

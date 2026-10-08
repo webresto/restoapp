@@ -90,7 +90,7 @@ module.exports.bootstrap = async function (cb) {
   } else if (process.env.NODE_RED_TOKEN !== undefined) {
     // Токен задан, но не прошёл проверку — Node-RED (и его MCP-tools) выключен,
     // bootstrap продолжается дальше.
-    sails.log.error(`Nodered NOT started: ${nodeRedTokenCheck.reason}. Set a strong NODE_RED_TOKEN to enable Node-RED (and its MCP tools).`);
+    sails.log.warn(`Nodered NOT started: ${nodeRedTokenCheck.reason}. Set a strong NODE_RED_TOKEN to enable Node-RED (and its MCP tools).`);
   }
 
   ////////////////////////////////////////////////////////////////////////////

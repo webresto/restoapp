@@ -73,5 +73,15 @@
   "Web config must contain vapidKey.": "Web config phải chứa vapidKey.",
   "What must be done outside WebResto": "Những việc cần làm ngoài WebResto",
   "You can paste the full object from Firebase Console as one file - fields will be filled automatically.": "Bạn có thể dán toàn bộ đối tượng từ Firebase Console dưới dạng một tệp - các trường sẽ được điền tự động.",
-  "not set": "chưa đặt"
+  "not set": "chưa đặt",
+  "Optional user confirmation that an APNs key or certificate is uploaded to Firebase for iOS push delivery.": "Xác nhận tùy chọn của người dùng rằng khóa hoặc chứng chỉ APNs đã được tải lên Firebase để gửi push cho iOS.",
+  "Not verified automatically and does not block the channel. Without a correct APNs key in Firebase, iOS push may not be delivered.": "Không được kiểm tra tự động và không chặn kênh. Nếu Firebase không có khóa APNs đúng, push cho iOS có thể không được gửi.",
+  "Legacy compatibility flag for mobile push. Actual readiness is determined by a filled FCM_SERVICE_ACCOUNT_KEY and the channel state in the notification manager.": "Cờ tương thích cũ cho push di động. Mức sẵn sàng thực tế được xác định bởi FCM_SERVICE_ACCOUNT_KEY đã điền và trạng thái kênh trong trình quản lý thông báo.",
+  "An unconfigured fcm-mobile channel does not take part in the delivery queue.": "Kênh fcm-mobile chưa được cấu hình sẽ không tham gia hàng đợi gửi.",
+  "Secret Firebase Admin SDK JSON file. Download it in Firebase Console: Project Settings -> Service accounts -> Generate new private key. Do not expose this key to the frontend.": "Tệp JSON bí mật của Firebase Admin SDK. Tải xuống trong Firebase Console: Project Settings -> Service accounts -> Generate new private key. Không đưa khóa này ra frontend.",
+  "The Firebase Push page can upload the whole file at once. At minimum project_id, client_email and private_key are required.": "Trang Firebase Push cho phép tải lên toàn bộ tệp cùng lúc. Tối thiểu cần project_id, client_email và private_key.",
+  "Public Firebase config for browser push notifications. The values come from the Firebase web app config and the Web Push certificates.": "Cấu hình Firebase công khai cho thông báo đẩy trên trình duyệt. Giá trị lấy từ cấu hình ứng dụng web Firebase và chứng chỉ Web Push.",
+  "At minimum apiKey, projectId, messagingSenderId, appId and vapidKey are required. These values are safe to send to the client.": "Tối thiểu cần apiKey, projectId, messagingSenderId, appId và vapidKey. Các giá trị này an toàn khi gửi cho client.",
+  "Legacy compatibility flag for web push. Actual readiness is determined by filled FCM_SERVICE_ACCOUNT_KEY and FCM_WEB_CONFIG values and the channel state in the notification manager.": "Cờ tương thích cũ cho push trên web. Mức sẵn sàng thực tế được xác định bởi FCM_SERVICE_ACCOUNT_KEY và FCM_WEB_CONFIG đã điền cùng trạng thái kênh trong trình quản lý thông báo.",
+  "An unconfigured fcm-web channel does not take part in the delivery queue.": "Kênh fcm-web chưa được cấu hình sẽ không tham gia hàng đợi gửi."
 }

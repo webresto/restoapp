@@ -9,7 +9,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/utils/helpers"
 
 # set default env's
-export PROJECT_NAME=${PROJECT_NAME:-restoapp}
+# NB: do NOT default PROJECT_NAME here. It is exported into the app process, and
+# Settings.use() gives process.env priority over the database — a default invented
+# here would pin the PROJECT_NAME setting in every container and make the stored
+# value unreachable. Backup filenames use their own prefix instead.
+export BACKUP_PREFIX=${BACKUP_PREFIX:-${PROJECT_NAME:-restoapp}}
 export DEPLOY_TIME=$(date '+%d_%m_%Y_%H_%M')
 
 if [[ -z "${CONTAINER_VERSION}" ]]; then
@@ -243,8 +247,8 @@ if [[ "${DATASTORE}" == "postgres" ]]; then
         # PGPASSWORD=postgres pg_restore -h localhost -U postgres -d postgres -Fc /backup/restoapp_.dump.sql
         if [ "$create_backup" = true ]; then
             "$SCRIPT_DIR/utils/update_maintenance_status" "Creating database backup"
-            log_info "Creating new backup to $POSTGRES_BACKUP_PATH/${PROJECT_NAME}_${DEPLOY_TIME}.dump.sql"
-            PGPASSWORD=$PG_PASSWORD pg_dump -h ${PG_HOST} -Fc -U ${PG_USER} ${PG_DATABASE} > $POSTGRES_BACKUP_PATH/${PROJECT_NAME}_${DEPLOY_TIME}.dump.sql
+            log_info "Creating new backup to $POSTGRES_BACKUP_PATH/${BACKUP_PREFIX}_${DEPLOY_TIME}.dump.sql"
+            PGPASSWORD=$PG_PASSWORD pg_dump -h ${PG_HOST} -Fc -U ${PG_USER} ${PG_DATABASE} > $POSTGRES_BACKUP_PATH/${BACKUP_PREFIX}_${DEPLOY_TIME}.dump.sql
         else
             log_info "Skipping backup creation because a recent backup was found"
         fi

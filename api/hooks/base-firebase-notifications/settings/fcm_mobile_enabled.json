@@ -2,8 +2,8 @@
   "key": "FCM_MOBILE_ENABLED",
   "type": "boolean",
   "name": "FCM Mobile Enabled",
-  "description": "Устаревший флаг совместимости для mobile push. Фактическая готовность определяется заполненным FCM_SERVICE_ACCOUNT_KEY и состоянием канала в менеджере уведомлений.",
-  "tooltip": "Ненастроенный канал fcm-mobile не участвует в очереди отправки.",
+  "description": "Legacy compatibility flag for mobile push. Actual readiness is determined by a filled FCM_SERVICE_ACCOUNT_KEY and the channel state in the notification manager.",
+  "tooltip": "An unconfigured fcm-mobile channel does not take part in the delivery queue.",
   "defaultValue": false,
   "isRequired": false,
   "module": "base-firebase-notifications"

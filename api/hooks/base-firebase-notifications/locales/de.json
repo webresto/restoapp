@@ -73,5 +73,15 @@
   "Web config must contain vapidKey.": "Web config muss vapidKey enthalten.",
   "What must be done outside WebResto": "Was außerhalb von WebResto erledigt werden muss",
   "You can paste the full object from Firebase Console as one file - fields will be filled automatically.": "Sie können das vollständige Objekt aus Firebase Console als eine Datei einfügen - die Felder werden automatisch ausgefüllt.",
-  "not set": "nicht gesetzt"
+  "not set": "nicht gesetzt",
+  "Optional user confirmation that an APNs key or certificate is uploaded to Firebase for iOS push delivery.": "Optionale Bestätigung des Nutzers, dass ein APNs-Schlüssel oder -Zertifikat für die iOS-Push-Zustellung in Firebase hochgeladen wurde.",
+  "Not verified automatically and does not block the channel. Without a correct APNs key in Firebase, iOS push may not be delivered.": "Wird nicht automatisch geprüft und blockiert den Kanal nicht. Ohne korrekten APNs-Schlüssel in Firebase werden iOS-Push-Nachrichten möglicherweise nicht zugestellt.",
+  "Legacy compatibility flag for mobile push. Actual readiness is determined by a filled FCM_SERVICE_ACCOUNT_KEY and the channel state in the notification manager.": "Veraltetes Kompatibilitäts-Flag für Mobile-Push. Die tatsächliche Bereitschaft ergibt sich aus einem ausgefüllten FCM_SERVICE_ACCOUNT_KEY und dem Kanalstatus im Benachrichtigungsmanager.",
+  "An unconfigured fcm-mobile channel does not take part in the delivery queue.": "Ein nicht konfigurierter fcm-mobile-Kanal nimmt nicht an der Sendewarteschlange teil.",
+  "Secret Firebase Admin SDK JSON file. Download it in Firebase Console: Project Settings -> Service accounts -> Generate new private key. Do not expose this key to the frontend.": "Geheime JSON-Datei des Firebase Admin SDK. Herunterladen in der Firebase Console: Project Settings -> Service accounts -> Generate new private key. Geben Sie diesen Schlüssel nicht an das Frontend weiter.",
+  "The Firebase Push page can upload the whole file at once. At minimum project_id, client_email and private_key are required.": "Auf der Firebase-Push-Seite kann die gesamte Datei auf einmal hochgeladen werden. Mindestens erforderlich sind project_id, client_email und private_key.",
+  "Public Firebase config for browser push notifications. The values come from the Firebase web app config and the Web Push certificates.": "Öffentliche Firebase-Konfiguration für Browser-Push-Benachrichtigungen. Die Werte stammen aus der Firebase-Web-App-Konfiguration und den Web-Push-Zertifikaten.",
+  "At minimum apiKey, projectId, messagingSenderId, appId and vapidKey are required. These values are safe to send to the client.": "Mindestens erforderlich sind apiKey, projectId, messagingSenderId, appId und vapidKey. Diese Werte dürfen an den Client gesendet werden.",
+  "Legacy compatibility flag for web push. Actual readiness is determined by filled FCM_SERVICE_ACCOUNT_KEY and FCM_WEB_CONFIG values and the channel state in the notification manager.": "Veraltetes Kompatibilitäts-Flag für Web-Push. Die tatsächliche Bereitschaft ergibt sich aus ausgefüllten Werten für FCM_SERVICE_ACCOUNT_KEY und FCM_WEB_CONFIG sowie dem Kanalstatus im Benachrichtigungsmanager.",
+  "An unconfigured fcm-web channel does not take part in the delivery queue.": "Ein nicht konfigurierter fcm-web-Kanal nimmt nicht an der Sendewarteschlange teil."
 }
