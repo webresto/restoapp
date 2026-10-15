@@ -13,6 +13,11 @@
  * no captcha on the admin login, and ADMIN_FRONTEND_RECIPE={} so the
  * admin-frontend install wizard does not order a storefront build.
  *
+ * DEFAULT_OTP is the code of every login on the demo: the seed registers an
+ * `sms` channel that writes the message into the log and into
+ * `.tmp/showcase-sms.json` - there is no gateway - and the core takes a
+ * fixed code from this variable outside production.
+ *
  * TZ is the restaurant's zone, the one the seed writes into the `TZ` setting:
  * the core reads the date of an order (`yyyy-MM-dd HH:mm`, the restaurant's
  * clock) in the zone of the process, so the two have to be the same. Without
@@ -39,6 +44,7 @@ const child = spawn(process.execPath, ['--import', 'tsx', path.join(root, 'resto
     MULTI_KITCHEN_DEMO_SEED: 'showcase',
     SAILS_DEFAULT_LOCALE: 'ru',
     TZ: 'Asia/Yekaterinburg',
+    DEFAULT_OTP: '123456',
     ENABLE_ADMIN_CAPTCHA: 'false',
     ADMIN_FRONTEND_RECIPE: '{}',
   },
