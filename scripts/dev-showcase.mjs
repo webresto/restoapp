@@ -12,6 +12,11 @@
  * The rest is what `dev:e2e` sets and why: Russian as the store's language,
  * no captcha on the admin login, and ADMIN_FRONTEND_RECIPE={} so the
  * admin-frontend install wizard does not order a storefront build.
+ *
+ * TZ is the restaurant's zone, the one the seed writes into the `TZ` setting:
+ * the core reads the date of an order (`yyyy-MM-dd HH:mm`, the restaurant's
+ * clock) in the zone of the process, so the two have to be the same. Without
+ * it the bootstrap leaves the process in UTC.
  */
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
@@ -33,6 +38,7 @@ const child = spawn(process.execPath, ['--import', 'tsx', path.join(root, 'resto
     SAILS_DISK_DIR: dbDir,
     MULTI_KITCHEN_DEMO_SEED: 'showcase',
     SAILS_DEFAULT_LOCALE: 'ru',
+    TZ: 'Asia/Yekaterinburg',
     ENABLE_ADMIN_CAPTCHA: 'false',
     ADMIN_FRONTEND_RECIPE: '{}',
   },
