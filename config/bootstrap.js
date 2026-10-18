@@ -261,7 +261,6 @@ module.exports.bootstrap = async function (cb) {
     sails.log.error(error);
   }
 
-  process.env.TZ = (await Settings.use("timezone")) ? await Settings.use("timezone") : process.env.TZ;
   cb();
 };
 
