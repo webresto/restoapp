@@ -78,22 +78,19 @@ FROM base AS test
 RUN apk add --no-cache git build-base
 WORKDIR /app
 COPY --from=cacher_modules /app/ .
-# Dev dependencies (mocha, ts-node, typescript, chai) are not in --production install
+# Dev dependencies (mocha, tsx, chai) are not in --production install
 # so we install them on top with npm
 RUN npm install --ignore-scripts \
     mocha \
-    ts-node \
-    typescript \
+    tsx \
     chai \
     dotenv \
     @types/mocha \
     @types/chai \
     @types/node
 RUN NODE_ENV=test \
-    TS_NODE_SKIP_IGNORE=true \
-    TS_NODE_COMPILER_OPTIONS='{"module":"commonjs","esModuleInterop":true}' \
     ./node_modules/.bin/mocha \
-    -r ts-node/register/transpile-only \
+    -r tsx/cjs \
     "tests/mcp.test.ts" \
     --exit
 
