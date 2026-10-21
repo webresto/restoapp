@@ -30,11 +30,8 @@ function setDatastore(datastore) {
 }
 
 
-// SAILS_DISK_DIR keeps a second development database next to the default one:
-// the storefront demo (`npm run dev:showcase`) must not share rows with the
-// end-to-end stand, which recreates its own Yekaterinburg.
 let datastores = {
-  default: { adapter: 'sails-disk', ...(process.env.SAILS_DISK_DIR ? { dir: process.env.SAILS_DISK_DIR } : {}) }
+  default: { adapter: 'sails-disk' }
 }
 if (process.env.DATASTORE){
   datastores["default"] = setDatastore(process.env.DATASTORE)

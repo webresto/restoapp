@@ -11,8 +11,8 @@
  *                                                <p> is a plain pg_dump (.sql or .sql.gz) or the
  *                                                folder of a server stack: the newest dump of its
  *                                                backup/ and the files of its tmp/public
- *   --port <n>                                   of the app, 42890 by default: the storefront
- *                                                stand (`dev:showcase`, 42880) can run at once
+ *   --port <n>                                   of the app, 42880 by default, as in config/env -
+ *                                                the address the storefront builds read
  *
  * The database server is the container restoapp-pg14 on port 5433 — the image of
  * the compose of a server, postgres:14:
@@ -60,7 +60,7 @@ const option = name => {
   return i === -1 ? undefined : args[i + 1]
 }
 const db = option('--db')
-const port = option('--port') ?? '42890'
+const port = option('--port') ?? '42880'
 const restore = option('--restore')
 const fresh = args.includes('--fresh')
 if (!db || !/^[a-z_][a-z0-9_]*$/.test(db)) {
