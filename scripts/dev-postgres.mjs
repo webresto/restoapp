@@ -34,7 +34,9 @@
  * password `admin` (Adminizer hashes login + password + AP_PASSWORD_SALT, the
  * same expression is used here), and the storefront auto-update of
  * admin-frontend is switched off — it would order a build from the fds of the
- * server every five minutes and install it into the shared .tmp/frontend.
+ * server every five minutes and install it into the shared .tmp/frontend. The
+ * notification rule user_otp_sms, the only one that sends a login code, is
+ * switched on: a server seeded by an older core has it off.
  *
  * The rest is what the other dev scripts set: Russian, no captcha on the admin
  * login, the fixed login code DEFAULT_OTP. RESTOCORE_URL and the checkout and
@@ -109,6 +111,7 @@ if (fresh) {
   const admins = psql(`UPDATE userap SET "passwordHashed" = '${hash}' WHERE login = 'admin' RETURNING id`)
   if (!admins) console.warn('[dev:pg] no admin with the login `admin` in the dump, passwords are as on the server')
   psql(`UPDATE settings SET value = jsonb_set(value::jsonb, '{autoUpdate,enabled}', 'false')::json WHERE key = 'ADMIN_FRONTEND_FDS' AND value::jsonb ? 'autoUpdate'`)
+  psql(`UPDATE notificationrules SET enabled = true WHERE key = 'user_otp_sms'`)
   if (publicFiles && fs.existsSync(publicFiles)) {
     step(`files: ${publicFiles} -> .tmp/public, existing files kept`)
     fs.cpSync(publicFiles, path.join(root, '.tmp', 'public'), { recursive: true, force: false })
