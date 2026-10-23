@@ -1,0 +1,52 @@
+diff --git a/node_modules/@webresto/worktime/bundles/lib/worktime.validator.js b/node_modules/@webresto/worktime/bundles/lib/worktime.validator.js
+index 2cfef78..59a1110 100644
+--- a/node_modules/@webresto/worktime/bundles/lib/worktime.validator.js
++++ b/node_modules/@webresto/worktime/bundles/lib/worktime.validator.js
+@@ -169,7 +169,7 @@ class WorkTimeValidator {
+             const curentDayStartTime = WorkTimeValidator.getTimeFromString(currentDayWorkTime.start); // текущее время начала рабочего дня в минутах
+             const curentDayStopTime = WorkTimeValidator.getTimeFromString(currentDayWorkTime.stop); // текущее время окончания рабочего дня в минутах
+             return {
+-                workNow: currentTime < curentDayStopTime && currentTime > curentDayStartTime,
++                workNow: currentTime < curentDayStopTime && currentTime >= curentDayStartTime,
+                 isNewDay: currentTimeInMinutesWithLocalDelta > 1440,
+                 currentTime,
+                 curentDayStartTime,
+diff --git a/node_modules/@webresto/worktime/esm2020/lib/worktime.validator.mjs b/node_modules/@webresto/worktime/esm2020/lib/worktime.validator.mjs
+index 90c9730..8eedab9 100644
+--- a/node_modules/@webresto/worktime/esm2020/lib/worktime.validator.mjs
++++ b/node_modules/@webresto/worktime/esm2020/lib/worktime.validator.mjs
+@@ -166,7 +166,7 @@ export class WorkTimeValidator {
+             const curentDayStartTime = WorkTimeValidator.getTimeFromString(currentDayWorkTime.start); // текущее время начала рабочего дня в минутах
+             const curentDayStopTime = WorkTimeValidator.getTimeFromString(currentDayWorkTime.stop); // текущее время окончания рабочего дня в минутах
+             return {
+-                workNow: currentTime < curentDayStopTime && currentTime > curentDayStartTime,
++                workNow: currentTime < curentDayStopTime && currentTime >= curentDayStartTime,
+                 isNewDay: currentTimeInMinutesWithLocalDelta > 1440,
+                 currentTime,
+                 curentDayStartTime,
+diff --git a/node_modules/@webresto/worktime/fesm2015/webresto-worktime.mjs b/node_modules/@webresto/worktime/fesm2015/webresto-worktime.mjs
+index fee41b1..cf0990e 100644
+--- a/node_modules/@webresto/worktime/fesm2015/webresto-worktime.mjs
++++ b/node_modules/@webresto/worktime/fesm2015/webresto-worktime.mjs
+@@ -1658,7 +1658,7 @@ class WorkTimeValidator {
+             const curentDayStartTime = WorkTimeValidator.getTimeFromString(currentDayWorkTime.start); // текущее время начала рабочего дня в минутах
+             const curentDayStopTime = WorkTimeValidator.getTimeFromString(currentDayWorkTime.stop); // текущее время окончания рабочего дня в минутах
+             return {
+-                workNow: currentTime < curentDayStopTime && currentTime > curentDayStartTime,
++                workNow: currentTime < curentDayStopTime && currentTime >= curentDayStartTime,
+                 isNewDay: currentTimeInMinutesWithLocalDelta > 1440,
+                 currentTime,
+                 curentDayStartTime,
+diff --git a/node_modules/@webresto/worktime/fesm2020/webresto-worktime.mjs b/node_modules/@webresto/worktime/fesm2020/webresto-worktime.mjs
+index 6b517da..1cbaf5b 100644
+--- a/node_modules/@webresto/worktime/fesm2020/webresto-worktime.mjs
++++ b/node_modules/@webresto/worktime/fesm2020/webresto-worktime.mjs
+@@ -1656,7 +1656,7 @@ class WorkTimeValidator {
+             const curentDayStartTime = WorkTimeValidator.getTimeFromString(currentDayWorkTime.start); // текущее время начала рабочего дня в минутах
+             const curentDayStopTime = WorkTimeValidator.getTimeFromString(currentDayWorkTime.stop); // текущее время окончания рабочего дня в минутах
+             return {
+-                workNow: currentTime < curentDayStopTime && currentTime > curentDayStartTime,
++                workNow: currentTime < curentDayStopTime && currentTime >= curentDayStartTime,
+                 isNewDay: currentTimeInMinutesWithLocalDelta > 1440,
+                 currentTime,
+                 curentDayStartTime,
