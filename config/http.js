@@ -12,6 +12,22 @@ if (process.env.OPENHARNESS_MCP_TOOLS !== 'false') {
     process.env.MCP_INTERNAL_ENABLED = process.env.MCP_INTERNAL_ENABLED || 'true';
 }
 
+var path = require('path');
+
+// Неизвестный адрес в этих пространствах — 404 бэкенда, а не страница витрины
+var BACKEND_PREFIXES = ['/admin', '/api', '/graphql', '/assets'];
+
+function isStorefrontPage(req) {
+    var urlPath = req.path;
+    var isBackendPath = BACKEND_PREFIXES.some(function (prefix) {
+        return urlPath === prefix || urlPath.indexOf(prefix + '/') === 0;
+    });
+    if (isBackendPath) return false;
+    // Ненайденный файл (манифест, логотип) — 404. Переход браузера явно просит text/html,
+    // поэтому страница со слагом с точкой (статьи base-pages) всё равно получает витрину.
+    return path.extname(urlPath) === '' || /text\/html/.test(req.headers.accept || '');
+}
+
 // TODO: add 500 and 404 for admin panel
 module.exports.http = {
     middleware: {
@@ -72,7 +88,7 @@ module.exports.http = {
                     }
                     break;
                 default:
-                    if (isPageRequest && !req.isSocket) {
+                    if (isPageRequest && !req.isSocket && isStorefrontPage(req)) {
                         return res.view('index');
                     }
             }
