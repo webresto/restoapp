@@ -8,13 +8,6 @@ const restartScheduler = require('../helpers/restartScheduler');
 export default async function modulesVersions(req: any, res: any) {
     const { config } = req.adminizer || {};
     const routePrefix = config?.routePrefix || '/admin';
-    if (config?.auth?.enable && !req.user) {
-        return res.redirect(`${routePrefix}/model/userap/login`);
-    }
-    // the right of the page's actions: the list is of no use to whom may not change the modules
-    if (!req.adminizer.accessRightsHelper.hasPermission('modules-process-upgrade', req.user)) {
-        return res.sendStatus(403);
-    }
     const availableLocales: string[] =
         config?.translation?.locales ||
         sails.config?.i18n?.locales ||
