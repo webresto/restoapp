@@ -45,6 +45,14 @@ export default function bindRoutes(sails: any) {
         const routePrefix = adminizer.config.routePrefix;
         const bind = makeAdminizerBinder(adminizer);
 
+        // the right of the page and of its actions; an administrator has it without a group
+        adminizer.accessRightsHelper.registerToken({
+            id: 'modules-process-upgrade',
+            name: 'Extensions',
+            description: 'Access to the Extensions page: the modules, their update, removal and the restart',
+            department: 'Store',
+        });
+
         // Configure multer for file uploads
         const upload = multer({
             dest: 'installStepper/uploadedImages/',
@@ -113,7 +121,8 @@ export default function bindRoutes(sails: any) {
                 title: 'Extensions',
                 link: `${routePrefix}/modules/versions`,
                 icon: 'extension',
-                section: 'Store'
+                section: 'Store',
+                accessRightsToken: 'modules-process-upgrade'
             });
         }
       });
