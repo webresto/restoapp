@@ -4,6 +4,7 @@ const restartScheduler = require('../helpers/restartScheduler');
 const { checkModule, loadModule } = require('../helpers/loadHelper');
 const ModuleHelper = require('../helpers/moduleHelper').default;
 const SettingsHelper = require('../helpers/settingsHelper').default;
+const MigrationsHelper = require('../helpers/migrationsHelper').default;
 const {
     addModuleToList,
     installMarketplaceModule,
@@ -83,6 +84,9 @@ module.exports = async function (req, res) {
                 ModuleHelper.addModule(appId, runtimeModule);
             }
             await SettingsHelper.processSettings(appId);
+            // the module's migrations now: at the start the manager turns an enabled module off while its migrations
+            // are not processed, and processes only the enabled ones
+            await MigrationsHelper.processSpecificModuleMigrations(appId);
             addModuleToList(modulesListFile, appId);
         } catch (error) {
             ModuleHelper.deleteModule(appId);

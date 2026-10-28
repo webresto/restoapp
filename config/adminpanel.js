@@ -124,7 +124,8 @@ module.exports.adminpanel = {
         link: 'https://restoapp.org',
     }
   },
-  sections: [],
+  // the menu under the brand, after «Админ-панель»: the storefront, in a new tab
+  sections: [{ id: 'site', title: 'Site', link: '/', type: 'blank', icon: 'storefront' }],
   aiAssistant: {
     // This must be enabled before Adminizer starts, otherwise it never creates
     // aiAssistantHandler for model registration.
