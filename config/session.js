@@ -25,6 +25,13 @@ module.exports.session = {
   ***************************************************************************/
   secret: process.env.SAILS_CONFIG_SESSION_SECRET ?? randomBytes(32).toString('hex'),
 
+  // GraphQL keeps its own sessions (the JWT of a UserDevice) and never reads req.session, while a request without the
+  // cookie (the storefront rendering a page on the server, an app, a bot) would leave a new session in the store each
+  // time. The rest - as Sails by default: no session for addresses that look like files.
+  isSessionDisabled: function (req) {
+    return req.path === '/graphql' || req.path.indexOf('/graphql/') === 0 || !!req.path.match(req._sails.LOOKS_LIKE_ASSET_RX);
+  },
+
 
   /***************************************************************************
   *                                                                          *

@@ -13,6 +13,7 @@ if (process.env.OPENHARNESS_MCP_TOOLS !== 'false') {
 }
 
 var path = require('path');
+var Readable = require('stream').Readable;
 
 // Неизвестный адрес в этих пространствах — 404 бэкенда, а не страница витрины
 var BACKEND_PREFIXES = ['/admin', '/api', '/graphql', '/assets'];
@@ -26,6 +27,54 @@ function isStorefrontPage(req) {
     // Ненайденный файл (манифест, логотип) — 404. Переход браузера явно просит text/html,
     // поэтому страница со слагом с точкой (статьи base-pages) всё равно получает витрину.
     return path.extname(urlPath) === '' || /text\/html/.test(req.headers.accept || '');
+}
+
+// How the storefront renders its pages, asked once, on the first page, from the module that delivers the storefront
+// (admin-frontend) by the event storefront:get-renderer. The answer is one object { mode, handle } the module keeps
+// current itself (at its start, after a build): mode 'ssr' - handle(request, { apiBase }) renders the page on the
+// server, anything else - views/index.ejs of the static build. One answer only: two are a conflict of modules.
+var storefrontRenderer;
+
+async function getStorefrontRenderer() {
+    if (storefrontRenderer !== undefined) return storefrontRenderer;
+    var answers = (await emitter.emit('storefront:get-renderer')).filter(function (answer) {
+        return answer.state === 'success' && answer.result;
+    });
+    if (answers.length > 1) {
+        sails.log.error('storefront:get-renderer: ' + answers.length + ' modules answered (' + answers.map(function (answer) { return answer.id; }).join(', ') + '), the storefront stays static');
+    }
+    storefrontRenderer = answers.length === 1 ? answers[0].result : null;
+    return storefrontRenderer;
+}
+
+// A page rendered on the server: the request as a fetch Request, the answer back into Express. The API is Sails
+// itself on 127.0.0.1 - past the nginx of the image, the base of the recipe ("/") is for the browser only.
+async function renderOnServer(renderer, req, res) {
+    var headers = new Headers();
+    Object.keys(req.headers).forEach(function (name) {
+        var value = req.headers[name];
+        (Array.isArray(value) ? value : [value]).forEach(function (one) {
+            if (one !== undefined) headers.append(name, one);
+        });
+    });
+    var request = new Request(req.protocol + '://' + req.get('host') + req.originalUrl, { method: req.method, headers: headers });
+    var response = await renderer.handle(request, { apiBase: 'http://127.0.0.1:' + sails.config.port });
+    res.status(response.status);
+    response.headers.forEach(function (value, name) {
+        if (name !== 'set-cookie') res.setHeader(name, value);
+    });
+    // append: the session of Sails may have set its own cookie already
+    var cookies = response.headers.getSetCookie();
+    if (cookies.length > 0) res.append('Set-Cookie', cookies);
+    if (!response.body) return res.end();
+    Readable.fromWeb(response.body).pipe(res);
+}
+
+function renderPage(req, res, next) {
+    getStorefrontRenderer().then(function (renderer) {
+        if (renderer && renderer.mode === 'ssr') return renderOnServer(renderer, req, res);
+        return res.view('index');
+    }).catch(next);
 }
 
 // TODO: add 500 and 404 for admin panel
@@ -84,12 +133,12 @@ module.exports.http = {
             switch (req.url) {
                 case '/':
                     if (isPageRequest) {
-                        return res.view('index');
+                        return renderPage(req, res, next);
                     }
                     break;
                 default:
                     if (isPageRequest && !req.isSocket && isStorefrontPage(req)) {
-                        return res.view('index');
+                        return renderPage(req, res, next);
                     }
             }
             return next();
