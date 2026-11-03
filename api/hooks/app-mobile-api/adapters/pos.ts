@@ -1,4 +1,17 @@
-import type { PosActor, PosLine, PosOrder, PosPort } from "../apps/pos";
+import type {
+  PosActor,
+  PosCatalog,
+  PosGroup,
+  PosLine,
+  PosMessage,
+  PosOrder,
+  PosPaymentOption,
+  PosPort,
+  PosProduct,
+  PosServiceOption,
+  PosStep,
+  PosTimeOptions,
+} from "../apps/pos";
 
 /**
  * The POS on core's own models.
@@ -15,8 +28,16 @@ import type { PosActor, PosLine, PosOrder, PosPort } from "../apps/pos";
  */
 
 declare const Order: any;
+declare const OrderDish: any;
+declare const Dish: any;
+declare const Group: any;
 declare const Place: any;
+declare const City: any;
 declare const User: any;
+declare const UserLocation: any;
+declare const PaymentMethod: any;
+declare const Settings: any;
+declare const Adapter: any;
 declare const MobileOrderDraft: any;
 
 /** States a draft can still be in; anything else is an order and leaves the drafts. */
@@ -25,6 +46,22 @@ const DRAFT_STATES = ["NEW", "CART", "CHECKOUT"];
 const DRAFTS_LIMIT = 50;
 
 const { v4: uuid } = require("uuid");
+
+const CORE = "@webresto/core";
+const authService = () => require(`${CORE}/lib/AuthService`).default ?? require(`${CORE}/lib/AuthService`);
+const splitPhone = (raw: string) => require(`${CORE}/lib/phone`).splitPhone(raw);
+/** What a refusal of `Order.check` means — core's table, shared with the storefront (C8). */
+const orderCheckFailure = (error: unknown, order?: unknown) => require(`${CORE}/lib/order/order-errors`).orderCheckFailure(error, order);
+const effectiveBalance = (id: string, context: any) =>
+  require(`${CORE}/lib/menu/product-availability`).getEffectiveBalanceAcross(id, context);
+const orderHelper = () => require(`${CORE}/lib/order/OrderHelper`).OrderHelper;
+
+/** The channel an order taken here comes from: the `staff` type core registers for this app. */
+const CHANNEL = "mobile-pos";
+
+const INFO = "info";
+const DANGER = "danger";
+const SUCCESS = "success";
 
 function phoneString(phone: any): string | null {
   if (!phone || typeof phone !== "object") return null;
@@ -94,6 +131,10 @@ async function toPosOrder(full: any, placeId: string): Promise<PosOrder> {
     bonusesTotal: Number(full.bonusesTotal) || 0,
     total: Number(full.total) || 0,
     message: full.message || null,
+    // What the operator may do now — the server's answer, not a rule the screen keeps: an empty
+    // basket or a customer without a phone cannot be checked, and only a checked order is placed.
+    canCheck: Number(full.dishesCount) > 0 && Boolean(customer?.phone?.number),
+    canPlace: full.state === "CHECKOUT",
     createdAt: Number(full.createdAt) || 0,
     updatedAt: Number(full.updatedAt) || 0,
   };
@@ -186,5 +227,437 @@ export function corePos(): PosPort {
       await Order.log({ id }, "info", "mobile-api", "order entry: draft dropped", { place, panelUser: userId });
       return true;
     },
+
+    // ---- the catalog ----
+
+    async catalog(place, id, { group, q, offset, limit }) {
+      const order = await Order.findOne({ id });
+      // The menu of *this* order: core reads it at the kitchens the order has, and hides what they
+      // cannot cook — the same answer the storefront gets for the same basket.
+      const context = await (await Adapter.get("menu")).resolveContext({ order });
+      const lines = await OrderDish.find({ order: id });
+      const inOrder = new Map<string, number>();
+      for (const line of lines) {
+        const dishId = String(typeof line.dish === "object" ? line.dish?.id : line.dish);
+        inOrder.set(dishId, (inOrder.get(dishId) ?? 0) + (Number(line.amount) || 0));
+      }
+
+      const products = q
+        ? await Dish.getDishes({ or: [{ name: { contains: q } }, { code: { contains: q } }], modifier: false }, context)
+        : group
+          ? await Dish.getDishes({ parentGroup: group, modifier: false }, context)
+          : [];
+      const items = await Promise.all(products.map((product: any) => toProduct(product, context, inOrder)));
+
+      const groups = q ? [] : await groupsOf(group);
+      return {
+        path: await pathTo(group),
+        groups,
+        items: items.slice(offset, offset + limit),
+        nextCursor: offset + limit < items.length ? String(offset + limit) : null,
+        total: items.length,
+      } as PosCatalog;
+    },
+
+    // ---- the lines ----
+
+    addProduct(place, id, dishId, amount) {
+      return change(place, id, async () => {
+        // `user`, exactly as the storefront adds a product: `countCart` sums only the lines a
+        // person put in the basket (`addedBy === "user"`), so anything else would be free. The
+        // consequence is core's own rule: with REQUIRE_AUTH_FOR_CART on, the operator has to pick
+        // the customer before the first product, and core says so in the message.
+        await Order.addDish({ id }, dishId, amount, [], "", "user");
+      });
+    },
+
+    setLineAmount(place, id, lineId, amount) {
+      return change(place, id, async () => {
+        const line = await lineRow(id, lineId);
+        if (!line) return { key: "mobile.pos.error.noLine", tone: DANGER };
+        if (amount <= 0) await Order.removeDish({ id }, line, Number(line.amount) || 1, false);
+        else await Order.setCount({ id }, line, amount);
+        return null;
+      });
+    },
+
+    setLineComment(place, id, lineId, comment) {
+      return change(place, id, async () => {
+        const line = await lineRow(id, lineId);
+        if (!line) return { key: "mobile.pos.error.noLine", tone: DANGER };
+        await Order.setComment({ id }, line, comment);
+        await Order.countCart({ id });
+        return null;
+      });
+    },
+
+    // ---- how the food is handed over ----
+
+    async serviceOptions(place) {
+      const point = await Place.findOne({ id: place });
+      return [
+        { id: "delivery", available: true, reason: null },
+        { id: "pickup", available: Boolean(point?.isPickupPoint), reason: point?.isPickupPoint ? null : "mobile.pos.service.noCounter" },
+        { id: "dine-in", available: Boolean(point?.hasDiningArea), reason: point?.hasDiningArea ? null : "mobile.pos.service.noRoom" },
+      ] as PosServiceOption[];
+    },
+
+    setService(place, id, serviceType, table) {
+      return change(place, id, async () => {
+        const options = await this.serviceOptions(place);
+        if (!options.find((option) => option.id === serviceType)?.available) {
+          return { key: "mobile.pos.error.serviceUnavailable", tone: DANGER };
+        }
+        await Order.setServiceType({ id }, serviceType);
+        await Order.update(
+          { id },
+          {
+            // Pickup and dine-in are cooked and collected at the point of the terminal; a delivery
+            // has none, and its kitchen is the address's (core's `resolveCookingPlace`).
+            pickupPoint: serviceType === "delivery" ? null : String(place),
+            table: serviceType === "dine-in" ? table ?? null : null,
+          },
+        ).fetch();
+        await Order.countCart({ id });
+        return null;
+      });
+    },
+
+    setTable(place, id, table) {
+      return change(place, id, async () => {
+        const order = await Order.findOne({ id });
+        if (order?.serviceType !== "dine-in") return { key: "mobile.pos.error.tableNotDineIn", tone: DANGER };
+        await Order.update({ id }, { table }).fetch();
+        return null;
+      });
+    },
+
+    setAddress(place, id, address) {
+      return change(place, id, async () => {
+        const line = [address.street, address.home].filter(Boolean).join(", ");
+        await Order.update(
+          { id },
+          {
+            address: {
+              city: address.city ?? null,
+              node: address.node ?? null,
+              formatted: address.formatted ?? line,
+              ...(address.home ? { home: address.home } : {}),
+              ...(address.housing ? { housing: address.housing } : {}),
+              ...(address.apartment ? { apartment: address.apartment } : {}),
+              ...(address.entrance ? { entrance: address.entrance } : {}),
+              ...(address.floor ? { floor: address.floor } : {}),
+              ...(address.doorphone ? { doorphone: address.doorphone } : {}),
+              ...(address.comment ? { comment: address.comment } : {}),
+            },
+          },
+        ).fetch();
+        // The address decides the kitchen and the price of the delivery: both are counted here.
+        await Order.countCart({ id });
+        return null;
+      });
+    },
+
+    async addressSearch(city, parent, q) {
+      const nodes = await (await Adapter.get("geo")).search({ city, parent, query: q });
+      return (nodes ?? []).map((node: any) => ({ id: String(node.id), name: node.name ?? "", type: node.type ?? null }));
+    },
+
+    async cities() {
+      const rows = await City.find({ where: { isDeleted: false }, sort: "name ASC" }).catch(() => []);
+      return rows.map((city: any) => ({ id: String(city.id), name: city.name ?? String(city.id) }));
+    },
+
+    async clientAddresses(clientId) {
+      const rows = await UserLocation.find({ where: { user: String(clientId) }, sort: "createdAt DESC" }).catch(() => []);
+      return rows.map((row: any) => ({ id: String(row.id), formatted: row.formatted ?? "" }));
+    },
+
+    // ---- who it is for ----
+
+    setCustomer(place, id, { name, phone, createClient }) {
+      return change(place, id, async () => {
+        const parts = splitPhone(phone);
+        const patch: Record<string, unknown> = { customer: { name, phone: parts } };
+        if (createClient) {
+          // The one factory core uses for a guest at DONE: the same number never makes a second
+          // profile, and the order is that person's from now on.
+          const { user } = await authService().materializeUser({ firstName: name, phone: parts });
+          patch.user = String(user.id);
+        }
+        await Order.update({ id }, patch).fetch();
+        return null;
+      });
+    },
+
+    setClient(place, id, clientId) {
+      return change(place, id, async () => {
+        const client = await User.findOne({ id: clientId });
+        if (!client || client.isDeleted) return { key: "mobile.pos.error.noClient", tone: DANGER };
+        const name = [client.firstName, client.lastName].filter(Boolean).join(" ").trim();
+        await Order.update({ id }, { user: String(client.id), customer: { name, phone: client.phone ?? null } }).fetch();
+        return null;
+      });
+    },
+
+    // ---- when ----
+
+    async timeOptions(place, id) {
+      const populated = await Order.populate({ id });
+      const init = await orderHelper().initCheckout(populated);
+      return {
+        asap: Boolean(init?.allowSoonAsPossible),
+        // core answers in unix seconds; the client works in milliseconds, as everywhere else here.
+        slots: (init?.worktimeIntervals ?? []).map((pair: number[]) => [pair[0] * 1000, pair[1] * 1000]),
+        minCookingMinutes: Number(init?.minCookingTimeInMinutes) || 0,
+      } as PosTimeOptions;
+    },
+
+    setTime(place, id, input) {
+      return change(place, id, async () => {
+        if (input.mode === "time" && !input.date) return { key: "mobile.pos.error.noTime", tone: DANGER };
+        if (input.mode === "maxWait" && !input.maxWaitMinutes) return { key: "mobile.pos.error.noWait", tone: DANGER };
+        await Order.update(
+          { id },
+          {
+            // The two are mutually exclusive: core refuses an order carrying both (code 20).
+            date: input.mode === "time" ? await wallClock(input.date as number) : null,
+            maxWaitMinutes: input.mode === "maxWait" ? input.maxWaitMinutes : null,
+          },
+        ).fetch();
+        await Order.countCart({ id });
+        return null;
+      });
+    },
+
+    // ---- what it is paid with ----
+
+    async payments(place, id) {
+      const methods = await PaymentMethod.getAvailable();
+      const options: PosPaymentOption[] = [];
+      for (const method of methods) {
+        const isPromise = await PaymentMethod.isPaymentPromise(String(method.id));
+        options.push({
+          id: String(method.id),
+          title: method.title ?? String(method.id),
+          isPromise,
+          // Online payment ends in a redirect, and a terminal has nowhere to send it (slice D).
+          available: isPromise,
+        });
+      }
+      return options;
+    },
+
+    setPayment(place, id, paymentMethodId, trifleFrom) {
+      return change(place, id, async () => {
+        const method = await PaymentMethod.findOne({ id: paymentMethodId });
+        if (!method) return { key: "mobile.pos.error.noPayment", tone: DANGER };
+        if (!(await PaymentMethod.isPaymentPromise(paymentMethodId))) {
+          return { key: "mobile.pos.error.onlinePayment", tone: DANGER };
+        }
+        await Order.update(
+          { id },
+          {
+            paymentMethod: paymentMethodId,
+            paymentMethodTitle: method.title ?? null,
+            isPaymentPromise: true,
+            ...(trifleFrom === undefined ? {} : { trifleFrom }),
+          },
+        ).fetch();
+        await Order.countCart({ id });
+        return null;
+      });
+    },
+
+    setDetails(place, id, input) {
+      return change(place, id, async () => {
+        const order = await Order.findOne({ id });
+        const customData = { ...(order?.customData ?? {}) };
+        if (input.callback !== undefined) customData.callback = input.callback;
+        await Order.update(
+          { id },
+          {
+            ...(input.comment === undefined ? {} : { comment: input.comment }),
+            ...(input.personsCount === undefined ? {} : { personsCount: String(input.personsCount) }),
+            customData,
+          },
+        ).fetch();
+        await Order.countCart({ id });
+        return null;
+      });
+    },
+
+    promocode(place, id, code) {
+      return change(place, id, async () => {
+        await Order.applyPromotionCode({ id }, code);
+        const order = await Order.findOne({ id });
+        if (!code) return { key: "mobile.pos.promocode.off", tone: INFO };
+        // core does not throw for a code that is not one: the order says whether it took it.
+        const taken = order?.promotionCode !== null && order?.promotionCode !== undefined && order?.promotionCode !== "";
+        if (taken) return { text: order.promotionCodeDescription || "", key: order.promotionCodeDescription ? undefined : "mobile.pos.promocode.on", tone: SUCCESS };
+        return { key: "mobile.pos.promocode.invalid", tone: DANGER };
+      });
+    },
+
+    // ---- the end ----
+
+    async check(place, id, actor) {
+      const before = await Order.findOne({ id });
+      if (!before) return { order: null, message: null, ok: false };
+      try {
+        const order = await Order.populate({ id });
+        await Order.check(
+          { id },
+          order.customer,
+          order.serviceType,
+          order.serviceType === "delivery" ? order.address : null,
+          order.paymentMethod ? String(order.paymentMethod.id ?? order.paymentMethod) : undefined,
+          order.user ? String(order.user.id ?? order.user) : null,
+          null,
+          CHANNEL,
+        );
+        await Order.log({ id }, "info", "mobile-api", "order entry: checked", { place, panelUser: actor.userId, device: actor.device });
+        const checked = await serialize(place, id);
+        return {
+          order: checked,
+          message: checked?.message ? { text: checked.message, tone: INFO } : { key: "mobile.pos.ready", tone: SUCCESS },
+          ok: checked?.state === "CHECKOUT",
+        };
+      } catch (error: any) {
+        const failure = orderCheckFailure(error, await Order.findOne({ id }));
+        await Order.log({ id }, "warn", "mobile-api", "order entry: check refused", { code: failure.code, panelUser: actor.userId });
+        return {
+          order: await serialize(place, id),
+          message: { key: failure.key, arg: failure.arg, tone: DANGER },
+          ok: false,
+        };
+      }
+    },
+
+    async place(place, id, actor) {
+      const row = await draftRow(place, actor.userId, id);
+      if (!row) return { order: null, message: null, ok: false };
+      const order = await Order.findOne({ id });
+      if (order?.state !== "CHECKOUT") {
+        return { order: await serialize(place, id), message: { key: "mobile.pos.error.checkFirst", tone: DANGER }, ok: false };
+      }
+      try {
+        await Order.order({ id });
+      } catch (error: any) {
+        await Order.log({ id }, "error", "mobile-api", "order entry: placing failed", { error: String(error?.message ?? error) });
+        return { order: await serialize(place, id), message: { key: "mobile.pos.error.notPlaced", tone: DANGER }, ok: false };
+      }
+      // Placed: it is an order now, and an order is the board's business, not the drafts'.
+      await MobileOrderDraft.destroy({ id: row.id });
+      await Order.log({ id }, "info", "mobile-api", "order entry: placed", { place, panelUser: actor.userId, device: actor.device });
+      const placed = await serialize(place, id);
+      return { order: placed, message: { key: "mobile.pos.placed", arg: placed?.number, tone: SUCCESS }, ok: true };
+    },
   };
+
+  /**
+   * One step of the order: do it, let core recount, and answer with the whole order.
+   *
+   * A throw of core is a word for the operator, not a 500: «this product is out of stock» is the
+   * next thing they will say out loud, so it comes back as a message and the receipt stays.
+   */
+  async function change(place: string, id: string, run: () => Promise<PosMessage | null | void>): Promise<PosStep> {
+    const order = await Order.findOne({ id });
+    if (!order) return { order: null, message: null, ok: false };
+    let message: PosMessage | null = null;
+    try {
+      message = (await run()) ?? null;
+    } catch (error: any) {
+      // A refusal core numbered is said in the words of the table it shares with the storefront;
+      // anything else — a plain throw of a model — is passed through as it came.
+      if (typeof error?.code === "number") {
+        const failure = orderCheckFailure(error, await Order.findOne({ id }));
+        return { order: await serialize(place, id), message: { key: failure.key, arg: failure.arg, tone: DANGER }, ok: false };
+      }
+      const text = String(error?.error ?? error?.body ?? error?.message ?? error);
+      return { order: await serialize(place, id), message: { text, tone: DANGER }, ok: false };
+    }
+    const updated = await serialize(place, id);
+    // core writes what its recount did — a product it dropped, a delivery it could not price.
+    const note = updated?.message ? { text: updated.message, tone: INFO } : null;
+    return { order: updated, message: message ?? note, ok: message === null || message.tone !== DANGER };
+  }
+}
+
+/** The line of this order, or null — a line of another order is not this caller's business. */
+async function lineRow(orderId: string, lineId: number): Promise<any | null> {
+  const line = await OrderDish.findOne({ id: lineId }).populate("dish");
+  if (!line) return null;
+  const owner = String(typeof line.order === "object" ? line.order?.id : line.order);
+  return owner === String(orderId) ? line : null;
+}
+
+/** The groups one level down: the top of the menu, or the children of the open group. */
+async function groupsOf(group?: string): Promise<PosGroup[]> {
+  const rows = group
+    ? await Group.find({ where: { parentGroup: group, isDeleted: false, enable: true }, sort: "sortOrder ASC" })
+    : await Group.getMenuGroups();
+  return rows.map((row: any) => ({ id: String(row.id), name: row.name ?? "", imageUrl: imageOf(row) }));
+}
+
+/** The groups from the top down to this one: the breadcrumbs of the catalog. */
+async function pathTo(group?: string): Promise<PosGroup[]> {
+  const path: PosGroup[] = [];
+  let current = group;
+  while (current) {
+    const row = await Group.findOne({ id: current });
+    if (!row) break;
+    path.unshift({ id: String(row.id), name: row.name ?? "", imageUrl: imageOf(row) });
+    current = row.parentGroup ? String(row.parentGroup.id ?? row.parentGroup) : undefined;
+  }
+  return path;
+}
+
+/** The first image of a product or a group as a URL the client can ask for. */
+function imageOf(record: any): string | null {
+  const image = (record?.images ?? [])[0];
+  const variants = image?.variant ?? {};
+  const path = variants.small ?? variants.medium ?? variants.origin ?? Object.values(variants)[0];
+  if (typeof path !== "string" || !path) return null;
+  // The uploads are served statically by the same server the API is on.
+  const index = path.indexOf("/uploads/");
+  return index === -1 ? null : path.slice(index);
+}
+
+/** A product of the catalog: the promotion's price and the stock core counted for this context. */
+async function toProduct(product: any, context: any, inOrder: Map<string, number>): Promise<PosProduct> {
+  const shown = await promotionView(product);
+  return {
+    id: String(product.id),
+    name: product.name ?? "",
+    code: product.code ?? null,
+    groupId: product.parentGroup ? String(product.parentGroup.id ?? product.parentGroup) : null,
+    price: Number(product.price) || 0,
+    salePrice: typeof shown?.salePrice === "number" && shown.salePrice !== product.price ? shown.salePrice : null,
+    balance: await effectiveBalance(String(product.id), context),
+    weight: typeof product.weight === "number" ? product.weight : null,
+    imageUrl: imageOf(product),
+    hasOptions: Array.isArray(product.modifiers) && product.modifiers.length > 0,
+    inOrder: inOrder.get(String(product.id)) ?? 0,
+  };
+}
+
+/** What the promotions make of a product, as the storefront shows it. */
+async function promotionView(product: any): Promise<any> {
+  try {
+    return (await Adapter.getPromotionAdapter()).displayDish({ ...product });
+  } catch {
+    // An installation without a promotion adapter sells at the price on the product.
+    return null;
+  }
+}
+
+/** Epoch milliseconds as core keeps a date: "YYYY-MM-DD HH:mm:ss" in the server's own zone. */
+async function wallClock(millis: number): Promise<string> {
+  const setting = await Settings.get("TZ");
+  const timeZone = typeof setting === "string" && setting.trim() ? setting.trim() : process.env.TZ;
+  const date = new Date(millis);
+  if (!timeZone) return date.toISOString().replace("T", " ").slice(0, 19);
+  // sv-SE gives "YYYY-MM-DD HH:mm:ss" — the shape core parses.
+  return date.toLocaleString("sv-SE", { timeZone, hourCycle: "h23" });
 }

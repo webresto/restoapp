@@ -54,6 +54,10 @@ function configureEnvironment(env: Record<string, string>): void {
 }
 
 async function fixtures(sails: any): Promise<Pick<Stand, "users" | "places">> {
+  // Without a timezone core refuses to place any order at all (models/Order.ts, code 19), so the
+  // stand has one, as a real installation does.
+  await (global as any).Settings.set("TZ", { key: "TZ", value: "Europe/Moscow" } as any);
+
   const Group = sails.models.groupap;
   const User = sails.models.userap;
   const Place = sails.models.place;

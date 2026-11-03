@@ -7,61 +7,427 @@
     "posLine": {
       "description": "A line of the receipt. Every number is core's: nothing is added up on the device.",
       "type": "object",
-      "required": ["lineId", "dishId", "name", "amount", "price", "total"],
+      "required": [
+        "lineId",
+        "dishId",
+        "name",
+        "amount",
+        "price",
+        "total"
+      ],
       "properties": {
-        "lineId": { "description": "core's `orderdish.id` — the line, not the product.", "type": "integer" },
-        "dishId": { "type": "string" },
-        "name": { "type": "string" },
-        "amount": { "type": "integer", "minimum": 0 },
-        "price": { "type": "number" },
-        "total": { "type": "number" },
-        "oldPrice": { "description": "The price before a promotion took the line; null when none did.", "type": ["number", "null"] },
-        "comment": { "type": ["string", "null"] },
-        "hasOptions": { "description": "The product has modifier groups; core fills their defaults until the chooser exists.", "type": "boolean" }
+        "lineId": {
+          "description": "core's `orderdish.id` — the line, not the product.",
+          "type": "integer"
+        },
+        "dishId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "price": {
+          "type": "number"
+        },
+        "total": {
+          "type": "number"
+        },
+        "oldPrice": {
+          "description": "The price before a promotion took the line; null when none did.",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "comment": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hasOptions": {
+          "description": "The product has modifier groups; core fills their defaults until the chooser exists.",
+          "type": "boolean"
+        }
       }
     },
     "posOrder": {
       "description": "The draft as the receipt shows it: the state, the way it is received, the lines and the totals the server counted.",
       "type": "object",
-      "required": ["id", "number", "state", "serviceType", "placeId", "lines", "total"],
+      "required": [
+        "id",
+        "number",
+        "state",
+        "serviceType",
+        "placeId",
+        "lines",
+        "total",
+        "canCheck",
+        "canPlace"
+      ],
       "properties": {
-        "id": { "type": "string" },
-        "number": { "type": "string" },
-        "state": { "enum": ["NEW", "CART", "CHECKOUT", "PAYMENT", "ORDER"] },
-        "serviceType": { "enum": ["delivery", "pickup", "dine-in"] },
-        "placeId": { "description": "The point the order is taken for.", "type": "string" },
-        "cookingPlaceId": { "description": "Where core decided it is cooked; for a delivery it may be another kitchen.", "type": ["string", "null"] },
-        "cookingPlaceTitle": { "type": ["string", "null"] },
-        "table": { "description": "Dine-in: the table as the venue calls it (core's `Order.table`, task C12a).", "type": ["string", "null"] },
-        "customerName": { "type": ["string", "null"] },
-        "customerPhone": { "type": ["string", "null"] },
-        "clientId": { "description": "The account the order belongs to; a guest order has none.", "type": ["string", "null"] },
-        "address": { "type": ["string", "null"] },
-        "comment": { "type": ["string", "null"] },
-        "personsCount": { "type": ["integer", "null"] },
-        "date": { "description": "Epoch milliseconds, or null for «as soon as possible».", "type": ["integer", "null"] },
-        "maxWaitMinutes": { "type": ["integer", "null"] },
-        "paymentMethodId": { "type": ["string", "null"] },
-        "paymentMethodTitle": { "type": ["string", "null"] },
-        "promotionCode": { "type": ["string", "null"] },
-        "lines": { "type": "array", "items": { "$ref": "#/definitions/posLine" } },
-        "dishesCount": { "type": "integer", "minimum": 0 },
-        "basketTotal": { "type": "number" },
-        "discountTotal": { "type": "number" },
-        "deliveryCost": { "type": "number" },
-        "bonusesTotal": { "type": "number" },
-        "total": { "type": "number" },
-        "message": { "description": "What core said about the last recount, verbatim.", "type": ["string", "null"] },
-        "createdAt": { "type": "integer" },
-        "updatedAt": { "type": "integer" }
+        "id": {
+          "type": "string"
+        },
+        "number": {
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "NEW",
+            "CART",
+            "CHECKOUT",
+            "PAYMENT",
+            "ORDER"
+          ]
+        },
+        "serviceType": {
+          "enum": [
+            "delivery",
+            "pickup",
+            "dine-in"
+          ]
+        },
+        "placeId": {
+          "description": "The point the order is taken for.",
+          "type": "string"
+        },
+        "cookingPlaceId": {
+          "description": "Where core decided it is cooked; for a delivery it may be another kitchen.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cookingPlaceTitle": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "table": {
+          "description": "Dine-in: the table as the venue calls it (core's `Order.table`, task C12a).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "customerName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "customerPhone": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "clientId": {
+          "description": "The account the order belongs to; a guest order has none.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "address": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "comment": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "personsCount": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "date": {
+          "description": "Epoch milliseconds, or null for «as soon as possible».",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "maxWaitMinutes": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "paymentMethodId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "paymentMethodTitle": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "promotionCode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/posLine"
+          }
+        },
+        "dishesCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "basketTotal": {
+          "type": "number"
+        },
+        "discountTotal": {
+          "type": "number"
+        },
+        "deliveryCost": {
+          "type": "number"
+        },
+        "bonusesTotal": {
+          "type": "number"
+        },
+        "total": {
+          "type": "number"
+        },
+        "message": {
+          "description": "What core said about the last recount, verbatim.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "createdAt": {
+          "type": "integer"
+        },
+        "updatedAt": {
+          "type": "integer"
+        },
+        "canCheck": {
+          "description": "The basket is not empty and the guest has a phone: there is something to check.",
+          "type": "boolean"
+        },
+        "canPlace": {
+          "description": "Checked and not placed yet.",
+          "type": "boolean"
+        }
       }
     },
     "posOrderAnswer": {
       "description": "`pos.order`: one draft when asked by id, otherwise the drafts of this person at this point. `pos.start` answers the same shape with the new draft in `order`.",
       "type": "object",
       "properties": {
-        "order": { "oneOf": [{ "$ref": "#/definitions/posOrder" }, { "type": "null" }] },
-        "drafts": { "type": "array", "items": { "$ref": "#/definitions/posOrder" } }
+        "order": {
+          "oneOf": [
+            {
+              "$ref": "#/definitions/posOrder"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "drafts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/posOrder"
+          }
+        }
+      }
+    },
+    "posStep": {
+      "description": "What a step of the order answers: the whole order as the server counted it, and the server's word about the step. `ok: false` is a refusal of core — the receipt stays and the message says why; it is not an error of the protocol.",
+      "type": "object",
+      "required": [
+        "order",
+        "message",
+        "ok"
+      ],
+      "properties": {
+        "order": {
+          "oneOf": [
+            {
+              "$ref": "#/definitions/posOrder"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": [
+                "text",
+                "tone"
+              ],
+              "properties": {
+                "text": {
+                  "type": "string"
+                },
+                "tone": {
+                  "enum": [
+                    "info",
+                    "warning",
+                    "success",
+                    "danger"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ok": {
+          "type": "boolean"
+        }
+      }
+    },
+    "posProduct": {
+      "description": "A product of the catalog, priced and counted for this order.",
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "price",
+        "balance",
+        "inOrder"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "code": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "groupId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "price": {
+          "type": "number"
+        },
+        "salePrice": {
+          "description": "The price a promotion makes; null when none takes it.",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "balance": {
+          "description": "-1 unlimited, 0 stopped.",
+          "type": "number"
+        },
+        "weight": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "imageUrl": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hasOptions": {
+          "type": "boolean"
+        },
+        "inOrder": {
+          "description": "How many of it the receipt already has.",
+          "type": "integer"
+        }
+      }
+    },
+    "posGroup": {
+      "type": "object",
+      "required": [
+        "id",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "imageUrl": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "posCatalog": {
+      "description": "`pos.catalog`: where we are in the menu, the groups one level down, and the products of the open group.",
+      "type": "object",
+      "required": [
+        "path",
+        "groups",
+        "items",
+        "nextCursor",
+        "total"
+      ],
+      "properties": {
+        "path": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/posGroup"
+          }
+        },
+        "groups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/posGroup"
+          }
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/posProduct"
+          }
+        },
+        "nextCursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "total": {
+          "type": "integer"
+        }
       }
     }
   }

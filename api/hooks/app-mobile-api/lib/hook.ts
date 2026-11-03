@@ -101,8 +101,10 @@ export default function createHook(sails: any) {
         await bindModels(sails);
         registerDishes(registry, coreStock());
         registerOrders(registry, coreOrders());
-        registerClients(registry, coreClients());
-        registerPos(registry, corePos());
+        const clients = coreClients();
+        registerClients(registry, clients);
+        // The POS looks customers up with the same port «Клиенты» uses: one search, two doors.
+        registerPos(registry, corePos(), clients);
         // Other modules may register their apps from their own hooks, now or later.
         sails.emit("mobile-api:ready", registry);
 

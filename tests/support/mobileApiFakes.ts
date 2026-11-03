@@ -17,7 +17,7 @@ import type {
 import type { StockItem, StockPort } from "../../api/hooks/app-mobile-api/apps/dishes";
 import type { OrderItem, OrdersActor, OrdersPort } from "../../api/hooks/app-mobile-api/apps/orders";
 import type { ClientCard, ClientItem, ClientsPort } from "../../api/hooks/app-mobile-api/apps/clients";
-import type { PosActor, PosOrder, PosPort } from "../../api/hooks/app-mobile-api/apps/pos";
+import type { PosActor, PosMessage, PosOrder, PosPort, PosStep } from "../../api/hooks/app-mobile-api/apps/pos";
 import { MobileApiRegistry } from "../../api/hooks/app-mobile-api/lib/registry";
 import { registerDishes } from "../../api/hooks/app-mobile-api/apps/dishes";
 import { NO_KITCHEN, registerOrders } from "../../api/hooks/app-mobile-api/apps/orders";
@@ -349,6 +349,8 @@ export class FakePos implements PosPort {
       bonusesTotal: 0,
       total: 0,
       message: null,
+      canCheck: false,
+      canPlace: false,
       createdAt: 1000 + this.seq,
       updatedAt: 1000 + this.seq,
     };
@@ -379,6 +381,218 @@ export class FakePos implements PosPort {
     if (index === -1) return false;
     this.rows.splice(index, 1);
     return true;
+  }
+
+  // ---- the rest of the flow, in memory: enough for the access and the schemas, no core ----
+
+  /** The three dishes of {@link FakeStock}, as a one-group catalog. */
+  async catalog(place: string, id: string, { group, q, offset, limit }: { group?: string; q?: string; offset: number; limit: number }) {
+    const order = this.rows.find((row) => row.id === id);
+    const products = new FakeStock().dishes
+      .filter((dish) => !q || dish.name.toLowerCase().includes(q.toLowerCase()))
+      .map((dish) => ({
+        id: dish.id,
+        name: dish.name,
+        code: dish.code,
+        groupId: "g1",
+        price: dish.price,
+        salePrice: null,
+        balance: -1,
+        weight: null,
+        imageUrl: null,
+        hasOptions: false,
+        inOrder: order?.lines.filter((line) => line.dishId === dish.id).reduce((sum, line) => sum + line.amount, 0) ?? 0,
+      }));
+    return {
+      path: group ? [{ id: "g1", name: "Меню", imageUrl: null }] : [],
+      groups: group ? [] : [{ id: "g1", name: "Меню", imageUrl: null }],
+      items: products.slice(offset, offset + limit),
+      nextCursor: null,
+      total: products.length,
+    };
+  }
+
+  private step(id: string, change?: (order: PosOrder) => PosMessage | null): PosStep {
+    const order = this.rows.find((row) => row.id === id);
+    if (!order) return { order: null, message: null, ok: false };
+    const message = change ? change(order) : null;
+    order.basketTotal = order.lines.reduce((sum, line) => sum + line.total, 0);
+    order.total = order.basketTotal;
+    order.dishesCount = order.lines.reduce((sum, line) => sum + line.amount, 0);
+    order.canCheck = order.dishesCount > 0 && Boolean(order.customerPhone);
+    order.canPlace = order.state === "CHECKOUT";
+    const { userId: _owner, ...view } = order;
+    return { order: view, message, ok: message === null || message.tone !== "danger" };
+  }
+
+  async addProduct(place: string, id: string, dishId: string, amount: number) {
+    return this.step(id, (order) => {
+      const dish = new FakeStock().dishes.find((candidate) => candidate.id === dishId);
+      if (!dish) return { key: "mobile.pos.error.noLine", tone: "danger" };
+      const line = order.lines.find((candidate) => candidate.dishId === dishId);
+      if (line) {
+        line.amount += amount;
+        line.total = line.amount * line.price;
+      } else {
+        order.lines.push({ lineId: order.lines.length + 1, dishId, name: dish.name, amount, price: dish.price, total: dish.price * amount, oldPrice: null, comment: null, hasOptions: false });
+      }
+      return null;
+    });
+  }
+
+  async setLineAmount(place: string, id: string, lineId: number, amount: number) {
+    return this.step(id, (order) => {
+      const line = order.lines.find((candidate) => candidate.lineId === lineId);
+      if (!line) return { key: "mobile.pos.error.noLine", tone: "danger" };
+      if (amount <= 0) order.lines = order.lines.filter((candidate) => candidate.lineId !== lineId);
+      else {
+        line.amount = amount;
+        line.total = line.price * amount;
+      }
+      return null;
+    });
+  }
+
+  async setLineComment(place: string, id: string, lineId: number, comment: string) {
+    return this.step(id, (order) => {
+      const line = order.lines.find((candidate) => candidate.lineId === lineId);
+      if (!line) return { key: "mobile.pos.error.noLine", tone: "danger" };
+      line.comment = comment;
+      return null;
+    });
+  }
+
+  async serviceOptions(place: string) {
+    return [
+      { id: "delivery", available: true, reason: null },
+      { id: "pickup", available: place === "p1", reason: place === "p1" ? null : "mobile.pos.service.noCounter" },
+      { id: "dine-in", available: place === "p1", reason: place === "p1" ? null : "mobile.pos.service.noRoom" },
+    ];
+  }
+
+  async setService(place: string, id: string, serviceType: string, table?: string) {
+    const options = await this.serviceOptions(place);
+    return this.step(id, (order) => {
+      if (!options.find((option) => option.id === serviceType)?.available) {
+        return { key: "mobile.pos.error.serviceUnavailable", tone: "danger" };
+      }
+      order.serviceType = serviceType;
+      order.table = serviceType === "dine-in" ? table ?? null : null;
+      return null;
+    });
+  }
+
+  async setTable(place: string, id: string, table: string) {
+    return this.step(id, (order) => {
+      if (order.serviceType !== "dine-in") return { key: "mobile.pos.error.tableNotDineIn", tone: "danger" };
+      order.table = table;
+      return null;
+    });
+  }
+
+  async setAddress(place: string, id: string, address: Record<string, unknown>) {
+    return this.step(id, (order) => {
+      order.address = [address.street, address.home].filter(Boolean).join(", ");
+      return null;
+    });
+  }
+
+  async addressSearch(city: string, parent: string | undefined, q: string) {
+    return [{ id: "node-1", name: `${q} улица`, type: "street" }];
+  }
+
+  async cities() {
+    return [{ id: "c1", name: "Город" }];
+  }
+
+  async clientAddresses(clientId: string) {
+    return clientId === "u1" ? [{ id: "loc-1", formatted: "ул. Ленина, 5, кв. 12" }] : [];
+  }
+
+  async setCustomer(place: string, id: string, input: { name: string; phone: string; createClient?: boolean }) {
+    return this.step(id, (order) => {
+      order.customerName = input.name;
+      order.customerPhone = input.phone;
+      if (input.createClient) order.clientId = "u-new";
+      return null;
+    });
+  }
+
+  async setClient(place: string, id: string, clientId: string) {
+    return this.step(id, (order) => {
+      if (clientId !== "u1") return { key: "mobile.pos.error.noClient", tone: "danger" };
+      order.clientId = clientId;
+      order.customerName = "Иван Петров";
+      order.customerPhone = "+7 9990000001";
+      return null;
+    });
+  }
+
+  async timeOptions() {
+    return { asap: true, slots: [[1_700_000_000_000, 1_700_003_600_000]] as Array<[number, number]>, minCookingMinutes: 20 };
+  }
+
+  async setTime(place: string, id: string, input: { mode: string; date?: number; maxWaitMinutes?: number }) {
+    return this.step(id, (order) => {
+      if (input.mode === "time" && !input.date) return { key: "mobile.pos.error.noTime", tone: "danger" };
+      order.date = input.mode === "time" ? input.date ?? null : null;
+      order.maxWaitMinutes = input.mode === "maxWait" ? input.maxWaitMinutes ?? null : null;
+      return null;
+    });
+  }
+
+  async payments() {
+    return [
+      { id: "cash", title: "Наличные", isPromise: true, available: true },
+      { id: "online", title: "Онлайн", isPromise: false, available: false },
+    ];
+  }
+
+  async setPayment(place: string, id: string, paymentMethodId: string) {
+    return this.step(id, (order) => {
+      if (paymentMethodId === "online") return { key: "mobile.pos.error.onlinePayment", tone: "danger" };
+      if (paymentMethodId !== "cash") return { key: "mobile.pos.error.noPayment", tone: "danger" };
+      order.paymentMethodId = "cash";
+      order.paymentMethodTitle = "Наличные";
+      return null;
+    });
+  }
+
+  async setDetails(place: string, id: string, input: { comment?: string; personsCount?: number }) {
+    return this.step(id, (order) => {
+      if (input.comment !== undefined) order.comment = input.comment;
+      if (input.personsCount !== undefined) order.personsCount = input.personsCount;
+      return null;
+    });
+  }
+
+  async promocode(place: string, id: string, code: string | null) {
+    return this.step(id, (order) => {
+      order.promotionCode = code;
+      if (!code) return { key: "mobile.pos.promocode.off", tone: "info" };
+      return code === "LETO20"
+        ? { key: "mobile.pos.promocode.on", tone: "success" }
+        : { key: "mobile.pos.promocode.invalid", tone: "danger" };
+    });
+  }
+
+  async check(place: string, id: string) {
+    const order = this.rows.find((row) => row.id === id);
+    if (!order) return { order: null, message: null, ok: false };
+    if (!order.lines.length) return { ...this.step(id), message: { key: "order.error.13", tone: "danger" }, ok: false };
+    if (!order.customerPhone) return { ...this.step(id), message: { key: "order.error.2", tone: "danger" }, ok: false };
+    order.state = "CHECKOUT";
+    return { ...this.step(id), message: { key: "mobile.pos.ready", tone: "success" }, ok: true };
+  }
+
+  async place(place: string, id: string) {
+    const order = this.rows.find((row) => row.id === id && row.placeId === place);
+    if (!order) return { order: null, message: null, ok: false };
+    if (order.state !== "CHECKOUT") return { ...this.step(id), message: { key: "mobile.pos.error.checkFirst", tone: "danger" }, ok: false };
+    order.state = "ORDER";
+    const placed = this.step(id);
+    this.rows = this.rows.filter((row) => row.id !== id);
+    return { ...placed, message: { key: "mobile.pos.placed", arg: order.number, tone: "success" }, ok: true };
   }
 }
 
@@ -439,7 +653,7 @@ export async function makeFakes(): Promise<Fakes> {
   registerDishes(registry, stock);
   registerOrders(registry, orders);
   registerClients(registry, clients);
-  registerPos(registry, pos);
+  registerPos(registry, pos, clients);
 
   const env = { enabled: true, captcha: true, https: false, secret: "s3cret" as string | undefined };
   const clock = { now: Date.now() };

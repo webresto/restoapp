@@ -416,11 +416,14 @@ describe("app-mobile-api", function () {
   describe("POS", () => {
     // The answers of a native app are its own shape; this file is that shape, and the client keeps
     // a copy of it in its test resources.
-    const validAnswer = (() => {
+    const posSchema = (definition: string) => {
       const ajv = new Ajv({ strict: false, allErrors: true });
       ajv.addSchema(posContract);
-      return ajv.getSchema(`${posContract.$id}#/definitions/posOrderAnswer`)!;
-    })();
+      return ajv.getSchema(`${posContract.$id}#/definitions/${definition}`)!;
+    };
+    const validAnswer = posSchema("posOrderAnswer");
+    const validStep = posSchema("posStep");
+    const validCatalog = posSchema("posCatalog");
 
     it("answers by its own contract, both the list of drafts and one draft", async () => {
       const token = await login("taker");
@@ -442,6 +445,102 @@ describe("app-mobile-api", function () {
       expect(pos.places).to.deep.equal(["p1"]);
       // A native app declares no screens: its methods carry schemas and nothing else.
       expect(pos.methods.every((method: any) => method.ui === undefined)).to.equal(true);
+    });
+
+    it("walks the whole order on fake deps: catalog, basket, guest, check, place", async () => {
+      const token = await login("taker");
+      const place = "p1";
+      const draft = (await call(token, "pos.start", { params: {}, place })).body.result.order;
+
+      const catalog = (await call(token, "pos.catalog", { params: { id: draft.id }, place })).body.result;
+      expect(validCatalog(catalog), JSON.stringify(validCatalog.errors)).to.equal(true);
+      expect(catalog.groups.map((group: any) => group.id)).to.deep.equal(["g1"]);
+
+      const added = (await call(token, "pos.add", { params: { id: draft.id, dishId: "d1", amount: 2 }, place })).body.result;
+      expect(validStep(added), JSON.stringify(validStep.errors)).to.equal(true);
+      expect(added.order.lines[0]).to.include({ name: "Борщ", amount: 2, total: 600 });
+      expect(added.order.canCheck, "no guest yet").to.equal(false);
+
+      // Checking an order with no guest is a refusal in words, not an error of the protocol.
+      const noGuest = await call(token, "pos.check", { params: { id: draft.id }, place });
+      expect(noGuest.status).to.equal(200);
+      expect(noGuest.body.result.ok).to.equal(false);
+      expect(noGuest.body.result.message.text).to.equal("Укажите телефон гостя");
+
+      await call(token, "pos.setService", { params: { id: draft.id, serviceType: "dine-in", table: "7" }, place });
+      const guest = (await call(token, "pos.setCustomer", { params: { id: draft.id, name: "Гость", phone: "+7 999 000-00-01" }, place })).body.result;
+      expect(guest.order).to.include({ table: "7", customerName: "Гость", canCheck: true });
+
+      const promo = (await call(token, "pos.promocode", { params: { id: draft.id, code: "НЕТ" }, place })).body.result;
+      expect(promo.ok).to.equal(false);
+      expect(promo.message.text).to.equal("Промокод не действует");
+
+      const paid = (await call(token, "pos.setPayment", { params: { id: draft.id, paymentMethodId: "cash" }, place })).body.result;
+      expect(paid.order.paymentMethodTitle).to.equal("Наличные");
+      const online = (await call(token, "pos.setPayment", { params: { id: draft.id, paymentMethodId: "online" }, place })).body.result;
+      expect(online.ok, "online payment is not taken on a terminal yet").to.equal(false);
+
+      const checked = (await call(token, "pos.check", { params: { id: draft.id }, place })).body.result;
+      expect(checked.ok).to.equal(true);
+      expect(checked.order).to.include({ state: "CHECKOUT", canPlace: true });
+
+      const placed = (await call(token, "pos.place", { params: { id: draft.id }, place })).body.result;
+      expect(placed.ok).to.equal(true);
+      expect(placed.message.text).to.contain(draft.number);
+      expect((await call(token, "pos.order", { params: {}, place })).body.result.drafts).to.deep.equal([]);
+    });
+
+    it("refuses a step of somebody without order-entry, whatever the step", async () => {
+      const operator = await login("operator");
+      const steps: Array<[string, Record<string, unknown>]> = [
+        ["pos.catalog", { id: "draft1" }],
+        ["pos.add", { id: "draft1", dishId: "d1" }],
+        ["pos.setLine", { id: "draft1", lineId: 1, amount: 1 }],
+        ["pos.setService", { id: "draft1", serviceType: "pickup" }],
+        ["pos.setCustomer", { id: "draft1", name: "Гость", phone: "+7 999 000-00-01" }],
+        ["pos.check", { id: "draft1" }],
+        ["pos.place", { id: "draft1" }],
+      ];
+      for (const [method, params] of steps) {
+        const answer = await call(operator, method, { params, place: "p1" });
+        expect(answer.body.error?.code, method).to.equal("forbidden");
+      }
+    });
+
+    it("refuses what the schemas refuse: an unknown service type, a number that is not one", async () => {
+      const token = await login("taker");
+      const draft = (await call(token, "pos.start", { params: {}, place: "p1" })).body.result.order;
+
+      const service = await call(token, "pos.setService", { params: { id: draft.id, serviceType: "teleport" }, place: "p1" });
+      expect(service.status).to.equal(400);
+      expect(service.body.error.code).to.equal("invalid");
+
+      const phone = await call(token, "pos.setCustomer", { params: { id: draft.id, name: "Гость", phone: "не телефон" }, place: "p1" });
+      expect(phone.status).to.equal(400);
+
+      const amount = await call(token, "pos.setLine", { params: { id: draft.id, lineId: 1, amount: -5 }, place: "p1" });
+      expect(amount.status).to.equal(400);
+
+      // The point of the call is checked before anything else, as for every app by points.
+      const other = await call(token, "pos.add", { params: { id: draft.id, dishId: "d1" }, place: "p2" });
+      expect(other.body.error.code).to.equal("place_forbidden");
+    });
+
+    it("tells the terminal what the point can do and when the order can be had", async () => {
+      const token = await login("taker");
+      const draft = (await call(token, "pos.start", { params: {}, place: "p1" })).body.result.order;
+      const options = (await call(token, "pos.serviceOptions", { params: {}, place: "p1" })).body.result.options;
+      expect(options.map((option: any) => option.id)).to.deep.equal(["delivery", "pickup", "dine-in"]);
+
+      const when = (await call(token, "pos.timeOptions", { params: { id: draft.id }, place: "p1" })).body.result;
+      expect(when.asap).to.equal(true);
+      expect(when.slots[0]).to.have.length(2);
+
+      const payments = (await call(token, "pos.payments", { params: { id: draft.id }, place: "p1" })).body.result.items;
+      expect(payments.find((item: any) => item.id === "online").available).to.equal(false);
+
+      const cities = (await call(token, "pos.cities", { params: {}, place: "p1" })).body.result.items;
+      expect(cities.map((city: any) => city.name)).to.deep.equal(["Город"]);
     });
 
     it("keeps the drafts of one person at one point", async () => {

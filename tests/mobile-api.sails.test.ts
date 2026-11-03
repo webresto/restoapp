@@ -194,6 +194,136 @@ describe("app-mobile-api in Sails", function () {
     expect(await stand.sails.models.order.findOne({ id: started.id })).to.not.equal(undefined);
   });
 
+  it("takes an order from the catalog to the board: the basket, the guest, the check, the placing", async () => {
+    const admin = await signIn("stand-admin");
+    const Dish = stand.sails.models.dish;
+    const Group = stand.sails.models.group;
+    const Order = stand.sails.models.order;
+    // A point of its own: an order really placed here would otherwise turn up among the orders the
+    // board's tests count at «Ленина, 5».
+    const place = (await stand.sails.models.place.create({
+      id: "stand-pos", title: "Касса", enable: true, isCookingPoint: true, isPickupPoint: true,
+    }).fetch()).id;
+
+    const group = await Group.create({ id: "stand-g1", name: "Пицца", enable: true, isDeleted: false }).fetch();
+    const pizza = await Dish.create({ id: "stand-d1", name: "Пепперони", code: "P1", price: 590, parentGroup: group.id, enable: true, isDeleted: false, modifier: false }).fetch();
+    await Dish.create({ id: "stand-d2", name: "Маргарита", code: "P2", price: 490, parentGroup: group.id, enable: true, isDeleted: false, modifier: false }).fetch();
+
+    const draft = (await call(admin, "pos.start", { params: {}, place })).body.result.order;
+
+    // The catalog is the menu of this order: the group's products, with the price core quotes.
+    const catalog = (await call(admin, "pos.catalog", { params: { id: draft.id, group: group.id }, place })).body.result;
+    expect(catalog.items.map((item: any) => item.id)).to.have.members(["stand-d1", "stand-d2"]);
+    expect(catalog.items.find((item: any) => item.id === "stand-d1")).to.include({ price: 590, inOrder: 0 });
+    expect(catalog.path.map((group: any) => group.id)).to.deep.equal(["stand-g1"]);
+
+    // «+» twice, then three of them: every answer is the whole receipt as core counted it.
+    await call(admin, "pos.add", { params: { id: draft.id, dishId: pizza.id }, place });
+    const added = (await call(admin, "pos.add", { params: { id: draft.id, dishId: pizza.id }, place })).body.result;
+    expect(added.order.lines).to.have.length(1);
+    expect(added.order.lines[0]).to.include({ name: "Пепперони", amount: 2 });
+    expect(added.order.total).to.equal(1180);
+    const three = (await call(admin, "pos.setLine", { params: { id: draft.id, lineId: added.order.lines[0].lineId, amount: 3 }, place })).body.result;
+    expect(three.order.lines[0].amount).to.equal(3);
+    expect(three.order.total).to.equal(1770);
+    expect(three.order.canCheck, "no guest yet").to.equal(false);
+
+    // The point of this stand hands food over but has no room to eat in, and says so.
+    const options = (await call(admin, "pos.serviceOptions", { params: {}, place })).body.result.options;
+    expect(options.find((option: any) => option.id === "pickup").available).to.equal(true);
+    expect(options.find((option: any) => option.id === "dine-in").available).to.equal(false);
+    const pickup = (await call(admin, "pos.setService", { params: { id: draft.id, serviceType: "pickup" }, place })).body.result;
+    expect(pickup.order.serviceType).to.equal("pickup");
+
+    const withGuest = (await call(admin, "pos.setCustomer", {
+      params: { id: draft.id, name: "Сергей Крылов", phone: "+7 999 123-45-67", createClient: true },
+      place,
+    })).body.result;
+    expect(withGuest.order.customerName).to.equal("Сергей Крылов");
+    expect(withGuest.order.clientId, "createClient made an account and bound it").to.be.a("string");
+    expect(withGuest.order.canCheck).to.equal(true);
+
+    const checked = (await call(admin, "pos.check", { params: { id: draft.id }, place })).body.result;
+    expect(checked.ok, JSON.stringify(checked.message)).to.equal(true);
+    expect(checked.order.state).to.equal("CHECKOUT");
+    expect(checked.order.canPlace).to.equal(true);
+
+    const placed = (await call(admin, "pos.place", { params: { id: draft.id }, place })).body.result;
+    expect(placed.ok, JSON.stringify(placed.message)).to.equal(true);
+    expect(placed.order.state).to.equal("ORDER");
+    expect(placed.message.text).to.contain("accepted");
+
+    // The order as core keeps it: at the point, from this channel, for the account just made.
+    const stored = await Order.findOne({ id: draft.id });
+    expect(stored.state).to.equal("ORDER");
+    expect(String(stored.pickupPoint)).to.equal(place);
+    expect(stored.orderedOnPlatform).to.equal("mobile-pos");
+    expect(stored.total).to.equal(1770);
+    expect(String(stored.user)).to.equal(withGuest.order.clientId);
+
+    // It is an order now: out of the drafts, and on the board of its point.
+    const drafts = (await call(admin, "pos.order", { params: {}, place })).body.result.drafts;
+    expect(drafts.map((order: any) => order.id)).to.not.include(draft.id);
+    const board = (await call(admin, "orders.list", { params: {}, place })).body.result;
+    expect(board.items.map((item: any) => item.id)).to.include(draft.id);
+  });
+
+  it("serves a table in the dining room, and keeps it on the order", async () => {
+    const admin = await signIn("stand-admin");
+    const Place = stand.sails.models.place;
+    const Dish = stand.sails.models.dish;
+    const Order = stand.sails.models.order;
+    const hall = await Place.create({ id: "stand-hall", title: "Зал", enable: true, isCookingPoint: true, isPickupPoint: false, hasDiningArea: true }).fetch();
+    const soup = await Dish.create({ id: "stand-d3", name: "Том ям", price: 420, enable: true, isDeleted: false, modifier: false }).fetch();
+
+    const draft = (await call(admin, "pos.start", { params: {}, place: hall.id })).body.result.order;
+    // A point with a room to eat in starts the order there, without being asked.
+    expect(draft.serviceType).to.equal("dine-in");
+
+    await call(admin, "pos.add", { params: { id: draft.id, dishId: soup.id }, place: hall.id });
+    const seated = (await call(admin, "pos.setService", { params: { id: draft.id, serviceType: "dine-in", table: "12" }, place: hall.id })).body.result;
+    expect(seated.order.table).to.equal("12");
+    const moved = (await call(admin, "pos.setTable", { params: { id: draft.id, table: "У окна" }, place: hall.id })).body.result;
+    expect(moved.order.table).to.equal("У окна");
+
+    await call(admin, "pos.setCustomer", { params: { id: draft.id, name: "Гость зала", phone: "+7 999 000-00-12" }, place: hall.id });
+    const checked = (await call(admin, "pos.check", { params: { id: draft.id }, place: hall.id })).body.result;
+    expect(checked.ok, JSON.stringify(checked.message)).to.equal(true);
+    const placed = (await call(admin, "pos.place", { params: { id: draft.id }, place: hall.id })).body.result;
+    expect(placed.ok, JSON.stringify(placed.message)).to.equal(true);
+
+    // The table is a field of the order now (core C12a), so the board and the kitchen see it.
+    const stored = await Order.findOne({ id: draft.id });
+    expect(stored.table).to.equal("У окна");
+    expect(stored.state).to.equal("ORDER");
+  });
+
+  it("says what core refuses, and keeps the receipt where it was", async () => {
+    const admin = await signIn("stand-admin");
+    const place = stand.places!.a.id;
+    const draft = (await call(admin, "pos.start", { params: {}, place })).body.result.order;
+
+    // An empty basket: core's code 13, in the operator's language, and no error of the protocol.
+    const empty = await request("POST", "/api/mobile/call/pos.check?lang=ru", { token: admin, body: { params: { id: draft.id }, place } });
+    expect(empty.status).to.equal(200);
+    expect(empty.body.result.ok).to.equal(false);
+    expect(empty.body.result.message.text).to.equal("В заказе пусто");
+    expect(empty.body.result.order.state).to.be.oneOf(["NEW", "CART"]);
+
+    // Placing before checking is refused by us, not by a crash of core.
+    const early = (await request("POST", "/api/mobile/call/pos.place?lang=ru", { token: admin, body: { params: { id: draft.id }, place } })).body.result;
+    expect(early.ok).to.equal(false);
+    expect(early.message.text).to.equal("Сначала проверьте заказ");
+
+    // A dining table at a point with no room for one.
+    const table = (await request("POST", "/api/mobile/call/pos.setService?lang=ru", {
+      token: admin,
+      body: { params: { id: draft.id, serviceType: "dine-in", table: "3" }, place },
+    })).body.result;
+    expect(table.ok).to.equal(false);
+    expect(table.message.text).to.equal("Этот способ получения на точке недоступен");
+  });
+
   /**
    * An order placed at a point, as core's own tests place one — with its stops written by hand,
    * because this does not go through `Order.order` (core C2: a point's board selects by them).
