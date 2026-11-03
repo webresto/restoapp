@@ -5,6 +5,7 @@ import { MobileApiRegistry, RegistrationError } from "../api/hooks/app-mobile-ap
 import { Fakes, PASSWORD, listen, makeFakes, solve } from "./support/mobileApiFakes";
 
 const contract = require("../api/hooks/app-mobile-api/schema/declaration.schema.json");
+const posContract = require("../api/hooks/app-mobile-api/schema/pos.schema.json");
 
 /**
  * The mobile API as an Express application on fake deps — no Sails. Access decisions are made by the
@@ -343,6 +344,141 @@ describe("app-mobile-api", function () {
       expect((await call(token, "dishes.setBalance", { params: { id: "d1", balance: 1 }, place: "p1" })).body.error.code).to.equal("forbidden");
       expect((await call(token, "nothing.here", { params: {} })).body.error.code).to.equal("forbidden");
       expect((await call(undefined, "dishes.list", { params: {}, place: "p1" })).status).to.equal(401);
+    });
+  });
+
+  describe("«Клиенты»", () => {
+    it("gives the app by the model rights of the panel, and no POS without order-entry", async () => {
+      const token = await login("reader");
+      const declaration = (await request("GET", "/api/mobile/describe?lang=ru", { token })).body.result;
+      expect(declaration.apps.map((app: any) => app.id)).to.deep.equal(["clients"]);
+      const [clients] = declaration.apps;
+      expect(clients).to.include({ id: "clients", title: "Клиенты", scope: "server", home: "clients.list" });
+      // Reading is allowed, adding is not: the method is simply not in the declaration.
+      expect(clients.methods.map((method: any) => method.name)).to.deep.equal(["clients.list", "clients.get"]);
+      expect((await call(token, "clients.create", { params: { name: "Гость", phone: "+7 999 000 00 09" } })).body.error.code).to.equal("forbidden");
+    });
+
+    it("translates the words of the form it sends with the method", async () => {
+      const token = await login("taker");
+      const declaration = (await request("GET", "/api/mobile/describe?lang=ru", { token })).body.result;
+      const create = declaration.apps.find((app: any) => app.id === "clients").methods.find((method: any) => method.name === "clients.create");
+      // The client draws the form from this schema, so its words have to be the person's language.
+      expect(create.ui.control).to.deep.equal({ type: "form" });
+      expect(create.input.properties.name.title).to.equal("Имя");
+      expect(create.input.properties.phone["x-format"]).to.equal("phone");
+      const english = (await request("GET", "/api/mobile/describe?lang=en", { token })).body.result;
+      const en = english.apps.find((app: any) => app.id === "clients").methods.find((method: any) => method.name === "clients.create");
+      expect(en.input.properties.name.title).to.equal("Name");
+    });
+
+    it("finds a customer by the last digits of the number and by name", async () => {
+      const token = await login("taker");
+      const byDigits = (await call(token, "clients.list", { params: { q: "0033" } })).body.result;
+      expect(byDigits.items.map((item: any) => item.id)).to.deep.equal(["u3"]);
+      const byName = (await call(token, "clients.list", { params: { q: "Петров" } })).body.result;
+      expect(byName.items.map((item: any) => item.id)).to.deep.equal(["u1"]);
+      const all = (await call(token, "clients.list", { params: {} })).body.result;
+      expect(all.items.map((item: any) => item.id)).to.deep.equal(["u3", "u2", "u1"]);
+      expect(all.items[2]._actions).to.deep.equal([]);
+    });
+
+    it("shows a card with addresses and recent orders, and 404s an unknown one", async () => {
+      const token = await login("taker");
+      const card = (await call(token, "clients.get", { params: { id: "u1" } })).body.result.item;
+      expect(card.addresses).to.deep.equal(["ул. Ленина, 5, кв. 12"]);
+      expect(card.orders).to.have.length(1);
+      expect((await call(token, "clients.get", { params: { id: "nope" } })).body.error.code).to.equal("not_found");
+    });
+
+    it("does not fork a second profile for a number that is already somebody's", async () => {
+      const token = await login("taker");
+      const created = (await call(token, "clients.create", { params: { name: "Новый", phone: "+7 999 555 00 33" } })).body.result.item;
+      expect(created.id).to.equal("u3");
+      expect(fakes.clients.rows).to.have.length(3);
+      const fresh = (await call(token, "clients.create", { params: { name: "Сергей", phone: "+7 912 000 11 22" } })).body.result.item;
+      expect(fresh.title).to.equal("Сергей");
+      expect(fakes.clients.rows).to.have.length(4);
+      // The audit keeps the record, never the number.
+      const event = fakes.audits.filter((candidate) => candidate.method === "clients.create").pop();
+      expect(event).to.include({ record: fresh.id });
+      expect(event!.params).to.deep.equal({});
+    });
+
+    it("refuses a number that is not one", async () => {
+      const token = await login("taker");
+      const answer = await call(token, "clients.create", { params: { name: "Гость", phone: "не телефон" } });
+      expect(answer.status).to.equal(400);
+      expect(answer.body.error.code).to.equal("invalid");
+    });
+  });
+
+  describe("POS", () => {
+    // The answers of a native app are its own shape; this file is that shape, and the client keeps
+    // a copy of it in its test resources.
+    const validAnswer = (() => {
+      const ajv = new Ajv({ strict: false, allErrors: true });
+      ajv.addSchema(posContract);
+      return ajv.getSchema(`${posContract.$id}#/definitions/posOrderAnswer`)!;
+    })();
+
+    it("answers by its own contract, both the list of drafts and one draft", async () => {
+      const token = await login("taker");
+      const started = (await call(token, "pos.start", { params: {}, place: "p1" })).body.result;
+      expect(validAnswer(started), JSON.stringify(validAnswer.errors)).to.equal(true);
+      const drafts = (await call(token, "pos.order", { params: {}, place: "p1" })).body.result;
+      expect(validAnswer(drafts), JSON.stringify(validAnswer.errors)).to.equal(true);
+      const one = (await call(token, "pos.order", { params: { id: started.order.id }, place: "p1" })).body.result;
+      expect(validAnswer(one), JSON.stringify(validAnswer.errors)).to.equal(true);
+    });
+
+    it("declares itself as drawn by the client, on the points of order-entry", async () => {
+      const token = await login("taker");
+      const declaration = (await request("GET", "/api/mobile/describe?lang=ru", { token })).body.result;
+      expect(declaration.apps.map((app: any) => app.id)).to.have.members(["clients", "pos"]);
+      const pos = declaration.apps.find((app: any) => app.id === "pos");
+      expect(pos).to.include({ title: "Касса", scope: "place", home: "pos.order" });
+      expect(pos.client).to.deep.equal({ native: "pos", min: 1 });
+      expect(pos.places).to.deep.equal(["p1"]);
+      // A native app declares no screens: its methods carry schemas and nothing else.
+      expect(pos.methods.every((method: any) => method.ui === undefined)).to.equal(true);
+    });
+
+    it("keeps the drafts of one person at one point", async () => {
+      const mine = await login("taker");
+      const theirs = await login("taker2");
+      const started = (await call(mine, "pos.start", { params: {}, place: "p1" })).body.result.order;
+      expect(started).to.include({ state: "CART", placeId: "p1", serviceType: "dine-in", total: 0 });
+
+      const drafts = (await call(mine, "pos.order", { params: {}, place: "p1" })).body.result;
+      expect(drafts.order).to.equal(null);
+      expect(drafts.drafts.map((order: any) => order.id)).to.deep.equal([started.id]);
+
+      // Another point, another person: neither the list nor the direct id.
+      expect((await call(theirs, "pos.order", { params: {}, place: "p2" })).body.result.drafts).to.deep.equal([]);
+      expect((await call(theirs, "pos.order", { params: { id: started.id }, place: "p2" })).body.error.code).to.equal("not_found");
+      expect((await call(theirs, "pos.order", { params: { id: started.id }, place: "p1" })).body.error.code).to.equal("place_forbidden");
+
+      expect((await call(mine, "pos.order", { params: { id: started.id }, place: "p1" })).body.result.order.id).to.equal(started.id);
+      expect((await call(mine, "pos.cancel", { params: { id: started.id }, place: "p1" })).body.result).to.deep.equal({ ok: true });
+      expect((await call(mine, "pos.order", { params: {}, place: "p1" })).body.result.drafts).to.deep.equal([]);
+      expect((await call(mine, "pos.cancel", { params: { id: started.id }, place: "p1" })).body.error.code).to.equal("not_found");
+    });
+
+    it("starts a draft for a chosen customer, and demands a point", async () => {
+      const token = await login("taker");
+      const order = (await call(token, "pos.start", { params: { clientId: "u1" }, place: "p1" })).body.result.order;
+      expect(order.clientId).to.equal("u1");
+      const noPlace = await call(token, "pos.start", { params: {} });
+      expect(noPlace.status).to.equal(400);
+      expect(noPlace.body.error.code).to.equal("invalid");
+    });
+
+    it("is not there for somebody without order-entry", async () => {
+      const token = await login("operator");
+      const declaration = (await request("GET", "/api/mobile/describe", { token })).body.result;
+      expect(declaration.apps.map((app: any) => app.id)).to.not.include("pos");
+      expect((await call(token, "pos.order", { params: {}, place: "p1" })).body.error.code).to.equal("forbidden");
     });
   });
 

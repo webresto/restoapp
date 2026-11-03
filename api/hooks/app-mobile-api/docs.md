@@ -85,6 +85,13 @@ those of a contextual adminizer token — for «Блюда» `stock-manager`, th
 ticks for the web Stock Manager; the administrator gets all enabled points. Each call is checked by
 `checkPermission(token, user, {placeId})`, the point must be enabled and of the app's kind.
 
+An app may also show among its points options of the same token that are not `Place` rows at all:
+`places.options: [{id, title}]`. «Заказы» declare one — «Без кухни» (`no-kitchen`), where an order
+waits while no kitchen has been resolved for it. Such an option is granted exactly like a point (it
+is one of the token's options in the group form), its title is a translation key rather than data,
+and `ctx.place.id` is its id in the handler. `ctx.appPlaces()` answers with every point of the app
+this user holds — for a method whose own input names one, as «Назначить кухню» does.
+
 ## Registering an app
 
 `global.mobileApi` (also `sails.hooks['app-mobile-api'].registry`; `mobile-api:ready` is emitted with
@@ -118,6 +125,33 @@ mobileApi.registerMethod({
 - Every mutation goes to core's audit log, scope `mobile-api`: user, device, point, record, params
   (or what `audit(params, result)` returns), `req.ip` under "trust proxy".
 
+## The apps it ships
+
+| App | Scope | Access | What |
+|---|---|---|---|
+| «Блюда» (`dishes`) | a cooking point | `stock-manager` (contextual) | The web Stock Manager of one point |
+| «Заказы» (`orders`) | a point, «Без кухни» among them | `order-kanban` + the `order` model rights | The orders board of one point: the two tabs with their counts, the card, the flow by buttons, «Назначить кухню» |
+| «Клиенты» (`clients`) | the server | the `Customer` model rights of the panel (`read-customer-model`, `create-customer-model`) | The customers: search by number or name, a card with addresses and recent orders, a new one through `AuthService.materializeUser` |
+| POS (`pos`) | a cooking point | `order-entry` (contextual) | Taking an order on a terminal. **Drawn by the client itself** — `client: {native: "pos", min: 1}`; the server owns the rights, the points and every number |
+
+«Заказы» decide nothing of their own: which orders a point leads, what a role may move an order to
+and what assigning a kitchen means are core's `ordersOfPlace`, `transitionOrder` and
+`assignOrderKitchen` — the very functions the web board calls, so the board and the phone can never
+answer differently about one order. Baskets are never among them. `orders.list` takes `since`, epoch
+milliseconds: the answer is then only the rows of that tab changed at or after that moment, which is
+what the client polls with every ten seconds while the screen is open (there is no SSE).
+
+A declaration may carry `client: {native, min}`: the client draws that app with a screen of its own
+instead of the universal renderer, because a POS receipt with a catalog is not a list with actions on
+a record (`order-entry.plan.md`). A client that does not know the `native` shows a «needs a newer
+version» tile — the mechanism of the reserved `script` field — so a server may declare it to anybody.
+The methods of such an app carry no `ui`, only their input schemas, and their answers are their own
+shape; nothing else about them is different.
+
+The POS keeps its drafts in `mobile_order_draft`: an order of core in NEW / CART / CHECKOUT, with
+whose it is and which point it was taken at — a cart of core carries neither. Rows go when the order
+is placed or dropped, and the hourly cleanup removes what nobody came back to within a day.
+
 ## Layout
 
 - `http/app.ts` — `createMobileApi(deps)`, Express 5, no Sails; `http/mount.ts` — the middleware Sails
@@ -125,7 +159,9 @@ mobileApi.registerMethod({
 - `lib/` — registry, access, declaration, call, login, devices, CAPTCHA; only interfaces of `lib/types.ts`.
 - `adapters/sails.ts` — the only place with Sails, adminizer and Waterline; `adapters/stock.ts` — core's
   web stock functions (from the controllers folder until core task C4 moves them to `lib/menu/`).
-- `apps/dishes.ts` — «Блюда».
+- `apps/dishes.ts` — «Блюда»; `apps/orders.ts` — «Заказы»; `apps/clients.ts` — «Клиенты»;
+  `apps/pos.ts` — the POS. Their adapters are `adapters/stock.ts`, `adapters/orders.ts`,
+  `adapters/clients.ts` and `adapters/pos.ts`: the only files that know Waterline and core.
 
 ## Tests
 

@@ -16,9 +16,13 @@ import type {
 } from "../../api/hooks/app-mobile-api/lib/types";
 import type { StockItem, StockPort } from "../../api/hooks/app-mobile-api/apps/dishes";
 import type { OrderItem, OrdersActor, OrdersPort } from "../../api/hooks/app-mobile-api/apps/orders";
+import type { ClientCard, ClientItem, ClientsPort } from "../../api/hooks/app-mobile-api/apps/clients";
+import type { PosActor, PosOrder, PosPort } from "../../api/hooks/app-mobile-api/apps/pos";
 import { MobileApiRegistry } from "../../api/hooks/app-mobile-api/lib/registry";
 import { registerDishes } from "../../api/hooks/app-mobile-api/apps/dishes";
 import { NO_KITCHEN, registerOrders } from "../../api/hooks/app-mobile-api/apps/orders";
+import { registerClients } from "../../api/hooks/app-mobile-api/apps/clients";
+import { registerPos } from "../../api/hooks/app-mobile-api/apps/pos";
 import { cryptoPuzzle } from "../../api/hooks/app-mobile-api/adapters/sails";
 
 const passwordHash = require("password-hash");
@@ -90,14 +94,18 @@ export async function realAccessRights(): Promise<any> {
   const { AccessRightsHelper } = require(path.join(adminizerDir, "helpers/accessRightsHelper.js"));
   const { checkStockManagerToken } = require("@webresto/core/lib/adminpanel/stock-manager-rights");
   const { checkOrderKanbanToken } = require("@webresto/core/lib/adminpanel/order-kanban-rights");
+  const { checkOrderEntryToken } = require("@webresto/core/lib/adminpanel/order-entry-rights");
   const helper = new AccessRightsHelper({ config: { auth: { enable: true } } });
   helper.registerTokens([
     { id: "access-to-adminpanel", name: "Access", description: "Access to the panel", department: "General" },
     { id: "stock-manager", name: "Stock Manager", description: "Stock", department: "Catalog", check: checkStockManagerToken },
     { id: "order-kanban", name: "Current Orders", description: "Orders", department: "Orders", check: checkOrderKanbanToken },
+    { id: "order-entry", name: "Order entry", description: "Takes orders", department: "Orders", check: checkOrderEntryToken },
   ]);
-  // The model rights of the web operator (`config/adminpanel.js`), registered as adminizer does.
+  // The model rights of the web operator (`config/adminpanel.js`), registered as adminizer does:
+  // one set per resource of `config.adminpanel.models` — `order` and `Customer` (core's `user`).
   helper.registerModelTokens("order");
+  helper.registerModelTokens("Customer");
   return helper;
 }
 
@@ -160,6 +168,7 @@ export class FakeStock implements StockPort {
     return true;
   }
 }
+
 
 /**
  * Four orders at three points, moved by core's own state flow: the rows are in memory, the rules
@@ -259,12 +268,128 @@ export class FakeOrders implements OrdersPort {
   }
 }
 
+/** Three customers, one of them already known by number — the one a search is supposed to find. */
+export class FakeClients implements ClientsPort {
+  rows: ClientItem[] = [
+    { id: "u1", title: "Иван Петров", firstName: "Иван", lastName: "Петров", phone: "+7 9990000001", email: null, verified: true, orderCount: 3, createdAt: 1000 },
+    { id: "u2", title: "Анна", firstName: "Анна", lastName: null, phone: "+7 9990000002", email: "anna@example.com", verified: false, orderCount: 0, createdAt: 2000 },
+    { id: "u3", title: "+7 9995550033", firstName: null, lastName: null, phone: "+7 9995550033", email: null, verified: false, orderCount: 1, createdAt: 3000 },
+  ];
+  private seq = 3;
+
+  async list({ q }: { q?: string }) {
+    if (!q) return [...this.rows].sort((a, b) => b.createdAt - a.createdAt);
+    const digits = q.replace(/\D/g, "");
+    const needle = q.toLowerCase();
+    return this.rows.filter((row) =>
+      (digits.length >= 3 && (row.phone ?? "").replace(/\D/g, "").includes(digits)) ||
+      row.title.toLowerCase().includes(needle) ||
+      (row.email ?? "").toLowerCase().includes(needle));
+  }
+
+  async get(id: string) {
+    const row = this.rows.find((candidate) => candidate.id === id);
+    if (!row) return null;
+    const card: ClientCard = { ...row, addresses: row.id === "u1" ? ["ул. Ленина, 5, кв. 12"] : [], orders: row.id === "u1" ? ["№1001 · 2026-05-12 · 1200 · DONE"] : [] };
+    return card;
+  }
+
+  /** As `materializeUser` is: the same number answers with the person who already has it. */
+  async create({ name, phone, email }: { name: string; phone: string; email?: string }) {
+    const digits = phone.replace(/\D/g, "");
+    const existing = this.rows.find((row) => (row.phone ?? "").replace(/\D/g, "") === digits);
+    if (existing) return existing;
+    const created: ClientItem = {
+      id: `u${++this.seq}`,
+      title: name,
+      firstName: name,
+      lastName: null,
+      phone,
+      email: email ?? null,
+      verified: false,
+      orderCount: 0,
+      createdAt: 4000,
+    };
+    this.rows.push(created);
+    return created;
+  }
+}
+
+/** Drafts in memory: whose cart it is and at which point — the questions the table answers. */
+export class FakePos implements PosPort {
+  rows: Array<PosOrder & { userId: string }> = [];
+  private seq = 0;
+
+  private blank(place: string, id: string, clientId?: string): PosOrder {
+    return {
+      id,
+      number: id.toUpperCase(),
+      state: "CART",
+      serviceType: place === "p2" ? "pickup" : "dine-in",
+      placeId: place,
+      cookingPlaceId: place,
+      cookingPlaceTitle: place,
+      table: null,
+      customerName: null,
+      customerPhone: null,
+      clientId: clientId ?? null,
+      address: null,
+      comment: null,
+      personsCount: null,
+      date: null,
+      maxWaitMinutes: null,
+      paymentMethodId: null,
+      paymentMethodTitle: null,
+      promotionCode: null,
+      lines: [],
+      dishesCount: 0,
+      basketTotal: 0,
+      discountTotal: 0,
+      deliveryCost: 0,
+      bonusesTotal: 0,
+      total: 0,
+      message: null,
+      createdAt: 1000 + this.seq,
+      updatedAt: 1000 + this.seq,
+    };
+  }
+
+  async drafts(place: string, userId: string) {
+    return this.rows
+      .filter((row) => row.placeId === place && row.userId === userId)
+      .map(({ userId: _owner, ...order }) => order)
+      .sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  async get(place: string, userId: string, id: string) {
+    const row = this.rows.find((candidate) => candidate.id === id && candidate.placeId === place && candidate.userId === userId);
+    if (!row) return null;
+    const { userId: _owner, ...order } = row;
+    return order;
+  }
+
+  async start(place: string, actor: PosActor, clientId?: string) {
+    const order = this.blank(place, `draft${++this.seq}`, clientId);
+    this.rows.push({ ...order, userId: actor.userId });
+    return order;
+  }
+
+  async cancel(place: string, userId: string, id: string) {
+    const index = this.rows.findIndex((row) => row.id === id && row.placeId === place && row.userId === userId);
+    if (index === -1) return false;
+    this.rows.splice(index, 1);
+    return true;
+  }
+}
+
 export interface Fakes {
   deps: MobileApiDeps;
   users: Map<string, PanelUser>;
   places: PlaceInfo[];
   stock: FakeStock;
   orders: FakeOrders;
+  clients: FakeClients;
+  pos: FakePos;
   devices: MemoryDevices;
   attempts: MemoryAttempts;
   powUses: MemoryPowUses;
@@ -278,7 +403,9 @@ export async function makeFakes(): Promise<Fakes> {
   const access = await realAccessRights();
   const stockGrant = (...places: string[]) => ({ tokenId: "stock-manager", rights: places });
   const ordersGrant = (...places: string[]) => ({ tokenId: "order-kanban", rights: places });
+  const entryGrant = (...places: string[]) => ({ tokenId: "order-entry", rights: places });
   const ORDER_MODEL = ["read-order-model", "update-order-model"];
+  const CUSTOMER_MODEL = ["read-customer-model", "create-customer-model"];
 
   const usersList = [
     makeUser(1, "admin", [], { isAdministrator: true }),
@@ -290,6 +417,12 @@ export async function makeFakes(): Promise<Fakes> {
     makeUser(6, "dispatcher", [{ name: "Operator", tokens: ["access-to-adminpanel", ordersGrant("p1", "p2", NO_KITCHEN), ...ORDER_MODEL] }]),
     // Reads orders of a point but may not write them: no `update-order-model`.
     makeUser(7, "watcher", [{ name: "Operator", tokens: ["access-to-adminpanel", ordersGrant("p1"), "read-order-model"] }]),
+    // Takes orders at one point and sees the customers: the terminal of «Ленина, 5».
+    makeUser(8, "taker", [{ name: "Order Taker", tokens: ["access-to-adminpanel", entryGrant("p1"), ...CUSTOMER_MODEL] }]),
+    // Takes orders at the other point: the same app, nothing of the first one's drafts.
+    makeUser(9, "taker2", [{ name: "Order Taker", tokens: ["access-to-adminpanel", entryGrant("p2"), ...CUSTOMER_MODEL] }]),
+    // May look customers up but not add them: only `read-customer-model`.
+    makeUser(10, "reader", [{ name: "Reader", tokens: ["access-to-adminpanel", "read-customer-model"] }]),
   ];
   const users = new Map(usersList.map((user) => [user.login, user]));
   const places: PlaceInfo[] = [
@@ -301,8 +434,12 @@ export async function makeFakes(): Promise<Fakes> {
   const registry = new MobileApiRegistry();
   const stock = new FakeStock();
   const orders = new FakeOrders();
+  const clients = new FakeClients();
+  const pos = new FakePos();
   registerDishes(registry, stock);
   registerOrders(registry, orders);
+  registerClients(registry, clients);
+  registerPos(registry, pos);
 
   const env = { enabled: true, captcha: true, https: false, secret: "s3cret" as string | undefined };
   const clock = { now: Date.now() };
@@ -340,7 +477,7 @@ export async function makeFakes(): Promise<Fakes> {
     now: () => clock.now,
   };
 
-  return { deps, users, places, stock, orders, devices, attempts, powUses, audits, env, clock };
+  return { deps, users, places, stock, orders, clients, pos, devices, attempts, powUses, audits, env, clock };
 }
 
 /**

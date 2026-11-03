@@ -6,11 +6,16 @@ import { createMobileApi } from "../http/app";
 import { cleanup, createSailsDeps, readSettings } from "../adapters/sails";
 import { coreStock } from "../adapters/stock";
 import { coreOrders } from "../adapters/orders";
+import { coreClients } from "../adapters/clients";
+import { corePos } from "../adapters/pos";
 import { registerDishes } from "../apps/dishes";
 import { registerOrders } from "../apps/orders";
+import { registerClients } from "../apps/clients";
+import { registerPos } from "../apps/pos";
 import { deviceModelConfig } from "./adminpanelConfig";
 
 declare const MobileDevice: any;
+declare const MobileOrderDraft: any;
 
 const buildDictionary = require("sails-build-dictionary");
 
@@ -22,6 +27,11 @@ const DEFAULT_GROUPS = [
     name: "Stock Manager",
     description: "Changes stock and stops at the cooking points ticked for Stock Manager in this group",
     tokens: ["access-to-adminpanel", "stock-manager"],
+  },
+  {
+    name: "Order Taker",
+    description: "Takes orders on a terminal for the cooking points ticked for Order entry in this group, and sees the customers",
+    tokens: ["access-to-adminpanel", "order-entry", "read-customer-model", "create-customer-model"],
   },
 ];
 
@@ -91,6 +101,8 @@ export default function createHook(sails: any) {
         await bindModels(sails);
         registerDishes(registry, coreStock());
         registerOrders(registry, coreOrders());
+        registerClients(registry, coreClients());
+        registerPos(registry, corePos());
         // Other modules may register their apps from their own hooks, now or later.
         sails.emit("mobile-api:ready", registry);
 
@@ -117,6 +129,7 @@ export default function createHook(sails: any) {
           if (settings.enabled()) {
             try {
               await MobileDevice.count({});
+              await MobileOrderDraft.count({});
             } catch (error) {
               tablesReady = false;
               sails.log.error(

@@ -18,6 +18,17 @@
       "properties": { "path": { "type": "string", "minLength": 1, "maxLength": 8000 } }
     },
 
+    "client": {
+      "description": "This app is drawn by the client itself, not by the universal renderer: `native` names which built-in screen draws it, `min` the oldest client version that has it. A client that knows neither shows the app as a 'Needs a newer version' tile — it neither crashes nor hides it (order-entry.plan.md).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["native"],
+      "properties": {
+        "native": { "$ref": "#/definitions/id" },
+        "min": { "type": "integer", "minimum": 1 }
+      }
+    },
+
     "special": {
       "description": "A value with its own meaning: -1 is 'Unlimited', 0 is 'Out of stock'.",
       "type": "object",
@@ -166,6 +177,7 @@
           }
         },
         "models": { "type": "object", "additionalProperties": { "$ref": "#/definitions/model" } },
+        "client": { "$ref": "#/definitions/client" },
         "script": { "description": "Reserved for apps delivered as JS (script-apps.plan.md). The first release never sends it.", "not": {} }
       },
       "if": { "properties": { "scope": { "const": "place" } }, "required": ["scope"] },
@@ -218,6 +230,7 @@
         "scope": { "enum": ["server", "place"] },
         "places": { "type": "array", "items": { "type": "string" } },
         "models": { "type": "object", "additionalProperties": { "$ref": "#/definitions/model" } },
+        "client": { "$ref": "#/definitions/client" },
         "methods": { "type": "array", "items": { "$ref": "#/definitions/declaredMethod" } },
         "script": { "description": "Reserved. A client that cannot run scripts shows such an app as a 'Needs a newer version' tile, it neither crashes nor hides it." }
       }

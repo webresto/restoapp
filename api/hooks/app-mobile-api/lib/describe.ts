@@ -109,6 +109,7 @@ export class DeclarationBuilder {
         home: app.home,
         scope: app.scope ?? "server",
         ...(app.models ? { models: app.models } : {}),
+        ...(app.client ? { client: app.client } : {}),
         methods,
       };
       if (app.scope === "place") {

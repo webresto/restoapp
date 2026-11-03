@@ -36,6 +36,13 @@ export interface AppDefinition {
   };
   /** Fields of the records the app shows, for apps whose data is not an adminizer model. */
   models?: Record<string, { fields: FieldDefinition[] }>;
+  /**
+   * The client draws this app itself — the POS of `order-entry.plan.md`, whose receipt and catalog
+   * no declaration describes. The server still owns the app: rights, points, methods and their
+   * schemas are the same as for any other, and a client that does not know this `native` (or is
+   * older than `min`) shows the «Needs a newer version» tile rather than a broken screen.
+   */
+  client?: { native: string; min?: number };
 }
 
 export interface FieldDefinition {

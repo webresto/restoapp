@@ -26,6 +26,7 @@ import { coreAudit } from "./audit";
 declare const MobileDevice: any;
 declare const MobilePowUse: any;
 declare const MobileAuthAttempt: any;
+declare const MobileOrderDraft: any;
 declare const Place: any;
 declare const Settings: any;
 declare const emitter: any;
@@ -150,6 +151,8 @@ export async function cleanup(now: number): Promise<void> {
   await MobilePowUse.destroy({ expiresAt: { "<": now } });
   await MobileAuthAttempt.destroy({ at: { "<": now - 24 * 60 * 60 * 1000 } });
   await MobileDevice.destroy({ expiresAt: { "<": now - 30 * 24 * 60 * 60 * 1000 } });
+  // A draft nobody came back to for a day. The cart itself is core's to clean (lib/order/CartCleanup).
+  await MobileOrderDraft.destroy({ createdAt: { "<": now - 24 * 60 * 60 * 1000 } });
 }
 
 function cached<T>(load: () => Promise<T>): { get(): Promise<T>; reset(): void } {

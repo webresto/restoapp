@@ -141,10 +141,55 @@ describe("app-mobile-api in Sails", function () {
 
     const admin = await signIn("stand-admin");
     const declaration = (await request("GET", "/api/mobile/describe", { token: admin })).body.result;
-    expect(declaration.apps.map((app: any) => app.id)).to.deep.equal(["dishes", "orders"]);
+    expect(declaration.apps.map((app: any) => app.id)).to.deep.equal(["dishes", "orders", "clients", "pos"]);
     expect(declaration.apps[0].places.sort()).to.deep.equal(["stand-a", "stand-b"]);
     // «Заказы» take pickup points too, and «Без кухни» is always among the administrator's.
     expect(declaration.apps[1].places.sort()).to.deep.equal(["no-kitchen", "stand-a", "stand-b", "stand-p"]);
+    // The POS is read at a kitchen, so its points are the cooking ones; and it says that the client
+    // draws it, which is the only thing that makes it different from the three above.
+    const pos = declaration.apps[3];
+    expect(pos.client).to.deep.equal({ native: "pos", min: 1 });
+    expect(pos.places.sort()).to.deep.equal(["stand-a", "stand-b"]);
+  });
+
+  it("takes a draft of the POS through core: a cart of the point, and the customers of the panel", async () => {
+    const admin = await signIn("stand-admin");
+    const place = stand.places!.a.id;
+
+    const started = (await call(admin, "pos.start", { params: {}, place })).body.result.order;
+    // A cart of core, counted by core: the state, the point and the zero totals are its answer.
+    expect(started.state).to.be.oneOf(["NEW", "CART"]);
+    expect(started).to.include({ placeId: place, total: 0, dishesCount: 0 });
+    const cart = await stand.sails.models.order.findOne({ id: started.id });
+    expect(cart.id).to.equal(started.id);
+    // The point it is taken at is where it is collected from, and that is how core reads its menu.
+    expect(String(cart.pickupPoint ?? "")).to.equal(started.serviceType === "delivery" ? "" : place);
+
+    const drafts = (await call(admin, "pos.order", { params: {}, place })).body.result.drafts;
+    expect(drafts.map((order: any) => order.id)).to.deep.equal([started.id]);
+
+    // A customer made through the panel's model is the same account core's own guest factory makes.
+    const created = (await call(admin, "clients.create", { params: { name: "Иван Петров", phone: "+7 999 000 00 01" } })).body.result.item;
+    const again = (await call(admin, "clients.create", { params: { name: "Иван", phone: "+7 999 000 00 01" } })).body.result.item;
+    expect(again.id).to.equal(created.id);
+    const found = (await call(admin, "clients.list", { params: { q: "0001" } })).body.result;
+    expect(found.items.map((item: any) => item.id)).to.deep.equal([created.id]);
+
+    // The card reads the real tables: a saved location of core and the customer's placed orders.
+    await stand.sails.models.userlocation.create({ user: created.id, formatted: "ул. Ленина, 5, кв. 12", city: "Город" }).fetch();
+    const card = (await call(admin, "clients.get", { params: { id: created.id } })).body.result.item;
+    expect(card.addresses).to.deep.equal(["ул. Ленина, 5, кв. 12"]);
+    expect(card.orders).to.deep.equal([]);
+    expect((await call(admin, "clients.get", { params: { id: "nobody" } })).body.error.code).to.equal("not_found");
+
+    const withClient = (await call(admin, "pos.start", { params: { clientId: created.id }, place })).body.result.order;
+    expect(withClient.clientId).to.equal(created.id);
+    expect(withClient.customerName).to.equal("Иван Петров");
+
+    expect((await call(admin, "pos.cancel", { params: { id: started.id }, place })).body.result).to.deep.equal({ ok: true });
+    expect((await call(admin, "pos.order", { params: { id: started.id }, place })).body.error.code).to.equal("not_found");
+    // The cart itself is core's to keep or clean: dropping a draft does not destroy an order.
+    expect(await stand.sails.models.order.findOne({ id: started.id })).to.not.equal(undefined);
   });
 
   /** An order placed at a point, as core's own tests place one. */
