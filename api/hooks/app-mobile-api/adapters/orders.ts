@@ -23,10 +23,20 @@ const transitions = () => require(`${CORE}/lib/order/transitionOrder`);
 const kitchens = () => require(`${CORE}/lib/order/assignKitchen`);
 const stateFlow = () => require(`${CORE}/lib/order/OrderStateFlow`);
 
-/** The lines of an order, newest order of creation: "2 × Борщ". */
-async function contentsOf(orderId: string): Promise<string> {
+/**
+ * The lines of the order this point has to make, in the order they were added: "2 × Борщ".
+ *
+ * A line names its own kitchen only when a route planner gave it one; a line without one is cooked
+ * at the leading point. So a kitchen that is not the leading one sees only what it was given — the
+ * plan's «состав — строки этой точки» — and everyone else sees the whole order.
+ */
+async function contentsOf(orderId: string, place: string, leading: boolean): Promise<string> {
   const lines = await OrderDish.find({ where: { order: orderId } }).populate("dish").sort("createdAt ASC");
   return lines
+    .filter((line: any) => {
+      const at = line.cookingPoint && typeof line.cookingPoint === "object" ? line.cookingPoint.id : line.cookingPoint;
+      return at ? String(at) === place : leading;
+    })
     .map((line: any) => {
       const name = line.dish?.name ?? line.dish?.title ?? line.dish?.id ?? "—";
       const amount = typeof line.amount === "number" ? line.amount : 1;
@@ -67,7 +77,7 @@ function addressOf(order: any): string | null {
 }
 
 export function coreOrders(): OrdersPort {
-  const { NO_KITCHEN, countOrdersOfPlace, orderPlaceKey, ordersOfPlace: selectOrders } = ordersOfPlace();
+  const { NO_KITCHEN, countOrdersOfPlace, orderIsAtPlace, orderPlaceKey, ordersOfPlace: selectOrders } = ordersOfPlace();
   const { isOperatorUser, getAllowedOrderTransitionsByRole } = stateFlow();
 
   /**
@@ -76,7 +86,7 @@ export function coreOrders(): OrdersPort {
    * The lines of the order are read only when the card asks for them: a list of fifty orders does
    * not show them, and reading them would be fifty queries for nothing.
    */
-  async function toItem(order: any, user: unknown, withContents = false): Promise<OrderItem> {
+  async function toItem(order: any, user: unknown, place: string | null = null): Promise<OrderItem> {
     const number = order.shortId || String(order.id).slice(-8);
     const customerName = order?.customer?.name || "";
     const method = order.serviceType || "delivery";
@@ -93,7 +103,7 @@ export function coreOrders(): OrdersPort {
       method,
       address: addressOf(order),
       comment: order.comment || null,
-      contents: withContents ? await contentsOf(String(order.id)) : "",
+      contents: place ? await contentsOf(String(order.id), place, orderPlaceKey(order) === place) : "",
       deliveryCost: typeof order?.delivery?.cost === "number" ? order.delivery.cost : 0,
       total: typeof order.total === "number" ? order.total : 0,
       paid: Boolean(order.paid),
@@ -102,10 +112,14 @@ export function coreOrders(): OrdersPort {
     };
   }
 
-  /** The order, but only if it is led by this point: by direct id, as in the list. */
-  async function ofPlace(place: string, id: string): Promise<any | null> {
+  /**
+   * The order, but only if this point has a stop of it — the same rule the list follows, so what a
+   * row shows can always be opened. A kitchen that is not the leading one of a routed order is such
+   * a point: it reads the order and the part it has to make, and it does not move it.
+   */
+  async function atPlace(place: string, id: string): Promise<any | null> {
     const order = await Order.findOne({ id });
-    if (!order || orderPlaceKey(order) !== place) return null;
+    if (!order || !(await orderIsAtPlace(id, place))) return null;
     return order;
   }
 
@@ -120,18 +134,24 @@ export function coreOrders(): OrdersPort {
     },
 
     async get(place, id, user) {
-      const order = await ofPlace(place, id);
-      return order ? toItem(order, user, true) : null;
+      const order = await atPlace(place, id);
+      return order ? toItem(order, user, place) : null;
     },
 
     async setState(place, id, to, { user, device }): Promise<SetStateOutcome> {
-      if (!(await ofPlace(place, id))) return { ok: false, reason: "not_found" };
+      const order = await atPlace(place, id);
+      if (!order) return { ok: false, reason: "not_found" };
+      // The state of the whole order is the leading point's to change: a second kitchen of a routed
+      // order reads it and makes its part (plan, section 3 and C3).
+      if (orderPlaceKey(order) !== place) {
+        return { ok: false, reason: "failed", message: "This order is led by another point" };
+      }
       const result = await transitions().transitionOrder({ id }, to, {
         user,
         source: "mobile-api",
         ...(device ? { data: { device } } : {}),
       });
-      if (result.ok) return { ok: true, item: await toItem(result.order, user, true) };
+      if (result.ok) return { ok: true, item: await toItem(result.order, user, place) };
       if (result.reason === "not_found") return { ok: false, reason: "not_found" };
       if (result.reason === "forbidden") return { ok: false, reason: "forbidden", allowed: result.allowedTransitions };
       if (result.reason === "invalid_state") return { ok: false, reason: "failed", message: `Unknown state ${to}` };
@@ -140,13 +160,13 @@ export function coreOrders(): OrdersPort {
 
     async assignKitchen(place, id, kitchen, { user, device }): Promise<AssignKitchenOutcome> {
       // Only from «Без кухни»: that is the point such an order is led by until it has a kitchen.
-      if (place !== NO_KITCHEN || !(await ofPlace(place, id))) return { ok: false, reason: "not_found" };
+      if (place !== NO_KITCHEN || !(await atPlace(place, id))) return { ok: false, reason: "not_found" };
       const result = await kitchens().assignOrderKitchen({ id }, kitchen, {
         user,
         source: "mobile-api",
         ...(device ? { data: { device } } : {}),
       });
-      if (result.ok) return { ok: true, item: await toItem(result.order, user, true) };
+      if (result.ok) return { ok: true, item: await toItem(result.order, user, place) };
       if (result.reason === "not_found") return { ok: false, reason: "not_found" };
       if (result.reason === "no_such_place") return { ok: false, reason: "no_such_place" };
       if (result.reason === "not_assignable") {

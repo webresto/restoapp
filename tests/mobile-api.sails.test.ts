@@ -259,6 +259,36 @@ describe("app-mobile-api in Sails", function () {
       .to.not.contain(waiting);
   });
 
+  it("shows a routed order at both kitchens, each its own part, and only the leading one moves it", async () => {
+    const routed = await placed({ serviceType: "delivery", cookingPoints: ["stand-a", "stand-b"] });
+    const Dish = stand.sails.models.dish;
+    const OrderDish = stand.sails.models.orderdish;
+    const borsch = await Dish.create({ id: "routed-d1", name: "Борщ рут", price: 300, enable: true }).fetch();
+    const plov = await Dish.create({ id: "routed-d2", name: "Плов рут", price: 450, enable: true }).fetch();
+    // A route planner gives each line its own kitchen; a line without one is the leading point's.
+    await OrderDish.create({ order: routed, dish: borsch.id, amount: 1, cookingPoint: "stand-a" }).fetch();
+    await OrderDish.create({ order: routed, dish: plov.id, amount: 2, cookingPoint: "stand-b" }).fetch();
+    const admin = await signIn("stand-admin");
+
+    const atA = (await call(admin, "orders.list", { params: {}, place: "stand-a" })).body.result;
+    const atB = (await call(admin, "orders.list", { params: {}, place: "stand-b" })).body.result;
+    expect(atA.items.map((item: any) => item.id), "the leading kitchen has it").to.contain(routed);
+    expect(atB.items.map((item: any) => item.id), "and so does the second one").to.contain(routed);
+
+    const cardA = (await call(admin, "orders.get", { params: { id: routed }, place: "stand-a" })).body.result.item;
+    const cardB = (await call(admin, "orders.get", { params: { id: routed }, place: "stand-b" })).body.result.item;
+    expect(cardA.contents, "each kitchen sees what it has to make").to.equal("1 × Борщ рут");
+    expect(cardB.contents).to.equal("2 × Плов рут");
+
+    const fromSecond = await call(admin, "orders.setState", { params: { id: routed, to: "COOKING" }, place: "stand-b" });
+    expect(fromSecond.status, JSON.stringify(fromSecond.body)).to.equal(409);
+    expect((await stand.sails.models.order.findOne({ id: routed })).state).to.equal("ORDER");
+
+    const fromLeading = await call(admin, "orders.setState", { params: { id: routed, to: "COOKING" }, place: "stand-a" });
+    expect(fromLeading.status, JSON.stringify(fromLeading.body)).to.equal(200);
+    expect(fromLeading.body.result.item.state).to.equal("COOKING");
+  });
+
   it("never shows a basket among the orders of a point", async () => {
     const Order = stand.sails.models.order;
     const basket = await Order.create({}).fetch();
