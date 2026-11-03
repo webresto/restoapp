@@ -3,9 +3,8 @@ import type { StockItem, StockPort } from "../apps/dishes";
 /**
  * «Блюда» on the functions of the web Stock Manager in core.
  *
- * Until core task C4 moves `getStockProducts` / `getLimitedStockProducts` out of the controllers
- * folder into `lib/menu/`, they are imported from where the web controllers have them; when they
- * move, only the path below changes. Writing is `DishPlace.upsertForPlace`, as in
+ * Reading is the public function of core the web page calls as well — `lib/menu/stock-items`, where
+ * task C4 moved it out of the panel's controller folder. Writing is `DishPlace.upsertForPlace`, as in
  * `update-stock.ts` / `update-dish-place-enable.ts`. The only Waterline queries of our own are the
  * page of the catalog (core's function has a limit but no offset or order) and the group titles.
  */
@@ -15,7 +14,7 @@ declare const DishPlace: any;
 declare const Group: any;
 
 const CORE = "@webresto/core";
-const stockFunctions = () => require(`${CORE}/lib/adminpanel/src/controller/stock-place-items`);
+const stockFunctions = () => require(`${CORE}/lib/menu/stock-items`);
 const balanceFunctions = () => require(`${CORE}/lib/menu/dish-place-balance`);
 
 /** Upper bound of products with a limit at one point; the list of the web shows 50. */

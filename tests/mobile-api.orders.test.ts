@@ -42,13 +42,28 @@ describe("app-mobile-api «Заказы»", function () {
     return { status: response.status, headers: response.headers, body: text ? JSON.parse(text) : null };
   }
 
+  /**
+   * A solved task, asking for another one when `crypto-puzzle` on Node refuses to open its own:
+   * a key whose first byte is zero fails with «Cipher job failed», about one task in 256 (the
+   * open finding of the plan). Without this a run of this file fails every twentieth time.
+   */
+  async function captcha(): Promise<string> {
+    for (let attempt = 0; ; attempt += 1) {
+      const challenge = await request("GET", "/api/mobile/auth/challenge");
+      try {
+        return await solve(challenge.body.result.task);
+      } catch (error) {
+        if (attempt >= 10) throw error;
+      }
+    }
+  }
+
   async function login(name: string): Promise<string> {
-    const challenge = await request("GET", "/api/mobile/auth/challenge");
     const response = await request("POST", "/api/mobile/auth/login", {
       body: {
         login: name,
         password: PASSWORD,
-        captchaSolution: await solve(challenge.body.result.task),
+        captchaSolution: await captcha(),
         device: { name: "Pixel", platform: "android" },
       },
     });
@@ -120,7 +135,7 @@ describe("app-mobile-api «Заказы»", function () {
       expect((await call(stock, "orders.list", { params: {}, place: "p1" })).body.error.code).to.equal("forbidden");
 
       const refused = await request("POST", "/api/mobile/auth/login", {
-        body: { login: "outsider", password: PASSWORD, captchaSolution: await solve((await request("GET", "/api/mobile/auth/challenge")).body.result.task), device: { name: "Pixel", platform: "android" } },
+        body: { login: "outsider", password: PASSWORD, captchaSolution: await captcha(), device: { name: "Pixel", platform: "android" } },
       });
       expect(refused.status).to.equal(403);
     });

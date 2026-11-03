@@ -3,6 +3,8 @@ import * as path from "path";
 import { liftWithAdminpanel, Stand, STAND_PASSWORD } from "./support/liftWithAdminpanel";
 import { solve } from "./support/mobileApiFakes";
 
+const { syncOrderStops } = require("@webresto/core/lib/order/order-stops");
+
 /**
  * app-mobile-api in a lifted Sails with the admin panel: the real adapters — adminizer users, groups
  * and contextual rights, Waterline stores, core's web stock functions, the middleware order.
@@ -104,7 +106,7 @@ describe("app-mobile-api in Sails", function () {
 
     const row = await stand.sails.models.dishplace.findOne({ dish: "stand-borsch", place: "stand-a" });
     expect(row.localBalance).to.equal(7);
-    const { getStockProducts } = require("@webresto/core/lib/adminpanel/src/controller/stock-place-items");
+    const { getStockProducts } = require("@webresto/core/lib/menu/stock-items");
     const web = await getStockProducts("stand-a", { id: "stand-borsch" }, 1);
     expect(web.results[0].balance).to.equal(7);
 
@@ -192,7 +194,10 @@ describe("app-mobile-api in Sails", function () {
     expect(await stand.sails.models.order.findOne({ id: started.id })).to.not.equal(undefined);
   });
 
-  /** An order placed at a point, as core's own tests place one. */
+  /**
+   * An order placed at a point, as core's own tests place one — with its stops written by hand,
+   * because this does not go through `Order.order` (core C2: a point's board selects by them).
+   */
   async function placed(values: Record<string, unknown>): Promise<string> {
     const Order = stand.sails.models.order;
     const order = await Order.create({}).fetch();
@@ -203,6 +208,7 @@ describe("app-mobile-api in Sails", function () {
       total: 1200,
       ...values,
     }).fetch();
+    await syncOrderStops({ id: order.id });
     return order.id;
   }
 
@@ -257,6 +263,7 @@ describe("app-mobile-api in Sails", function () {
     const Order = stand.sails.models.order;
     const basket = await Order.create({}).fetch();
     await Order.update({ id: basket.id }, { state: "CART", serviceType: "delivery", cookingPoints: ["stand-a"] }).fetch();
+    await syncOrderStops({ id: basket.id });
     const token = await signIn("stand-operator");
 
     const { items } = (await call(token, "orders.list", { params: {}, place: "stand-a" })).body.result;
