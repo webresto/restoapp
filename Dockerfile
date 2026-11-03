@@ -88,10 +88,14 @@ RUN npm install --ignore-scripts \
     @types/mocha \
     @types/chai \
     @types/node
+# tests/mobile-api.test.ts: the mobile API (api/hooks/app-mobile-api) on fake deps, with the real
+# AccessRightsHelper of the installed adminizer; tests/mobile-api.sails.test.ts needs the lifted stand
+# and runs with `npm test`.
 RUN NODE_ENV=test \
     ./node_modules/.bin/mocha \
     -r tsx/cjs \
     "tests/mcp.test.ts" \
+    "tests/mobile-api.test.ts" \
     --exit
 
 

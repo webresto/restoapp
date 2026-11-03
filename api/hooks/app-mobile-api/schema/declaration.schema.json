@@ -1,0 +1,343 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://restoapp.org/schema/mobile-api/declaration.schema.json",
+  "title": "RestoApp mobile API, protocol 1",
+  "description": "The contract between the app-mobile-api hook and the mobile client. The hook validates every app and method registration against appRegistration / methodRegistration, so an unknown view, control, format or ui key fails at server start. The client runs its contract tests on the same file (copied into its test resources).",
+  "definitions": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$", "maxLength": 64 },
+    "methodName": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-zA-Z0-9][a-zA-Z0-9-]*$", "maxLength": 128 },
+    "text": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "tone": { "enum": ["info", "warning", "success", "danger"] },
+    "format": { "enum": ["text", "number", "money", "datetime", "relative", "phone", "boolean", "enum", "image", "ref"] },
+
+    "icon": {
+      "description": "SVG path in a 24x24 box — AppIcon.Path in Superizer.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": { "path": { "type": "string", "minLength": 1, "maxLength": 8000 } }
+    },
+
+    "special": {
+      "description": "A value with its own meaning: -1 is 'Unlimited', 0 is 'Out of stock'.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "title"],
+      "properties": {
+        "value": { "type": ["number", "string", "boolean"] },
+        "title": { "$ref": "#/definitions/text" },
+        "tone": { "$ref": "#/definitions/tone" }
+      }
+    },
+
+    "field": {
+      "description": "A field of a model as the user may see it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "title", "format"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$" },
+        "title": { "$ref": "#/definitions/text" },
+        "format": { "$ref": "#/definitions/format" },
+        "readonly": { "type": "boolean" },
+        "section": { "$ref": "#/definitions/text" },
+        "specials": { "type": "array", "items": { "$ref": "#/definitions/special" } },
+        "x-titles": { "type": "object", "additionalProperties": { "$ref": "#/definitions/text" } }
+      }
+    },
+
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fields"],
+      "properties": { "fields": { "type": "array", "items": { "$ref": "#/definitions/field" } } }
+    },
+
+    "control": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "enum": ["stepper", "toggle", "buttons", "form"] },
+        "param": { "type": "string" },
+        "bind": { "type": "string" },
+        "specials": { "type": "array", "items": { "$ref": "#/definitions/special" } },
+        "tones": { "type": "object", "additionalProperties": { "$ref": "#/definitions/tone" } }
+      }
+    },
+
+    "ui": {
+      "description": "Screen hints, version 1. Exactly these keys; anything else is refused at registration.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["view"],
+      "properties": {
+        "view": { "enum": ["list", "detail", "action"] },
+        "item": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "title": { "type": "string" },
+            "subtitle": { "type": "string" },
+            "meta": { "type": "string" },
+            "value": { "type": "string" },
+            "badge": { "type": "string" },
+            "image": { "type": "string" }
+          }
+        },
+        "groupBy": { "type": "string" },
+        "search": { "type": "string" },
+        "chips": { "type": "string" },
+        "open": { "$ref": "#/definitions/methodName" },
+        "empty": { "$ref": "#/definitions/text" },
+        "on": { "type": "string", "description": "Model the action is shown on; 'list' — on the list screen itself." },
+        "placement": { "type": "array", "items": { "enum": ["row", "detail", "list"] }, "uniqueItems": true },
+        "control": { "$ref": "#/definitions/control" },
+        "confirm": { "$ref": "#/definitions/text" },
+        "specials": { "type": "array", "items": { "$ref": "#/definitions/special" } },
+        "bind": { "type": "string" },
+        "param": { "type": "string" }
+      }
+    },
+
+    "access": {
+      "description": "Who may see and call. Without it a registration is refused: there are no silently open methods.",
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false, "required": ["public"],
+          "properties": { "public": { "const": true } }
+        },
+        {
+          "type": "object", "additionalProperties": false, "required": ["token"],
+          "properties": {
+            "token": {
+              "oneOf": [
+                { "type": "string", "minLength": 1 },
+                {
+                  "description": "A token of its own: the hook registers it in the 'Mobile app' department.",
+                  "type": "object", "additionalProperties": false, "required": ["id", "name"],
+                  "properties": {
+                    "id": { "type": "string", "pattern": "^mobile-app-[a-z0-9-]+$" },
+                    "name": { "$ref": "#/definitions/text" },
+                    "description": { "$ref": "#/definitions/text" }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false, "required": ["tokens"],
+          "properties": { "tokens": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } } }
+        }
+      ]
+    },
+
+    "appRegistration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "title", "home"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+" },
+        "title": { "$ref": "#/definitions/text" },
+        "icon": { "$ref": "#/definitions/icon" },
+        "category": { "$ref": "#/definitions/text" },
+        "home": { "$ref": "#/definitions/methodName" },
+        "scope": { "enum": ["server", "place"] },
+        "places": {
+          "description": "Where the points of a scope:'place' app come from: the points granted by this contextual token, as in the web.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["token", "kind"],
+          "properties": {
+            "token": { "type": "string", "minLength": 1 },
+            "kind": { "enum": ["cooking", "pickup", "any"] }
+          }
+        },
+        "models": { "type": "object", "additionalProperties": { "$ref": "#/definitions/model" } },
+        "script": { "description": "Reserved for apps delivered as JS (script-apps.plan.md). The first release never sends it.", "not": {} }
+      },
+      "if": { "properties": { "scope": { "const": "place" } }, "required": ["scope"] },
+      "then": { "required": ["places"] },
+      "else": { "not": { "required": ["places"] } }
+    },
+
+    "methodRegistration": {
+      "description": "The JSON part of registerMethod. handler, describe and describeItem are functions and are checked separately.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "app", "kind", "title", "access", "input"],
+      "properties": {
+        "name": { "$ref": "#/definitions/methodName" },
+        "app": { "$ref": "#/definitions/id" },
+        "kind": { "enum": ["query", "mutation"] },
+        "title": { "$ref": "#/definitions/text" },
+        "access": { "$ref": "#/definitions/access" },
+        "input": { "type": "object", "required": ["type"], "properties": { "type": { "const": "object" } } },
+        "model": { "type": "string", "description": "Model of the records a query returns; their _actions are the actions with ui.on equal to it." },
+        "ui": { "$ref": "#/definitions/ui" }
+      }
+    },
+
+    "declaredMethod": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "kind", "title", "input"],
+      "properties": {
+        "name": { "$ref": "#/definitions/methodName" },
+        "kind": { "enum": ["query", "mutation"] },
+        "title": { "type": "string" },
+        "input": { "type": "object" },
+        "model": { "type": "string" },
+        "ui": { "$ref": "#/definitions/ui" }
+      }
+    },
+
+    "declaredApp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "title", "home", "scope", "methods"],
+      "properties": {
+        "id": { "$ref": "#/definitions/id" },
+        "version": { "type": "string" },
+        "title": { "type": "string" },
+        "icon": { "$ref": "#/definitions/icon" },
+        "category": { "type": "string" },
+        "home": { "$ref": "#/definitions/methodName" },
+        "scope": { "enum": ["server", "place"] },
+        "places": { "type": "array", "items": { "type": "string" } },
+        "models": { "type": "object", "additionalProperties": { "$ref": "#/definitions/model" } },
+        "methods": { "type": "array", "items": { "$ref": "#/definitions/declaredMethod" } },
+        "script": { "description": "Reserved. A client that cannot run scripts shows such an app as a 'Needs a newer version' tile, it neither crashes nor hides it." }
+      }
+    },
+
+    "place": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title"],
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "address": { "type": ["string", "null"] }
+      }
+    },
+
+    "declaration": {
+      "description": "GET /api/mobile/describe → {result: declaration}",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocolVersion", "revision", "server", "user", "places", "apps"],
+      "properties": {
+        "protocolVersion": { "const": 1 },
+        "revision": { "type": "string" },
+        "server": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name"],
+          "properties": {
+            "name": { "type": "string" },
+            "version": { "type": ["string", "null"] },
+            "currency": { "type": ["string", "null"] },
+            "timezone": { "type": ["string", "null"] },
+            "locale": { "type": ["string", "null"] }
+          }
+        },
+        "user": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "login"],
+          "properties": {
+            "id": { "type": ["string", "number"] },
+            "login": { "type": "string" },
+            "fullName": { "type": ["string", "null"] },
+            "isAdministrator": { "type": "boolean" }
+          }
+        },
+        "places": { "type": "array", "items": { "$ref": "#/definitions/place" } },
+        "apps": { "type": "array", "items": { "$ref": "#/definitions/declaredApp" } }
+      }
+    },
+
+    "callRequest": {
+      "description": "POST /api/mobile/call/:method. place is required exactly for the methods of scope:'place' apps and refused for the rest.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "params": { "type": "object" },
+        "place": { "type": "string", "minLength": 1 }
+      }
+    },
+
+    "action": {
+      "description": "An action available on one record. input narrows the method's input for this record (e.g. the allowed transitions).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method"],
+      "properties": { "method": { "$ref": "#/definitions/methodName" }, "input": { "type": "object" } }
+    },
+
+    "listResult": {
+      "type": "object",
+      "required": ["items", "nextCursor"],
+      "properties": {
+        "items": { "type": "array", "items": { "type": "object", "properties": { "_actions": { "type": "array", "items": { "$ref": "#/definitions/action" } } } } },
+        "nextCursor": { "type": ["string", "null"] },
+        "counts": { "type": "object", "additionalProperties": { "type": "integer" } },
+        "total": { "type": "integer" }
+      }
+    },
+
+    "itemResult": {
+      "type": "object",
+      "required": ["item"],
+      "properties": { "item": { "type": "object", "properties": { "_actions": { "type": "array", "items": { "$ref": "#/definitions/action" } } } } }
+    },
+
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["error"],
+      "properties": {
+        "error": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code", "message", "retryable"],
+          "properties": {
+            "code": {
+              "enum": [
+                "unauthorized", "forbidden", "place_forbidden", "invalid", "not_found", "conflict",
+                "rate_limited", "unavailable", "invalid_credentials", "captcha_invalid", "https_required",
+                "too_large", "internal"
+              ]
+            },
+            "message": { "type": "string" },
+            "retryable": { "type": "boolean" },
+            "details": {}
+          }
+        }
+      }
+    },
+
+    "loginRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["login", "password", "device"],
+      "properties": {
+        "login": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "password": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "captchaSolution": { "type": "string", "maxLength": 1000 },
+        "device": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "platform"],
+          "properties": {
+            "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+            "platform": { "type": "string", "minLength": 1, "maxLength": 50 }
+          }
+        }
+      }
+    }
+  }
+}

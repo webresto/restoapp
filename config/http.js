@@ -77,8 +77,23 @@ function renderPage(req, res, next) {
     }).catch(next);
 }
 
+// Express "trust proxy": nginx of the image (.ci/config/nginx.conf) is one hop in front of Sails and
+// appends the address it saw to X-Forwarded-For. Without it `req.ip` is 127.0.0.1 for every client:
+// the login CAPTCHA label and the rate limits of the mobile API would be shared by everyone.
+// TRUST_PROXY: a number of hops (default 1), true/false, or a list of addresses/subnets, e.g.
+// "loopback, 10.0.0.0/8" — set 2 when another proxy terminates TLS in front of the image.
+function parseTrustProxy(value) {
+    if (value === undefined || value.trim() === '') return 1;
+    var trimmed = value.trim();
+    if (/^\d+$/.test(trimmed)) return Number(trimmed);
+    if (trimmed.toLowerCase() === 'true') return true;
+    if (trimmed.toLowerCase() === 'false') return false;
+    return trimmed;
+}
+
 // TODO: add 500 and 404 for admin panel
 module.exports.http = {
+    trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
     middleware: {
         order: [
             'metrics',

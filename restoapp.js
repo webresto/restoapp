@@ -138,6 +138,7 @@ try {
   config.hooks['app-manager-proto'] = require('./api/hooks/app-manager-proto/index.js')
   config.hooks['base-firebase-notifications'] = require('./api/hooks/base-firebase-notifications/index.js')
   config.hooks['openharness-ui'] = require('./api/hooks/openharness-ui/index.js')
+  config.hooks['app-mobile-api'] = require('./api/hooks/app-mobile-api/index.js')
   sails.lift(config);
 } catch (error) {
   console.error(error);
