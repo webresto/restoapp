@@ -26,6 +26,21 @@ export const PAGE_SIZE = 50;
 /** core's `SERVICE_TYPES`; the schema of a step names them so ajv refuses a fourth. */
 const SERVICE_TYPES = ["delivery", "pickup", "dine-in"];
 
+/** The chosen modifiers as a call carries them; ajv refuses anything else. */
+const CHOSEN_OPTIONS = {
+  type: "array",
+  maxItems: 50,
+  items: {
+    type: "object",
+    required: ["id", "groupId", "amount"],
+    properties: {
+      id: { type: "string", minLength: 1, maxLength: 100 },
+      groupId: { type: "string", minLength: 1, maxLength: 100 },
+      amount: { type: "integer", minimum: 0, maximum: 99 },
+    },
+  },
+} as const;
+
 /** A number as typed: digits, a leading plus, the spaces and brackets of a printed form. */
 const PHONE_PATTERN = "^[+]?[0-9 ()-]{5,20}$";
 
@@ -47,8 +62,17 @@ export interface PosLine {
   /** Set when a promotion took the line: the price before it. */
   oldPrice: number | null;
   comment: string | null;
-  /** The product has modifier groups: slice D lets the operator choose, core fills defaults for now. */
+  /** The product has modifier groups: `pos.options` says what they are. */
   hasOptions: boolean;
+  /** What was chosen of them — what the kitchen will read off this line. */
+  options: PosLineOption[];
+}
+
+/** One chosen modifier, as the line shows it. */
+export interface PosLineOption {
+  id: string;
+  name: string;
+  amount: number;
 }
 
 /** The order as the receipt shows it: the server's numbers, the server's state. */
@@ -110,7 +134,7 @@ export interface PosProduct {
   balance: number;
   weight: number | null;
   imageUrl: string | null;
-  /** Has modifier groups: core fills their defaults until the chooser exists (slice D). */
+  /** Has modifier groups: the «+» opens the chooser instead of adding at once. */
   hasOptions: boolean;
   /** How many of it are already in the receipt. */
   inOrder: number;
@@ -130,6 +154,65 @@ export interface PosCatalog {
   items: PosProduct[];
   nextCursor: string | null;
   total: number;
+}
+
+/**
+ * One option of a modifier group: a product of the menu that is sold with the dish.
+ *
+ * The numbers are the rules core keeps on the dish (`GroupModifier.childModifiers`), passed through
+ * rather than interpreted: the chooser draws them, and the server is the one that checks them.
+ */
+export interface PosOption {
+  /** The modifier's own product id — what goes into `OrderDish.modifiers`. */
+  id: string;
+  name: string;
+  /** What one of it costs on top of the dish. */
+  price: number;
+  /** Stock at this order's kitchens: -1 unlimited, 0 stopped — the same number a product has. */
+  balance: number;
+  /** How many are chosen now: the defaults core would fill, or what the line already has. */
+  amount: number;
+  minAmount: number;
+  /** null — the group's own ceiling is the only one. */
+  maxAmount: number | null;
+  /** How many of it are not charged for (`freeOfChargeAmount`). */
+  freeAmount: number;
+  defaultAmount: number;
+}
+
+/** A group of modifiers of one dish: «Соус», «Размер» — with how many of it may be taken. */
+export interface PosOptionGroup {
+  id: string;
+  name: string;
+  required: boolean;
+  minAmount: number;
+  maxAmount: number | null;
+  /** At most one of the group: the chooser draws a choice rather than steppers. */
+  single: boolean;
+  options: PosOption[];
+}
+
+/** What the operator chose, as the client sends it back: core's `OrderModifier`, nothing more. */
+export interface PosChosenOption {
+  id: string;
+  groupId: string;
+  amount: number;
+}
+
+/**
+ * `pos.options`: the dish and what may be chosen with it.
+ *
+ * No total: what the dish with these options costs is core's arithmetic, and it is read off the
+ * receipt after the line is written — the chooser shows what each option adds, nothing summed.
+ */
+export interface PosOptionsView {
+  dishId: string;
+  name: string;
+  price: number;
+  /** The line being edited, when the chooser was opened from the receipt; null — a new line. */
+  lineId: number | null;
+  amount: number;
+  groups: PosOptionGroup[];
 }
 
 /** One way of handing the food over, as this point can do it. */
@@ -199,10 +282,14 @@ export interface PosPort {
   /** The menu as this order may buy it: core reads it at the order's kitchens. */
   catalog(place: string, id: string, options: { group?: string; q?: string; offset: number; limit: number }): Promise<PosCatalog>;
   /** «+» on a tile: adds the product, or adds one more of it. */
-  addProduct(place: string, id: string, dishId: string, amount: number): Promise<PosStep>;
+  addProduct(place: string, id: string, dishId: string, amount: number, modifiers?: PosChosenOption[]): Promise<PosStep>;
   /** − / + / «убрать» in the receipt; 0 removes the line. */
   setLineAmount(place: string, id: string, lineId: number, amount: number): Promise<PosStep>;
   setLineComment(place: string, id: string, lineId: number, comment: string): Promise<PosStep>;
+  /** What may be chosen with a dish, and what is chosen now — for a new line or for one in the receipt. */
+  options(place: string, id: string, input: { dishId?: string; lineId?: number }): Promise<PosOptionsView | null>;
+  /** Writes the chosen modifiers onto a line that is already in the receipt. */
+  setLineOptions(place: string, id: string, lineId: number, modifiers: PosChosenOption[]): Promise<PosStep>;
 
   // ---- how it is received ----
 
@@ -360,11 +447,61 @@ export function registerPos(registry: MobileApiRegistry, pos: PosPort, clients: 
         id: { type: "string", minLength: 1, maxLength: 100 },
         dishId: { type: "string", minLength: 1, maxLength: 100 },
         amount: { type: "integer", minimum: 1, maximum: 999, default: 1 },
+        modifiers: CHOSEN_OPTIONS,
       },
     },
-    handler: (params: { id: string; dishId: string; amount: number }, ctx) =>
-      step(ctx, () => pos.addProduct(placeOf(ctx), params.id, params.dishId, params.amount)),
-    audit: ({ id, dishId, amount }) => ({ record: id, params: { dishId, amount } }),
+    handler: (params: { id: string; dishId: string; amount: number; modifiers?: PosChosenOption[] }, ctx) =>
+      step(ctx, () => pos.addProduct(placeOf(ctx), params.id, params.dishId, params.amount, params.modifiers)),
+    audit: ({ id, dishId, amount, modifiers }) => ({ record: id, params: { dishId, amount, modifiers: modifiers ?? [] } }),
+  });
+
+  /**
+   * What may be chosen with a dish. A query, because choosing changes nothing until it is added:
+   * the operator may back out of the chooser and the receipt is as it was.
+   */
+  registry.registerMethod({
+    name: "pos.options",
+    app: "pos",
+    kind: "query",
+    title: "mobile.pos.options.title",
+    access,
+    input: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: { type: "string", minLength: 1, maxLength: 100 },
+        dishId: { type: "string", minLength: 1, maxLength: 100 },
+        lineId: { type: "integer", minimum: 1 },
+      },
+    },
+    handler: async (params: { id: string; dishId?: string; lineId?: number }, ctx) => {
+      const place = placeOf(ctx);
+      const { userId } = actorOf(ctx);
+      if (!(await pos.get(place, userId, params.id))) return ctx.fail("not_found", "No such draft");
+      const view = await pos.options(place, params.id, { dishId: params.dishId, lineId: params.lineId });
+      if (!view) return ctx.fail("not_found", "No such product");
+      return view;
+    },
+  });
+
+  registry.registerMethod({
+    name: "pos.setLineOptions",
+    app: "pos",
+    kind: "mutation",
+    title: "mobile.pos.setLineOptions.title",
+    access,
+    input: {
+      type: "object",
+      required: ["id", "lineId", "modifiers"],
+      properties: {
+        id: { type: "string", minLength: 1, maxLength: 100 },
+        lineId: { type: "integer", minimum: 1 },
+        modifiers: CHOSEN_OPTIONS,
+      },
+    },
+    handler: (params: { id: string; lineId: number; modifiers: PosChosenOption[] }, ctx) =>
+      step(ctx, () => pos.setLineOptions(placeOf(ctx), params.id, params.lineId, params.modifiers)),
+    audit: ({ id, lineId, modifiers }) => ({ record: id, params: { lineId, modifiers } }),
   });
 
   registry.registerMethod({

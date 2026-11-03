@@ -424,6 +424,7 @@ describe("app-mobile-api", function () {
     const validAnswer = posSchema("posOrderAnswer");
     const validStep = posSchema("posStep");
     const validCatalog = posSchema("posCatalog");
+    const validOptions = posSchema("posOptions");
 
     it("answers by its own contract, both the list of drafts and one draft", async () => {
       const token = await login("taker");
@@ -490,12 +491,79 @@ describe("app-mobile-api", function () {
       expect((await call(token, "pos.order", { params: {}, place })).body.result.drafts).to.deep.equal([]);
     });
 
+    it("chooses the options of a dish: the defaults open, the chosen set is the line's", async () => {
+      const token = await login("taker");
+      const place = "p1";
+      const draft = (await call(token, "pos.start", { params: {}, place })).body.result.order;
+
+      // The chooser opens at what core itself would have put on the line: «Сметана» is the default.
+      const options = (await call(token, "pos.options", { params: { id: draft.id, dishId: "d2" }, place })).body.result;
+      expect(validOptions(options), JSON.stringify(validOptions.errors)).to.equal(true);
+      expect(options).to.include({ dishId: "d2", name: "Плов", lineId: null });
+      expect(options.groups.map((group: any) => [group.id, group.single])).to.deep.equal([["sauce", true], ["extra", false]]);
+      expect(options.groups[0].options.find((option: any) => option.id === "m1").amount).to.equal(1);
+
+      // A group that requires a choice and has none: a refusal in words, and nothing is added.
+      const empty = (await call(token, "pos.add", { params: { id: draft.id, dishId: "d2", modifiers: [{ id: "m2", groupId: "sauce", amount: 0 }] }, place })).body.result;
+      expect(empty.ok).to.equal(false);
+      expect(empty.message.text).to.equal("Выберите, что идёт в «Соус»");
+      expect(empty.order.lines).to.deep.equal([]);
+
+      // Over the ceiling of a group: the same.
+      const tooMany = (await call(token, "pos.add", {
+        params: { id: draft.id, dishId: "d2", modifiers: [{ id: "m1", groupId: "sauce", amount: 1 }, { id: "m2", groupId: "sauce", amount: 1 }] },
+        place,
+      })).body.result;
+      expect(tooMany.ok).to.equal(false);
+      expect(tooMany.message.text).to.equal("В «Соус» выбрано больше, чем можно");
+
+      // The hot sauce instead of the default one, and two of the greens with one of them free.
+      const added = (await call(token, "pos.add", {
+        params: {
+          id: draft.id,
+          dishId: "d2",
+          modifiers: [{ id: "m2", groupId: "sauce", amount: 1 }, { id: "m3", groupId: "extra", amount: 2 }],
+        },
+        place,
+      })).body.result;
+      expect(validStep(added), JSON.stringify(validStep.errors)).to.equal(true);
+      const line = added.order.lines[0];
+      expect(line.options.map((option: any) => [option.name, option.amount])).to.deep.equal([["Острый", 1], ["Зелень", 2]]);
+      // 450 of the dish, 50 of the sauce, 30 of the second greens — the first is free.
+      expect(line).to.include({ price: 530, total: 530 });
+
+      // The same chooser, opened on the line: the amounts are the line's, not the defaults.
+      const onLine = (await call(token, "pos.options", { params: { id: draft.id, lineId: line.lineId }, place })).body.result;
+      expect(onLine).to.include({ lineId: line.lineId, amount: 1 });
+      expect(onLine.groups[0].options.map((option: any) => option.amount)).to.deep.equal([0, 1]);
+
+      // Changed on the line: the same line, the new money.
+      const changed = (await call(token, "pos.setLineOptions", {
+        params: { id: draft.id, lineId: line.lineId, modifiers: [{ id: "m1", groupId: "sauce", amount: 1 }] },
+        place,
+      })).body.result;
+      expect(changed.ok).to.equal(true);
+      expect(changed.order.lines).to.have.length(1);
+      expect(changed.order.lines[0]).to.include({ lineId: line.lineId, price: 450 });
+      expect(changed.order.lines[0].options.map((option: any) => option.name)).to.deep.equal(["Сметана"]);
+
+      // An option of another dish is not this one's.
+      const alien = (await call(token, "pos.setLineOptions", {
+        params: { id: draft.id, lineId: line.lineId, modifiers: [{ id: "nope", groupId: "sauce", amount: 1 }] },
+        place,
+      })).body.result;
+      expect(alien.ok).to.equal(false);
+      expect(alien.message.text).to.equal("Такой добавки у этого блюда нет");
+    });
+
     it("refuses a step of somebody without order-entry, whatever the step", async () => {
       const operator = await login("operator");
       const steps: Array<[string, Record<string, unknown>]> = [
         ["pos.catalog", { id: "draft1" }],
         ["pos.add", { id: "draft1", dishId: "d1" }],
         ["pos.setLine", { id: "draft1", lineId: 1, amount: 1 }],
+        ["pos.options", { id: "draft1", dishId: "d1" }],
+        ["pos.setLineOptions", { id: "draft1", lineId: 1, modifiers: [] }],
         ["pos.setService", { id: "draft1", serviceType: "pickup" }],
         ["pos.setCustomer", { id: "draft1", name: "Гость", phone: "+7 999 000-00-01" }],
         ["pos.check", { id: "draft1" }],

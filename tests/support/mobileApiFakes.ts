@@ -17,7 +17,7 @@ import type {
 import type { StockItem, StockPort } from "../../api/hooks/app-mobile-api/apps/dishes";
 import type { OrderItem, OrdersActor, OrdersPort } from "../../api/hooks/app-mobile-api/apps/orders";
 import type { ClientCard, ClientItem, ClientsPort } from "../../api/hooks/app-mobile-api/apps/clients";
-import type { PosActor, PosMessage, PosOrder, PosPort, PosStep } from "../../api/hooks/app-mobile-api/apps/pos";
+import type { PosActor, PosChosenOption, PosMessage, PosOptionGroup, PosOrder, PosPort, PosStep } from "../../api/hooks/app-mobile-api/apps/pos";
 import { MobileApiRegistry } from "../../api/hooks/app-mobile-api/lib/registry";
 import { registerDishes } from "../../api/hooks/app-mobile-api/apps/dishes";
 import { NO_KITCHEN, registerOrders } from "../../api/hooks/app-mobile-api/apps/orders";
@@ -400,7 +400,7 @@ export class FakePos implements PosPort {
         balance: -1,
         weight: null,
         imageUrl: null,
-        hasOptions: false,
+        hasOptions: FakePos.GROUPS.length > 0 && dish.id === FakePos.WITH_OPTIONS,
         inOrder: order?.lines.filter((line) => line.dishId === dish.id).reduce((sum, line) => sum + line.amount, 0) ?? 0,
       }));
     return {
@@ -425,17 +425,73 @@ export class FakePos implements PosPort {
     return { order: view, message, ok: message === null || message.tone !== "danger" };
   }
 
-  async addProduct(place: string, id: string, dishId: string, amount: number) {
+  async addProduct(place: string, id: string, dishId: string, amount: number, modifiers?: PosChosenOption[]) {
+    const chosen = modifiers ?? [];
+    const refusal = chosen.length ? FakePos.refuse(dishId, chosen) : null;
+    if (refusal) return this.step(id, () => refusal);
     return this.step(id, (order) => {
       const dish = new FakeStock().dishes.find((candidate) => candidate.id === dishId);
       if (!dish) return { key: "mobile.pos.error.noLine", tone: "danger" };
-      const line = order.lines.find((candidate) => candidate.dishId === dishId);
+      // A line with options is its own line: two guests want different sauces on the same dish.
+      const line = chosen.length ? undefined : order.lines.find((candidate) => candidate.dishId === dishId);
       if (line) {
         line.amount += amount;
         line.total = line.amount * line.price;
       } else {
-        order.lines.push({ lineId: order.lines.length + 1, dishId, name: dish.name, amount, price: dish.price, total: dish.price * amount, oldPrice: null, comment: null, hasOptions: false });
+        const price = dish.price + FakePos.extra(chosen);
+        order.lines.push({
+          lineId: order.lines.length + 1,
+          dishId,
+          name: dish.name,
+          amount,
+          price,
+          total: price * amount,
+          oldPrice: null,
+          comment: null,
+          hasOptions: dishId === FakePos.WITH_OPTIONS,
+          options: FakePos.named(chosen),
+        });
       }
+      return null;
+    });
+  }
+
+  async options(place: string, id: string, { dishId, lineId }: { dishId?: string; lineId?: number }) {
+    const order = this.rows.find((row) => row.id === id);
+    const line = lineId !== undefined ? order?.lines.find((candidate) => candidate.lineId === lineId) : undefined;
+    if (lineId !== undefined && !line) return null;
+    const productId = line ? line.dishId : dishId;
+    const dish = new FakeStock().dishes.find((candidate) => candidate.id === productId);
+    if (!dish) return null;
+    const taken = new Map((line?.options ?? []).map((option) => [option.id, option.amount]));
+    return {
+      dishId: dish.id,
+      name: dish.name,
+      price: dish.price,
+      lineId: line ? line.lineId : null,
+      amount: line ? line.amount : 1,
+      groups: (dish.id === FakePos.WITH_OPTIONS ? FakePos.GROUPS : []).map((group) => ({
+        ...group,
+        options: group.options.map((option) => ({
+          ...option,
+          // A line's own choice, or the default core would have filled in.
+          amount: line ? taken.get(option.id) ?? 0 : option.defaultAmount,
+        })),
+      })),
+    };
+  }
+
+  async setLineOptions(place: string, id: string, lineId: number, modifiers: PosChosenOption[]) {
+    const order = this.rows.find((row) => row.id === id);
+    const line = order?.lines.find((candidate) => candidate.lineId === lineId);
+    if (!line) return this.step(id, () => ({ key: "mobile.pos.error.noLine", tone: "danger" }));
+    const refusal = FakePos.refuse(line.dishId, modifiers);
+    if (refusal) return this.step(id, () => refusal);
+    return this.step(id, () => {
+      const dish = new FakeStock().dishes.find((candidate) => candidate.id === line.dishId);
+      line.options = FakePos.named(modifiers);
+      line.price = (dish?.price ?? 0) + FakePos.extra(modifiers);
+      line.total = line.price * line.amount;
       return null;
     });
   }
@@ -593,6 +649,69 @@ export class FakePos implements PosPort {
     const placed = this.step(id);
     this.rows = this.rows.filter((row) => row.id !== id);
     return { ...placed, message: { key: "mobile.pos.placed", arg: order.number, tone: "success" }, ok: true };
+  }
+
+  // ---- the options of the one dish that has them ----
+
+  /** «Плов» of {@link FakeStock}: a sauce that must be chosen, and extras that need not be. */
+  static readonly WITH_OPTIONS = "d2";
+
+  static readonly GROUPS: PosOptionGroup[] = [
+    {
+      id: "sauce",
+      name: "Соус",
+      required: true,
+      minAmount: 1,
+      maxAmount: 1,
+      single: true,
+      options: [
+        { id: "m1", name: "Сметана", price: 0, balance: -1, amount: 0, minAmount: 0, maxAmount: 1, freeAmount: 0, defaultAmount: 1 },
+        { id: "m2", name: "Острый", price: 50, balance: -1, amount: 0, minAmount: 0, maxAmount: 1, freeAmount: 0, defaultAmount: 0 },
+      ],
+    },
+    {
+      id: "extra",
+      name: "Добавки",
+      required: false,
+      minAmount: 0,
+      maxAmount: 3,
+      single: false,
+      options: [
+        { id: "m3", name: "Зелень", price: 30, balance: -1, amount: 0, minAmount: 0, maxAmount: 3, freeAmount: 1, defaultAmount: 0 },
+      ],
+    },
+  ];
+
+  /** The rules of the groups, as the real adapter checks them: a refusal in words. */
+  static refuse(dishId: string, chosen: PosChosenOption[]): PosMessage | null {
+    const groups = dishId === FakePos.WITH_OPTIONS ? FakePos.GROUPS : [];
+    const taken = chosen.filter((entry) => entry.amount > 0);
+    const known = new Set(groups.flatMap((group) => group.options.map((option) => option.id)));
+    if (taken.some((entry) => !known.has(entry.id))) return { key: "mobile.pos.error.optionUnknown", tone: "danger" };
+    for (const group of groups) {
+      const ids = new Set(group.options.map((option) => option.id));
+      const sum = taken.filter((entry) => ids.has(entry.id)).reduce((total, entry) => total + entry.amount, 0);
+      if (sum < group.minAmount) return { key: "mobile.pos.error.optionMin", arg: group.name, tone: "danger" };
+      if (group.maxAmount !== null && sum > group.maxAmount) return { key: "mobile.pos.error.optionMax", arg: group.name, tone: "danger" };
+    }
+    return null;
+  }
+
+  /** What the options add to one dish, the free ones not charged — core's own arithmetic. */
+  static extra(chosen: PosChosenOption[]): number {
+    const flat = FakePos.GROUPS.flatMap((group) => group.options);
+    return chosen.reduce((sum, entry) => {
+      const option = flat.find((candidate) => candidate.id === entry.id);
+      if (!option) return sum;
+      return sum + Math.max(0, entry.amount - option.freeAmount) * option.price;
+    }, 0);
+  }
+
+  static named(chosen: PosChosenOption[]): Array<{ id: string; name: string; amount: number }> {
+    const flat = FakePos.GROUPS.flatMap((group) => group.options);
+    return chosen
+      .filter((entry) => entry.amount > 0)
+      .map((entry) => ({ id: entry.id, name: flat.find((option) => option.id === entry.id)?.name ?? entry.id, amount: entry.amount }));
   }
 }
 

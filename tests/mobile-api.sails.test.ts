@@ -268,6 +268,113 @@ describe("app-mobile-api in Sails", function () {
     expect(board.items.map((item: any) => item.id)).to.include(draft.id);
   });
 
+  it("chooses the modifiers of a dish through core: the line keeps what was chosen, and the price with it", async () => {
+    const admin = await signIn("stand-admin");
+    const Dish = stand.sails.models.dish;
+    const Group = stand.sails.models.group;
+    const OrderDish = stand.sails.models.orderdish;
+    const place = (await stand.sails.models.place.create({
+      id: "stand-mods", title: "Касса с добавками", enable: true, isCookingPoint: true, isPickupPoint: true,
+    }).fetch()).id;
+
+    // The modifiers are products of the menu like any other, gathered into groups by the dish.
+    const sauces = await Group.create({ id: "stand-g-sauce", name: "Соусы", enable: true, isDeleted: false }).fetch();
+    const extras = await Group.create({ id: "stand-g-extra", name: "Добавки", enable: true, isDeleted: false }).fetch();
+    const sour = await Dish.create({ id: "stand-m-sour", name: "Сметана", price: 0, modifier: true, enable: true, isDeleted: false, parentGroup: sauces.id }).fetch();
+    const hot = await Dish.create({ id: "stand-m-hot", name: "Острый соус", price: 60, modifier: true, enable: true, isDeleted: false, parentGroup: sauces.id }).fetch();
+    // The free-of-charge rule of core is found by the product's `rmsId` (`countCart`, «Find
+    // original obj modifiers»), so a group that gives one away names its option by that id — which
+    // is how an RMS-imported menu names them anyway.
+    const cheese = await Dish.create({
+      id: "stand-m-cheese", rmsId: "rms-cheese", name: "Сыр", price: 40, modifier: true, enable: true, isDeleted: false, parentGroup: extras.id,
+    }).fetch();
+    const pilaf = await Dish.create({
+      id: "stand-d-pilaf", name: "Плов", price: 450, enable: true, isDeleted: false, modifier: false,
+      modifiers: [
+        { id: sauces.id, required: true, minAmount: 1, maxAmount: 1, childModifiers: [{ id: sour.id, defaultAmount: 1 }, { id: hot.id }] },
+        { id: extras.id, minAmount: 0, maxAmount: 3, childModifiers: [{ id: cheese.rmsId, freeOfChargeAmount: 1 }] },
+      ],
+    }).fetch();
+
+    const draft = (await call(admin, "pos.start", { params: {}, place })).body.result.order;
+
+    // The catalog says the dish has something to choose, so the «+» opens the chooser.
+    const catalog = (await call(admin, "pos.catalog", { params: { id: draft.id, q: "Плов" }, place })).body.result;
+    expect(catalog.items.find((item: any) => item.id === pilaf.id).hasOptions).to.equal(true);
+
+    // The chooser opens at core's own answer: the group's names, and the default sauce chosen.
+    const chooser = (await call(admin, "pos.options", { params: { id: draft.id, dishId: pilaf.id }, place })).body.result;
+    expect(chooser.groups.map((group: any) => [group.name, group.single, group.required])).to.deep.equal([
+      ["Соусы", true, true],
+      ["Добавки", false, false],
+    ]);
+    expect(chooser.groups[0].options.map((option: any) => [option.name, option.price, option.amount])).to.deep.equal([
+      ["Сметана", 0, 1],
+      ["Острый соус", 60, 0],
+    ]);
+    expect(chooser.groups[1].options[0]).to.include({ name: "Сыр", price: 40, freeAmount: 1, amount: 0 });
+
+    // A required group left empty: core would have filled it, the POS asks instead.
+    const empty = (await call(admin, "pos.add", { params: { id: draft.id, dishId: pilaf.id, modifiers: [] }, place })).body.result;
+    expect(empty.order.lines).to.deep.equal([]);
+
+    // The hot sauce instead of the default, and two of the cheese with one of them free.
+    const added = (await call(admin, "pos.add", {
+      params: {
+        id: draft.id,
+        dishId: pilaf.id,
+        modifiers: [{ id: hot.id, groupId: sauces.id, amount: 1 }, { id: cheese.rmsId, groupId: extras.id, amount: 2 }],
+      },
+      place,
+    })).body.result;
+    expect(added.ok, JSON.stringify(added.message)).to.equal(true);
+    expect(added.order.lines).to.have.length(1);
+    const line = added.order.lines[0];
+    expect(line.options.map((option: any) => [option.name, option.amount])).to.deep.equal([["Острый соус", 1], ["Сыр", 2]]);
+    // core's arithmetic: 450 of the dish, 60 of the sauce, 40 of the second cheese — the first free.
+    expect(added.order.total).to.equal(550);
+
+    // What core keeps on the line is what was chosen — the default sauce is not back on it.
+    const stored = await OrderDish.findOne({ id: line.lineId });
+    expect(stored.modifiers.map((modifier: any) => String(modifier.id))).to.deep.equal([hot.id, cheese.rmsId]);
+
+    // The same chooser on the line, and the choice changed on it: the line stays, the money moves.
+    const onLine = (await call(admin, "pos.options", { params: { id: draft.id, lineId: line.lineId }, place })).body.result;
+    expect(onLine.lineId).to.equal(line.lineId);
+    expect(onLine.groups[0].options.map((option: any) => option.amount)).to.deep.equal([0, 1]);
+
+    const changed = (await call(admin, "pos.setLineOptions", {
+      params: { id: draft.id, lineId: line.lineId, modifiers: [{ id: sour.id, groupId: sauces.id, amount: 1 }] },
+      place,
+    })).body.result;
+    expect(changed.ok, JSON.stringify(changed.message)).to.equal(true);
+    expect(changed.order.lines).to.have.length(1);
+    expect(changed.order.lines[0].lineId).to.equal(line.lineId);
+    expect(changed.order.lines[0].options.map((option: any) => option.name)).to.deep.equal(["Сметана"]);
+    expect(changed.order.total).to.equal(450);
+
+    // Two of the sauce in a group that takes one: a refusal in words, and the line is untouched.
+    const tooMany = (await call(admin, "pos.setLineOptions", {
+      params: {
+        id: draft.id,
+        lineId: line.lineId,
+        modifiers: [{ id: sour.id, groupId: sauces.id, amount: 1 }, { id: hot.id, groupId: sauces.id, amount: 1 }],
+      },
+      place,
+    })).body.result;
+    expect(tooMany.ok).to.equal(false);
+    expect(tooMany.message.text).to.contain("Соусы");
+    expect(tooMany.order.total).to.equal(450);
+
+    // A line with options is its own line: the same dish with another sauce does not merge into it.
+    const second = (await call(admin, "pos.add", {
+      params: { id: draft.id, dishId: pilaf.id, modifiers: [{ id: hot.id, groupId: sauces.id, amount: 1 }] },
+      place,
+    })).body.result;
+    expect(second.order.lines).to.have.length(2);
+    expect(second.order.total).to.equal(960);
+  });
+
   it("serves a table in the dining room, and keeps it on the order", async () => {
     const admin = await signIn("stand-admin");
     const Place = stand.sails.models.place;

@@ -1,9 +1,12 @@
 import type {
   PosActor,
   PosCatalog,
+  PosChosenOption,
   PosGroup,
   PosLine,
   PosMessage,
+  PosOptionGroup,
+  PosOptionsView,
   PosOrder,
   PosPaymentOption,
   PosPort,
@@ -55,6 +58,8 @@ const orderCheckFailure = (error: unknown, order?: unknown) => require(`${CORE}/
 const effectiveBalance = (id: string, context: any) =>
   require(`${CORE}/lib/menu/product-availability`).getEffectiveBalanceAcross(id, context);
 const orderHelper = () => require(`${CORE}/lib/order/OrderHelper`).OrderHelper;
+/** core's own reading of the modifier rules of a dish: the defaults it would fill in. */
+const modifiersOf = (groups: unknown[]) => new (require(`${CORE}/lib/ProductModifier`).ProductModifier)(groups ?? []);
 
 /** The channel an order taken here comes from: the `staff` type core registers for this app. */
 const CHANNEL = "mobile-pos";
@@ -88,6 +93,13 @@ function lineOf(orderDish: any): PosLine {
     oldPrice: before && before !== total ? before : null,
     comment: orderDish.comment || null,
     hasOptions: Array.isArray(dish.modifiers) && dish.modifiers.length > 0,
+    // `Order.populate` puts the modifier's own product on each entry, so the line can be read out
+    // by name — «Пицца 35 см · Сыр чеддер ×2» — and not by id.
+    options: ((orderDish.modifiers ?? []) as any[]).map((chosen) => ({
+      id: String(chosen.id),
+      name: chosen.dish?.name ?? String(chosen.id),
+      amount: Number(chosen.amount) || 1,
+    })),
   };
 }
 
@@ -261,13 +273,27 @@ export function corePos(): PosPort {
 
     // ---- the lines ----
 
-    addProduct(place, id, dishId, amount) {
+    addProduct(place, id, dishId, amount, modifiers) {
       return change(place, id, async () => {
+        // The chooser was used — even when it was closed with nothing ticked: a group that
+        // requires a choice is refused here rather than filled in behind the operator's back.
+        const chose = modifiers !== undefined;
+        const chosen = modifiers ?? [];
+        let groups: any[] = [];
+        if (chose) {
+          const read = await productOf(id, dishId);
+          if (!read) return { key: "mobile.pos.error.noProduct", tone: DANGER };
+          groups = read.product.modifiers ?? [];
+          const refusal = refuseChosen(groups, chosen);
+          if (refusal) return refusal;
+        }
         // `user`, exactly as the storefront adds a product: `countCart` sums only the lines a
         // person put in the basket (`addedBy === "user"`), so anything else would be free. The
         // consequence is core's own rule: with REQUIRE_AUTH_FOR_CART on, the operator has to pick
         // the customer before the first product, and core says so in the message.
-        await Order.addDish({ id }, dishId, amount, [], "", "user");
+        await Order.addDish({ id }, dishId, amount, orderModifiers(groups, chosen), "", "user");
+        if (chose) await keepChosen(id, dishId, null, groups, chosen);
+        return null;
       });
     },
 
@@ -287,6 +313,71 @@ export function corePos(): PosPort {
         if (!line) return { key: "mobile.pos.error.noLine", tone: DANGER };
         await Order.setComment({ id }, line, comment);
         await Order.countCart({ id });
+        return null;
+      });
+    },
+
+    // ---- what goes with a dish ----
+
+    /**
+     * The modifier groups of a dish, as this order may buy them: core reads the menu at the
+     * order's kitchens, so an option the kitchen has stopped is not in the list at all
+     * (`Dish.getDishModifiers` drops it). Asked for a line, the amounts are that line's; asked for
+     * a product, they are the defaults core would fill in.
+     */
+    async options(place, id, { dishId, lineId }) {
+      const line = lineId !== undefined ? await lineRow(id, lineId) : null;
+      if (lineId !== undefined && !line) return null;
+      const productId = line ? String(line.dish?.id ?? line.dish) : dishId;
+      if (!productId) return null;
+      const read = await productOf(id, productId);
+      if (!read) return null;
+      const { product, context } = read;
+
+      const groups: any[] = product.modifiers ?? [];
+      const chosen = line
+        ? ((line.modifiers ?? []) as any[]).map((entry) => ({
+            id: String(entry.id),
+            groupId: String(entry.groupId ?? groupOf(groups, String(entry.id)) ?? ""),
+            amount: Number(entry.amount) || 1,
+          }))
+        // What core itself would put on the line: its defaults, and enough of them for the groups
+        // that require a choice. The chooser opens at core's own answer, not at an empty form.
+        : (modifiersOf(groups).ensureMinDefaults(modifiersOf(groups).fillDefault([])) as PosChosenOption[]);
+
+      return {
+        dishId: String(product.id),
+        name: product.name ?? "",
+        price: Number(product.price) || 0,
+        lineId: line ? Number(line.id) : null,
+        amount: line ? Number(line.amount) || 1 : 1,
+        groups: await Promise.all(groups.map((group) => optionGroup(group, chosen, context))),
+      } as PosOptionsView;
+    },
+
+    setLineOptions(place, id, lineId, modifiers) {
+      return change(place, id, async () => {
+        const line = await lineRow(id, lineId);
+        if (!line) return { key: "mobile.pos.error.noLine", tone: DANGER };
+        const dishId = String(line.dish?.id ?? line.dish);
+        const read = await productOf(id, dishId);
+        if (!read) return { key: "mobile.pos.error.noProduct", tone: DANGER };
+        const groups: any[] = read.product.modifiers ?? [];
+        const refusal = refuseChosen(groups, modifiers);
+        if (refusal) return refusal;
+        // The same line, rewritten: `replace` with its own id keeps the amount and the comment on
+        // the receipt where they were, and core recounts the money.
+        await Order.addDish(
+          { id },
+          dishId,
+          Number(line.amount) || 1,
+          orderModifiers(groups, modifiers),
+          line.comment ?? "",
+          "user",
+          true,
+          Number(line.id),
+        );
+        await keepChosen(id, dishId, Number(line.id), groups, modifiers);
         return null;
       });
     },
@@ -590,6 +681,154 @@ async function lineRow(orderId: string, lineId: number): Promise<any | null> {
   if (!line) return null;
   const owner = String(typeof line.order === "object" ? line.order?.id : line.order);
   return owner === String(orderId) ? line : null;
+}
+
+/** A number of core's rules as a number, with nothing set meaning none. */
+function count(value: unknown): number {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : 0;
+}
+
+/** A ceiling of core's rules: null when the rule does not set one. */
+function ceiling(value: unknown): number | null {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : null;
+}
+
+/**
+ * The product as *this order* may buy it, with its modifier groups popularized — the group's name,
+ * each option's own product — and read at the order's kitchens, which is what decides what is in
+ * the menu at all.
+ */
+async function productOf(orderId: string, dishId: string): Promise<{ product: any; context: any } | null> {
+  const order = await Order.findOne({ id: orderId });
+  const context = await (await Adapter.get("menu")).resolveContext({ order });
+  const found = await Dish.getDishes({ id: dishId }, context);
+  return found[0] ? { product: found[0], context } : null;
+}
+
+/** Which group an option belongs to — for a line written before `groupId` was carried. */
+function groupOf(groups: any[], optionId: string): string | null {
+  for (const group of groups) {
+    if ((group.childModifiers ?? []).some((child: any) => String(child.id) === optionId)) return String(group.id);
+  }
+  return null;
+}
+
+/** One group of a dish, with what is chosen of it now and what the kitchen has left of each option. */
+async function optionGroup(group: any, chosen: PosChosenOption[], context: any): Promise<PosOptionGroup> {
+  const minAmount = count(group.minAmount);
+  const maxAmount = ceiling(group.maxAmount);
+  const options = await Promise.all(
+    (group.childModifiers ?? []).map(async (child: any) => {
+      // The id a group keeps may be the product's `rmsId` — core accepts both on a line and
+      // resolves them the same way (`Dish.getDishModifiers`), so it is passed back as it came;
+      // the stock, though, is the product's own.
+      const id = String(child.id);
+      const dish = child.dish ?? {};
+      const defaultAmount = count(child.defaultAmount);
+      return {
+        id,
+        name: dish.name ?? id,
+        price: Number(dish.price) || 0,
+        balance: await effectiveBalance(String(dish.id ?? id), context),
+        amount: chosen.filter((entry) => String(entry.id) === id).reduce((sum, entry) => sum + count(entry.amount), 0),
+        minAmount: count(child.minAmount),
+        maxAmount: ceiling(child.maxAmount),
+        freeAmount: count(child.freeOfChargeAmount),
+        defaultAmount,
+      };
+    }),
+  );
+  return {
+    id: String(group.id),
+    name: group.group?.name ?? group.name ?? "",
+    required: Boolean(group.required) || minAmount > 0,
+    minAmount,
+    maxAmount,
+    // One of the group at most: a choice, not a counter.
+    single: maxAmount === 1,
+    options,
+  };
+}
+
+/**
+ * What the operator chose, checked against the rules of the dish — in words, not in codes.
+ *
+ * core does not check: `ProductModifier.validate` exists and `addDish` has the call to it
+ * commented out, so a group that needs a sauce would otherwise go to the kitchen without one.
+ */
+function refuseChosen(groups: any[], chosen: PosChosenOption[]): PosMessage | null {
+  const taken = chosen.filter((entry) => count(entry.amount) > 0);
+  const known = new Set<string>();
+  for (const group of groups) for (const child of group.childModifiers ?? []) known.add(String(child.id));
+  const unknown = taken.find((entry) => !known.has(String(entry.id)));
+  if (unknown) return { key: "mobile.pos.error.optionUnknown", tone: DANGER };
+
+  for (const group of groups) {
+    const children: any[] = group.childModifiers ?? [];
+    const ids = new Set(children.map((child) => String(child.id)));
+    const inGroup = taken.filter((entry) => ids.has(String(entry.id)));
+    const sum = inGroup.reduce((total, entry) => total + count(entry.amount), 0);
+    const name = group.group?.name ?? group.name ?? "";
+    if (sum < count(group.minAmount)) return { key: "mobile.pos.error.optionMin", arg: name, tone: DANGER };
+    const max = ceiling(group.maxAmount);
+    if (max !== null && sum > max) return { key: "mobile.pos.error.optionMax", arg: name, tone: DANGER };
+    for (const child of children) {
+      const own = ceiling(child.maxAmount);
+      const amount = inGroup.filter((entry) => String(entry.id) === String(child.id)).reduce((total, entry) => total + count(entry.amount), 0);
+      if (own !== null && amount > own) return { key: "mobile.pos.error.optionMax", arg: child.dish?.name ?? name, tone: DANGER };
+    }
+  }
+  return null;
+}
+
+/**
+ * The chosen options as core keeps them on a line: `OrderModifier`, nothing of ours.
+ *
+ * The option's own product goes along with it, as the storefront's menu objects carry it: core
+ * reads the «so many free of charge» rule off `modifier.dish.rmsId` and charges for all of them
+ * when it is not there (`countCart`, «Find original obj modifiers»). The price itself is always
+ * looked up afresh, so the copy on the line cannot go stale into the money.
+ */
+function orderModifiers(groups: any[], chosen: PosChosenOption[]): Array<Record<string, unknown>> {
+  const children = new Map<string, any>();
+  for (const group of groups) for (const child of group.childModifiers ?? []) children.set(String(child.id), child);
+  return chosen
+    .filter((entry) => count(entry.amount) > 0)
+    .map((entry) => {
+      const option = children.get(String(entry.id));
+      return {
+        id: String(entry.id),
+        groupId: String(entry.groupId),
+        amount: count(entry.amount),
+        ...(option?.dish ? { dish: option.dish } : {}),
+      };
+    });
+}
+
+/**
+ * The line keeps exactly what was chosen.
+ *
+ * `addDish` fills in every option that has a `defaultAmount` whether or not the group already had a
+ * choice — that is core's tested behaviour and the storefront's, so it is not touched here; it does
+ * mean that «Средний» comes back onto a line the operator switched to «Большой». The POS has a
+ * person in front of the guest, and what they chose is what goes to the kitchen: the chosen set is
+ * written back and core recounts the money from it.
+ */
+async function keepChosen(orderId: string, dishId: string, lineId: number | null, groups: any[], chosen: PosChosenOption[]): Promise<void> {
+  const wanted = orderModifiers(groups, chosen);
+  const line = lineId !== null
+    ? await OrderDish.findOne({ id: lineId })
+    // A line with modifiers is never merged into another (`addDish` only merges plain lines), so
+    // the newest line of this product is the one just written.
+    : (await OrderDish.find({ where: { order: orderId, dish: dishId }, sort: "id DESC", limit: 1 }))[0];
+  if (!line) return;
+  const written = ((line.modifiers ?? []) as any[]).map((entry) => `${entry.id}:${count(entry.amount)}`).sort().join(",");
+  const asked = wanted.map((entry) => `${entry.id}:${entry.amount}`).sort().join(",");
+  if (written === asked) return;
+  await OrderDish.update({ id: line.id }, { modifiers: wanted }).fetch();
+  await Order.countCart({ id: orderId });
 }
 
 /** The groups one level down: the top of the menu, or the children of the open group. */

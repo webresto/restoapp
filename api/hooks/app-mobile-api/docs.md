@@ -148,6 +148,7 @@ the message says what to do. The words of a refusal come from core's own table
 | `pos.order`, `pos.start`, `pos.cancel` | the drafts of this person at this point; `Order.create`; the row of `mobile_order_draft` |
 | `pos.catalog` | `Dish.getDishes` in the order's menu context — the price a promotion makes, the stock of its kitchens, and how many of a product the receipt has |
 | `pos.add`, `pos.setLine`, `pos.setLineComment` | `Order.addDish` (`addedBy: "user"`, as the site: `countCart` sums only those lines), `setCount`, `removeDish`, `setComment` |
+| `pos.options`, `pos.setLineOptions` | the modifier groups of the dish as `Dish.getDishModifiers` reads them at this order's kitchens, with core's own defaults ticked; the chosen set goes into `OrderDish.modifiers` and `countCart` prices it |
 | `pos.serviceOptions`, `pos.setService`, `pos.setTable` | the flags of the point; `Order.setServiceType`, `pickupPoint`, `Order.table` |
 | `pos.clients`, `pos.setClient`, `pos.setCustomer` | the search of «Клиенты»; `order.user` and `order.customer`; `AuthService.materializeUser` when an account is asked for |
 | `pos.cities`, `pos.addressSearch`, `pos.setAddress`, `pos.clientAddresses` | the geo adapter and `UserLocation`; the address is priced by `countCart` |
@@ -155,6 +156,15 @@ the message says what to do. The words of a refusal come from core's own table
 | `pos.payments`, `pos.setPayment` | `PaymentMethod.getAvailable`; only a promise of payment is taken on a terminal |
 | `pos.promocode`, `pos.setDetails` | `Order.applyPromotionCode`; the comment, the guests, «перезвонить» |
 | `pos.check`, `pos.place` | `Order.check` and `Order.order`; the placed order leaves the drafts and turns up on the board of its point, with `orderedOnPlatform: "mobile-pos"` |
+
+Two things about the options are worth knowing, because both are core's and neither is obvious.
+`Order.addDish` fills in every option that has a `defaultAmount` even when the group already has a
+choice (`ProductModifier.fillDefault`, and core's tests say so), so «Средний» would come back onto a
+line switched to «Большой»: the POS writes the chosen set back onto the line and lets core recount,
+rather than changing a library the storefront is built on. And the «so many free of charge» rule is
+found by the option's own product (`countCart` matches `modifier.dish.rmsId`), so the chosen options
+carry that product along, exactly as the storefront's menu objects do — without it a free first
+portion is charged for.
 
 «Заказы» decide nothing of their own: which orders a point leads, what a role may move an order to
 and what assigning a kitchen means are core's `ordersOfPlace`, `transitionOrder` and

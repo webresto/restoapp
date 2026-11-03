@@ -50,8 +50,32 @@
           ]
         },
         "hasOptions": {
-          "description": "The product has modifier groups; core fills their defaults until the chooser exists.",
+          "description": "The product has modifier groups; `pos.options` says what they are.",
           "type": "boolean"
+        },
+        "options": {
+          "description": "What was chosen of them — what the kitchen reads off this line.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "amount"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "amount": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
         }
       }
     },
@@ -387,6 +411,137 @@
             "string",
             "null"
           ]
+        }
+      }
+    },
+    "posOption": {
+      "description": "One option of a modifier group: a product of the menu sold with the dish. The numbers are the rules core keeps on the dish, passed through — the chooser draws them and the server checks them.",
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "price",
+        "balance",
+        "amount"
+      ],
+      "properties": {
+        "id": {
+          "description": "The modifier's own product id — what goes into `OrderDish.modifiers`.",
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "price": {
+          "description": "What one of it costs on top of the dish.",
+          "type": "number"
+        },
+        "balance": {
+          "description": "-1 unlimited, 0 stopped — the same number a product has.",
+          "type": "number"
+        },
+        "amount": {
+          "description": "How many are chosen now: core's defaults, or what the line already has.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "minAmount": {
+          "description": "The option's own floor, as core keeps it.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxAmount": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "freeAmount": {
+          "description": "How many of it are not charged for (`freeOfChargeAmount`).",
+          "type": "integer",
+          "minimum": 0
+        },
+        "defaultAmount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "posOptionGroup": {
+      "description": "A group of modifiers of one dish, with how many of it may be taken.",
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "options"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "minAmount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxAmount": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "single": {
+          "description": "At most one of the group: a choice rather than steppers.",
+          "type": "boolean"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/posOption"
+          }
+        }
+      }
+    },
+    "posOptions": {
+      "description": "`pos.options`: the dish and what may be chosen with it. No total — what the dish with these options costs is core's arithmetic, read off the receipt once the line is written.",
+      "type": "object",
+      "required": [
+        "dishId",
+        "name",
+        "price",
+        "groups"
+      ],
+      "properties": {
+        "dishId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "price": {
+          "type": "number"
+        },
+        "lineId": {
+          "description": "The line being edited, when the chooser was opened from the receipt; null — a new line.",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "amount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "groups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/posOptionGroup"
+          }
         }
       }
     },
