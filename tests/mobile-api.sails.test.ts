@@ -58,6 +58,20 @@ describe("app-mobile-api in Sails", function () {
 
   const call = (token: string, method: string, body: unknown) => request("POST", `/api/mobile/call/${method}`, { token, body });
 
+  /**
+   * A signed-in token per user, kept for the whole file: the login limit is ten attempts a minute
+   * per address, and every test here comes from 127.0.0.1.
+   */
+  const tokens = new Map<string, string>();
+  async function signIn(name: string): Promise<string> {
+    if (!tokens.has(name)) {
+      const response = await login(name);
+      expect(response.status, JSON.stringify(response.body)).to.equal(200);
+      tokens.set(name, response.body.result.token);
+    }
+    return tokens.get(name)!;
+  }
+
   it("stands before bodyParser and keeps the rest of Sails untouched", async () => {
     const order: string[] = stand.sails.config.http.middleware.order;
     expect(order.indexOf("mobileApi")).to.be.lessThan(order.indexOf("bodyParser"));
@@ -116,14 +130,92 @@ describe("app-mobile-api in Sails", function () {
     expect(after.headers.get("x-mobile-revision")).to.not.equal(before.headers.get("x-mobile-revision"));
   });
 
-  it("gives an Operator and a panel-only user no «Блюда», the administrator every cooking point", async () => {
-    for (const login_ of ["stand-operator", "stand-panel"]) {
-      const token = (await login(login_)).body.result.token;
-      expect((await request("GET", "/api/mobile/describe", { token })).body.result.apps).to.deep.equal([]);
-    }
-    const admin = (await login("stand-admin")).body.result.token;
+  it("gives an Operator «Заказы» and no «Блюда», a panel-only user nothing, the administrator both", async () => {
+    const operator = await signIn("stand-operator");
+    const operatorApps = (await request("GET", "/api/mobile/describe", { token: operator })).body.result.apps;
+    expect(operatorApps.map((app: any) => app.id)).to.deep.equal(["orders"]);
+    expect(operatorApps[0].places).to.deep.equal(["stand-a", "no-kitchen"]);
+
+    const panelOnly = await signIn("stand-panel");
+    expect((await request("GET", "/api/mobile/describe", { token: panelOnly })).body.result.apps).to.deep.equal([]);
+
+    const admin = await signIn("stand-admin");
     const declaration = (await request("GET", "/api/mobile/describe", { token: admin })).body.result;
+    expect(declaration.apps.map((app: any) => app.id)).to.deep.equal(["dishes", "orders"]);
     expect(declaration.apps[0].places.sort()).to.deep.equal(["stand-a", "stand-b"]);
+    // «Заказы» take pickup points too, and «Без кухни» is always among the administrator's.
+    expect(declaration.apps[1].places.sort()).to.deep.equal(["no-kitchen", "stand-a", "stand-b", "stand-p"]);
+  });
+
+  /** An order placed at a point, as core's own tests place one. */
+  async function placed(values: Record<string, unknown>): Promise<string> {
+    const Order = stand.sails.models.order;
+    const order = await Order.create({}).fetch();
+    await Order.update({ id: order.id }, {
+      state: "ORDER",
+      orderedAt: Math.floor(Date.now() / 1000),
+      customer: { name: "Иван", phone: { code: "7", number: "9000000001", additionalNumber: "" } },
+      total: 1200,
+      ...values,
+    }).fetch();
+    return order.id;
+  }
+
+  it("walks an order of one point ORDER → COOKING → ON_THE_WAY → DONE, and the database agrees", async () => {
+    const mine = await placed({ serviceType: "delivery", cookingPoints: ["stand-a"], address: { formatted: "ул. Ленина, 5", home: "5" } });
+    const theirs = await placed({ serviceType: "delivery", cookingPoints: ["stand-b"] });
+    const token = await signIn("stand-operator");
+
+    const active = (await call(token, "orders.list", { params: {}, place: "stand-a" })).body.result;
+    expect(active.items.map((item: any) => item.id)).to.deep.equal([mine]);
+    expect(active.items[0]).to.include({ state: "ORDER", total: 1200, address: "ул. Ленина, 5" });
+    expect(active.counts.active).to.equal(1);
+
+    for (const to of ["COOKING", "ON_THE_WAY", "DONE"]) {
+      const response = await call(token, "orders.setState", { params: { id: mine, to }, place: "stand-a" });
+      expect(response.status, JSON.stringify(response.body)).to.equal(200);
+      expect(response.body.result.item.state).to.equal(to);
+    }
+
+    // The same order as the web board reads it, finished through core's doFinalize.
+    const stored = await stand.sails.models.order.findOne({ id: mine });
+    expect(stored.state).to.equal("DONE");
+    expect(stored.completedAt).to.be.a("number");
+    const logs = await stand.sails.models.order.getLogs({ id: mine });
+    expect(logs.some((log: any) => log.message === "mobile-api: state changed")).to.equal(true);
+
+    // The order of point B is invisible and immovable, by list and by direct id.
+    expect((await call(token, "orders.list", { params: {}, place: "stand-b" })).body.error.code).to.equal("place_forbidden");
+    expect((await call(token, "orders.get", { params: { id: theirs }, place: "stand-a" })).body.error.code).to.equal("not_found");
+    expect((await call(token, "orders.setState", { params: { id: theirs, to: "COOKING" }, place: "stand-a" })).body.error.code)
+      .to.equal("not_found");
+    expect((await stand.sails.models.order.findOne({ id: theirs })).state).to.equal("ORDER");
+  });
+
+  it("hands an order that arrived without a kitchen one of the operator's, through core", async () => {
+    const waiting = await placed({ serviceType: "delivery", cookingPoints: [] });
+    const token = await signIn("stand-operator");
+
+    const list = (await call(token, "orders.list", { params: {}, place: "no-kitchen" })).body.result;
+    expect(list.items.map((item: any) => item.id)).to.contain(waiting);
+    const actions = list.items.find((item: any) => item.id === waiting)._actions.map((action: any) => action.method);
+    expect(actions).to.contain("orders.assignKitchen");
+
+    const assigned = await call(token, "orders.assignKitchen", { params: { id: waiting, place: "stand-a" }, place: "no-kitchen" });
+    expect(assigned.status, JSON.stringify(assigned.body)).to.equal(200);
+    expect((await stand.sails.models.order.findOne({ id: waiting })).cookingPoints).to.deep.equal(["stand-a"]);
+    expect((await call(token, "orders.list", { params: {}, place: "no-kitchen" })).body.result.items.map((item: any) => item.id))
+      .to.not.contain(waiting);
+  });
+
+  it("never shows a basket among the orders of a point", async () => {
+    const Order = stand.sails.models.order;
+    const basket = await Order.create({}).fetch();
+    await Order.update({ id: basket.id }, { state: "CART", serviceType: "delivery", cookingPoints: ["stand-a"] }).fetch();
+    const token = await signIn("stand-operator");
+
+    const { items } = (await call(token, "orders.list", { params: {}, place: "stand-a" })).body.result;
+    expect(items.map((item: any) => item.id)).to.not.contain(basket.id);
   });
 
   it("keeps the device in the database and signs it out after a password change", async () => {

@@ -15,8 +15,10 @@ import type {
   PowUseStore,
 } from "../../api/hooks/app-mobile-api/lib/types";
 import type { StockItem, StockPort } from "../../api/hooks/app-mobile-api/apps/dishes";
+import type { OrderItem, OrdersActor, OrdersPort } from "../../api/hooks/app-mobile-api/apps/orders";
 import { MobileApiRegistry } from "../../api/hooks/app-mobile-api/lib/registry";
 import { registerDishes } from "../../api/hooks/app-mobile-api/apps/dishes";
+import { NO_KITCHEN, registerOrders } from "../../api/hooks/app-mobile-api/apps/orders";
 import { cryptoPuzzle } from "../../api/hooks/app-mobile-api/adapters/sails";
 
 const passwordHash = require("password-hash");
@@ -80,19 +82,22 @@ export function makeUser(id: number, login: string, groups: PanelUser["groups"],
   };
 }
 
-/** The real AccessRightsHelper of the installed adminizer, with core's stock-manager token. */
+/** The real AccessRightsHelper of the installed adminizer, with core's own contextual checks. */
 export async function realAccessRights(): Promise<any> {
   const adminizerDir = path.dirname(require.resolve("adminizer"));
   // require, not import(): under mocha only the CJS hook of tsx is on, and adminizer's own imports
   // need its resolution (directory imports) — as in the running server, which lifts under tsx.
   const { AccessRightsHelper } = require(path.join(adminizerDir, "helpers/accessRightsHelper.js"));
   const { checkStockManagerToken } = require("@webresto/core/lib/adminpanel/stock-manager-rights");
+  const { checkOrderKanbanToken } = require("@webresto/core/lib/adminpanel/order-kanban-rights");
   const helper = new AccessRightsHelper({ config: { auth: { enable: true } } });
   helper.registerTokens([
     { id: "access-to-adminpanel", name: "Access", description: "Access to the panel", department: "General" },
     { id: "stock-manager", name: "Stock Manager", description: "Stock", department: "Catalog", check: checkStockManagerToken },
-    { id: "order-kanban", name: "Current Orders", description: "Orders", department: "Orders" },
+    { id: "order-kanban", name: "Current Orders", description: "Orders", department: "Orders", check: checkOrderKanbanToken },
   ]);
+  // The model rights of the web operator (`config/adminpanel.js`), registered as adminizer does.
+  helper.registerModelTokens("order");
   return helper;
 }
 
@@ -156,11 +161,110 @@ export class FakeStock implements StockPort {
   }
 }
 
+/**
+ * Four orders at three points, moved by core's own state flow: the rows are in memory, the rules
+ * are not. One order waits at «Без кухни», as one that reached the staff without one does.
+ */
+export class FakeOrders implements OrdersPort {
+  rows = [
+    { id: "o1", number: "AAAA1111", place: "p1", state: "ORDER", customerName: "Иван", phone: "+70000000001", method: "delivery", address: "ул. Ленина, 5", comment: "Домофон 12", total: 1200, deliveryCost: 200, paid: false, createdAt: 1000, updatedAt: 1000 },
+    { id: "o2", number: "BBBB2222", place: "p2", state: "ORDER", customerName: "Пётр", phone: "+70000000002", method: "pickup", address: null as string | null, comment: null as string | null, total: 540, deliveryCost: 0, paid: true, createdAt: 2000, updatedAt: 2000 },
+    { id: "o3", number: "CCCC3333", place: "p1", state: "DONE", customerName: "Анна", phone: "+70000000003", method: "delivery", address: "пр. Мира, 3", comment: null as string | null, total: 800, deliveryCost: 150, paid: true, createdAt: 3000, updatedAt: 3000 },
+    { id: "o4", number: "DDDD4444", place: NO_KITCHEN, state: "ORDER", customerName: "Ольга", phone: "+70000000004", method: "delivery", address: "ул. Садовая, 1", comment: null as string | null, total: 300, deliveryCost: 100, paid: false, createdAt: 4000, updatedAt: 4000 },
+  ];
+  /** Every move that went through, as the journal of core would have it. */
+  moves: Array<{ id: string; to: string; device: string | null }> = [];
+  now = 5000;
+
+  private flow() {
+    return require("@webresto/core/lib/order/OrderStateFlow");
+  }
+
+  private item(row: (typeof this.rows)[number], user: unknown, withContents = false): OrderItem {
+    const { getAllowedOrderTransitionsByRole, isOperatorUser } = this.flow();
+    return {
+      id: row.id,
+      number: row.number,
+      title: `№ ${row.number}`,
+      summary: [row.customerName, row.method].filter(Boolean).join(" · "),
+      state: row.state,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      customerName: row.customerName,
+      customerPhone: row.phone,
+      method: row.method,
+      address: row.address,
+      comment: row.comment,
+      contents: withContents ? `1 × Борщ\n2 × Плов` : "",
+      deliveryCost: row.deliveryCost,
+      total: row.total,
+      paid: row.paid,
+      allowedTransitions: getAllowedOrderTransitionsByRole(row.state, isOperatorUser(user)),
+      placeId: row.place,
+    };
+  }
+
+  private of(place: string, id: string) {
+    return this.rows.find((row) => row.id === id && row.place === place) ?? null;
+  }
+
+  private tabOf(row: (typeof this.rows)[number]): "active" | "done" {
+    return ["DONE", "REJECT"].includes(row.state) ? "done" : "active";
+  }
+
+  async list(place: string, { tab, since, user }: { tab: "active" | "done"; since?: number | null; user: unknown }) {
+    return this.rows
+      .filter((row) => row.place === place && this.tabOf(row) === tab)
+      .filter((row) => typeof since !== "number" || row.updatedAt >= since)
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .map((row) => this.item(row, user));
+  }
+
+  async counts(place: string) {
+    const mine = this.rows.filter((row) => row.place === place);
+    return {
+      active: mine.filter((row) => this.tabOf(row) === "active").length,
+      done: mine.filter((row) => this.tabOf(row) === "done").length,
+    };
+  }
+
+  async get(place: string, id: string, user: unknown) {
+    const row = this.of(place, id);
+    return row ? this.item(row, user, true) : null;
+  }
+
+  async setState(place: string, id: string, to: string, { user, device }: OrdersActor) {
+    const row = this.of(place, id);
+    if (!row) return { ok: false as const, reason: "not_found" as const };
+    const { getAllowedOrderTransitionsByRole, isOperatorUser } = this.flow();
+    const allowed = getAllowedOrderTransitionsByRole(row.state, isOperatorUser(user));
+    if (!allowed.includes(to)) return { ok: false as const, reason: "forbidden" as const, allowed };
+    row.state = to;
+    row.updatedAt = ++this.now;
+    if (to === "DONE") row.paid = true;
+    this.moves.push({ id, to, device });
+    return { ok: true as const, item: this.item(row, user, true) };
+  }
+
+  async assignKitchen(place: string, id: string, kitchen: string, { user, device }: OrdersActor) {
+    const row = this.of(place, id);
+    if (!row || place !== NO_KITCHEN) return { ok: false as const, reason: "not_found" as const };
+    if (row.method !== "delivery") {
+      return { ok: false as const, reason: "conflict" as const, message: "This order is collected at the point the customer chose" };
+    }
+    row.place = kitchen;
+    row.updatedAt = ++this.now;
+    this.moves.push({ id, to: `kitchen:${kitchen}`, device });
+    return { ok: true as const, item: this.item(row, user, true) };
+  }
+}
+
 export interface Fakes {
   deps: MobileApiDeps;
   users: Map<string, PanelUser>;
   places: PlaceInfo[];
   stock: FakeStock;
+  orders: FakeOrders;
   devices: MemoryDevices;
   attempts: MemoryAttempts;
   powUses: MemoryPowUses;
@@ -173,13 +277,19 @@ export async function makeFakes(): Promise<Fakes> {
   process.env.AP_PASSWORD_SALT = SALT;
   const access = await realAccessRights();
   const stockGrant = (...places: string[]) => ({ tokenId: "stock-manager", rights: places });
+  const ordersGrant = (...places: string[]) => ({ tokenId: "order-kanban", rights: places });
+  const ORDER_MODEL = ["read-order-model", "update-order-model"];
 
   const usersList = [
     makeUser(1, "admin", [], { isAdministrator: true }),
     makeUser(2, "stock", [{ name: "Stock Manager", tokens: ["access-to-adminpanel", stockGrant("p1", "p2")] }]),
-    makeUser(3, "operator", [{ name: "Operator", tokens: ["access-to-adminpanel", "order-kanban"] }]),
+    makeUser(3, "operator", [{ name: "Operator", tokens: ["access-to-adminpanel", ordersGrant("p1", "p3"), ...ORDER_MODEL] }]),
     makeUser(4, "nopoints", [{ name: "Stock Manager", tokens: ["access-to-adminpanel", "stock-manager"] }]),
     makeUser(5, "outsider", [{ name: "Nobody", tokens: [] }]),
+    // Hands orders that arrived without a kitchen to one: «Без кухни» plus the kitchens themselves.
+    makeUser(6, "dispatcher", [{ name: "Operator", tokens: ["access-to-adminpanel", ordersGrant("p1", "p2", NO_KITCHEN), ...ORDER_MODEL] }]),
+    // Reads orders of a point but may not write them: no `update-order-model`.
+    makeUser(7, "watcher", [{ name: "Operator", tokens: ["access-to-adminpanel", ordersGrant("p1"), "read-order-model"] }]),
   ];
   const users = new Map(usersList.map((user) => [user.login, user]));
   const places: PlaceInfo[] = [
@@ -190,7 +300,9 @@ export async function makeFakes(): Promise<Fakes> {
 
   const registry = new MobileApiRegistry();
   const stock = new FakeStock();
+  const orders = new FakeOrders();
   registerDishes(registry, stock);
+  registerOrders(registry, orders);
 
   const env = { enabled: true, captcha: true, https: false, secret: "s3cret" as string | undefined };
   const clock = { now: Date.now() };
@@ -228,7 +340,7 @@ export async function makeFakes(): Promise<Fakes> {
     now: () => clock.now,
   };
 
-  return { deps, users, places, stock, devices, attempts, powUses, audits, env, clock };
+  return { deps, users, places, stock, orders, devices, attempts, powUses, audits, env, clock };
 }
 
 /**

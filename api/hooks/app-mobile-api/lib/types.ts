@@ -26,6 +26,11 @@ export interface PlaceInfo {
   address: string | null;
   isCookingPoint: boolean;
   isPickupPoint: boolean;
+  /**
+   * Not a `Place` of the server but an option of the app's token that the app treats as a point —
+   * «Без кухни» of «Заказы» (`places.options`). Its `title` is a translation key, not data.
+   */
+  virtual?: boolean;
 }
 
 export interface ServerFacts {

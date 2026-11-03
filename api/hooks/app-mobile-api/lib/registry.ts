@@ -24,7 +24,16 @@ export interface AppDefinition {
   home: string;
   /** "place": every call carries exactly one point the user holds for `places.token`. */
   scope?: "server" | "place";
-  places?: { token: string; kind: "cooking" | "pickup" | "any" };
+  places?: {
+    token: string;
+    kind: "cooking" | "pickup" | "any";
+    /**
+     * Options of the same token that are not points of the server but which the app shows among
+     * them — «Без кухни» of «Заказы»: the orders no kitchen was resolved for. Granted exactly like
+     * a point, and the titles are translation keys.
+     */
+    options?: Array<{ id: string; title: string }>;
+  };
   /** Fields of the records the app shows, for apps whose data is not an adminizer model. */
   models?: Record<string, { fields: FieldDefinition[] }>;
 }
@@ -46,6 +55,12 @@ export interface MethodContext {
   lang: string;
   /** The checked point of a scope:"place" app; null otherwise. Handlers of such apps must filter by it. */
   place: PlaceInfo | null;
+  /**
+   * Every point of this app the user holds — the `places` of their declaration. Empty for an app
+   * that is not by points. For a method whose input names a point of its own: «Назначить кухню»
+   * offers the kitchens of the person, not of the server.
+   */
+  appPlaces(): Promise<PlaceInfo[]>;
   t(key: string): string;
   fail(code: ErrorCode, message?: string): never;
 }

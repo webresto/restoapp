@@ -55,8 +55,10 @@ export async function computeRevision(deps: DescribeDeps, user: PanelUser): Prom
   return createHash("sha256").update(JSON.stringify(material)).digest("hex").slice(0, 32);
 }
 
-function placeView(place: PlaceInfo) {
-  return { id: String(place.id), title: place.title, address: place.address };
+function placeView(place: PlaceInfo, translator: Translator, lang: string) {
+  // Titles of real points are data and never go through the translator; the title of an option the
+  // app shows as a point — «Без кухни» — is a key of the app's own locales.
+  return { id: String(place.id), title: place.virtual ? translator.t(place.title, lang) : place.title, address: place.address };
 }
 
 /**
@@ -79,10 +81,15 @@ export class DeclarationBuilder {
     const apps = [];
 
     for (const app of await availableApps(access, registry, user)) {
+      // The points of this app first: a method whose input names one of them — «Назначить кухню» —
+      // is personalised with exactly the list the declaration will carry.
+      const appPlaces = app.scope === "place" ? await placesFor(access, this.deps.places, user, app) : [];
+      const ctx: MethodContext = { ...baseCtx, appPlaces: async () => appPlaces };
+
       const methods = [];
       for (const method of registry.methodsOf(app.id)) {
         if (!(await isAvailable(access, user, method))) continue;
-        const personal = method.describe ? await method.describe(baseCtx) : undefined;
+        const personal = method.describe ? await method.describe(ctx) : undefined;
         methods.push({
           name: method.name,
           kind: method.kind,
@@ -105,9 +112,8 @@ export class DeclarationBuilder {
         methods,
       };
       if (app.scope === "place") {
-        const places = await placesFor(access, this.deps.places, user, app);
-        for (const place of places) allPlaces.set(String(place.id), place);
-        declared.places = places.map((place) => String(place.id));
+        for (const place of appPlaces) allPlaces.set(String(place.id), place);
+        declared.places = appPlaces.map((place) => String(place.id));
       }
       apps.push(declared);
     }
@@ -123,14 +129,16 @@ export class DeclarationBuilder {
           fullName: user.fullName ?? null,
           isAdministrator: Boolean(user.isAdministrator),
         },
-        places: [...allPlaces.values()].sort((a, b) => a.title.localeCompare(b.title)).map(placeView),
+        places: [],
         apps,
       },
       lang,
     );
     // Data, not keys: the server name and place titles must not go through the translator.
     (declaration as any).server = facts;
-    (declaration as any).places = [...allPlaces.values()].sort((a, b) => a.title.localeCompare(b.title)).map(placeView);
+    (declaration as any).places = [...allPlaces.values()]
+      .map((place) => placeView(place, this.deps.translator, lang))
+      .sort((a, b) => a.title.localeCompare(b.title));
 
     if (this.cache.size >= CACHE_LIMIT) this.cache.delete(this.cache.keys().next().value as string);
     this.cache.set(key, declaration);

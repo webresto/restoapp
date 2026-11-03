@@ -236,11 +236,12 @@ describe("app-mobile-api", function () {
       expect(dishes.models.dish.fields[1].specials[0]).to.deep.equal({ value: -1, title: "Безлимит" });
     });
 
-    it("gives an operator no «Блюда»", async () => {
+    it("gives an operator «Заказы» on their points and no «Блюда»", async () => {
       const token = await login("operator");
       const declaration = (await request("GET", "/api/mobile/describe", { token })).body.result;
-      expect(declaration.apps).to.deep.equal([]);
-      expect(declaration.places).to.deep.equal([]);
+      expect(declaration.apps.map((app: any) => app.id)).to.deep.equal(["orders"]);
+      expect(declaration.apps[0].places).to.deep.equal(["p1", "p3"]);
+      expect(declaration.places.map((place: any) => place.id)).to.have.members(["p1", "p3"]);
     });
 
     it("shows «Блюда» without points to a group that has the token but no points ticked", async () => {

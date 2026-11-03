@@ -1,4 +1,5 @@
 import type { MethodContext, MobileApiRegistry } from "../lib/registry";
+import { decodeCursor, encodeCursor } from "../lib/cursor";
 
 /**
  * «Блюда» — the web Stock Manager of one point, on the phone.
@@ -49,21 +50,6 @@ const BALANCE_SPECIALS = [
   { value: -1, title: "mobile.dishes.unlimited" },
   { value: 0, title: "mobile.dishes.outOfStock", tone: "danger" },
 ];
-
-function encodeCursor(offset: number): string {
-  return Buffer.from(JSON.stringify({ o: offset })).toString("base64url");
-}
-
-function decodeCursor(cursor: string | undefined, ctx: MethodContext): number {
-  if (!cursor) return 0;
-  try {
-    const offset = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")).o;
-    if (Number.isInteger(offset) && offset >= 0) return offset;
-  } catch {
-    // falls through
-  }
-  return ctx.fail("invalid", "Bad cursor");
-}
 
 function matches(item: StockItem, q: string): boolean {
   const needle = q.toLowerCase();

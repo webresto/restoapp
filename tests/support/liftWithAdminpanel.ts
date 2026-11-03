@@ -66,7 +66,13 @@ async function fixtures(sails: any): Promise<Pick<Stand, "users" | "places">> {
 
   const group = async (name: string, tokens: unknown[]) =>
     (await Group.findOne({ name })) ? Group.updateOne({ name }, { tokens }) : Group.create({ name, tokens }).fetch();
-  const operator = await group("Operator", ["access-to-adminpanel", "order-kanban", "read-order-model"]);
+  // `order-kanban` is contextual (core C1): the Operator holds point A and «Без кухни», never B.
+  const operator = await group("Operator", [
+    "access-to-adminpanel",
+    { tokenId: "order-kanban", rights: [a.id, "no-kitchen"] },
+    "read-order-model",
+    "update-order-model",
+  ]);
   const stock = await group("Stock Manager", ["access-to-adminpanel", { tokenId: "stock-manager", rights: [a.id, b.id] }]);
   const panel = await group("Panel only", ["access-to-adminpanel"]);
 

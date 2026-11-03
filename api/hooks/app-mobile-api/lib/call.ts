@@ -1,5 +1,5 @@
 import type { AccessPort, AuditEvent, PlacesPort } from "./types";
-import { checkPlace, isAvailable } from "./access";
+import { checkPlace, isAvailable, placesFor } from "./access";
 import { fail, MobileError } from "./errors";
 import type { Session } from "./auth/device";
 import type { MethodContext, MobileApiRegistry, RegisteredMethod } from "./registry";
@@ -27,6 +27,7 @@ export function makeContext(deps: Pick<CallDeps, "translator">, session: Session
     device: session?.device ?? null,
     lang,
     place: null,
+    appPlaces: async () => [],
     t: (key) => deps.translator.t(key, lang),
     fail: (code, message) => fail(code, message),
   };
@@ -38,7 +39,10 @@ async function actionsFor(deps: CallDeps, ctx: MethodContext, actions: Registere
   for (const action of actions) {
     const override = action.describeItem ? await action.describeItem(ctx, record) : undefined;
     if (override === false) continue;
-    result.push(override?.input ? { method: action.name, input: override.input } : { method: action.name });
+    // A narrowed input travels with the record and not in the declaration, so it is translated
+    // here: the titles of the transitions a client draws its buttons from are in it.
+    const input = override?.input ? deps.translator.localize(override.input, ctx.lang) : undefined;
+    result.push(input ? { method: action.name, input } : { method: action.name });
   }
   return result;
 }
@@ -87,6 +91,7 @@ export async function invoke(deps: CallDeps, session: Session | null, request: C
     const place = await checkPlace(deps.access, deps.places, user!, app, request.place);
     if (!place) fail("place_forbidden");
     ctx.place = place;
+    ctx.appPlaces = () => placesFor(deps.access, deps.places, user!, app);
   } else if (request.place !== undefined) {
     fail("invalid", "This method does not take a point");
   }

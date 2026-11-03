@@ -5,7 +5,9 @@ import { createMount, MobileApiMount } from "../http/mount";
 import { createMobileApi } from "../http/app";
 import { cleanup, createSailsDeps, readSettings } from "../adapters/sails";
 import { coreStock } from "../adapters/stock";
+import { coreOrders } from "../adapters/orders";
 import { registerDishes } from "../apps/dishes";
+import { registerOrders } from "../apps/orders";
 import { deviceModelConfig } from "./adminpanelConfig";
 
 declare const MobileDevice: any;
@@ -88,6 +90,7 @@ export default function createHook(sails: any) {
 
         await bindModels(sails);
         registerDishes(registry, coreStock());
+        registerOrders(registry, coreOrders());
         // Other modules may register their apps from their own hooks, now or later.
         sails.emit("mobile-api:ready", registry);
 

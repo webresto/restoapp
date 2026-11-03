@@ -36,12 +36,18 @@ function kindMatches(kind: "cooking" | "pickup" | "any", place: PlaceInfo): bool
  */
 export async function placesFor(access: AccessPort, places: PlacesPort, user: PanelUser, app: AppDefinition): Promise<PlaceInfo[]> {
   if (app.scope !== "place" || !app.places) return [];
-  const { token, kind } = app.places;
+  const { token, kind, options = [] } = app.places;
   const candidates = (await places.list()).filter((place) => kindMatches(kind, place));
+  const virtual = options.map(asVirtualPlace);
   const rights = access.getPermissionRights(token, user);
-  if (rights === null) return candidates;
+  if (rights === null) return [...candidates, ...virtual];
   const granted = new Set(rights.map(String));
-  return candidates.filter((place) => granted.has(String(place.id)));
+  return [...candidates, ...virtual].filter((place) => granted.has(String(place.id)));
+}
+
+/** An option of the token the app shows among its points: «Без кухни» is not a `Place`. */
+function asVirtualPlace(option: { id: string; title: string }): PlaceInfo {
+  return { id: option.id, title: option.title, address: null, isCookingPoint: false, isPickupPoint: false, virtual: true };
 }
 
 /**
@@ -57,8 +63,11 @@ export async function checkPlace(
   placeId: string,
 ): Promise<PlaceInfo | null> {
   if (app.scope !== "place" || !app.places) return null;
-  const place = (await places.list()).find((candidate) => String(candidate.id) === placeId);
-  if (!place || !kindMatches(app.places.kind, place)) return null;
+  const option = app.places.options?.find((candidate) => candidate.id === placeId);
+  const place = option
+    ? asVirtualPlace(option)
+    : (await places.list()).find((candidate) => String(candidate.id) === placeId);
+  if (!place || (!option && !kindMatches(app.places.kind, place))) return null;
   if (!(await access.checkPermission(app.places.token, user, { placeId: place.id }))) return null;
   return place;
 }

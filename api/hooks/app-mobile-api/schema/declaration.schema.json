@@ -152,7 +152,17 @@
           "required": ["token", "kind"],
           "properties": {
             "token": { "type": "string", "minLength": 1 },
-            "kind": { "enum": ["cooking", "pickup", "any"] }
+            "kind": { "enum": ["cooking", "pickup", "any"] },
+            "options": {
+              "description": "Options of the same token the app shows among its points although they are not Places — «Без кухни» of «Заказы». Titles are translation keys.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "title"],
+                "properties": { "id": { "$ref": "#/definitions/id" }, "title": { "$ref": "#/definitions/text" } }
+              }
+            }
           }
         },
         "models": { "type": "object", "additionalProperties": { "$ref": "#/definitions/model" } },
