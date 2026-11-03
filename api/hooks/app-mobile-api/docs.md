@@ -132,7 +132,29 @@ mobileApi.registerMethod({
 | «Блюда» (`dishes`) | a cooking point | `stock-manager` (contextual) | The web Stock Manager of one point, through core's `lib/menu/stock-items` (C4) |
 | «Заказы» (`orders`) | a point, «Без кухни» among them | `order-kanban` + the `order` model rights | The orders board of one point: the two tabs with their counts, the card, the flow by buttons, «Назначить кухню» |
 | «Клиенты» (`clients`) | the server | the `Customer` model rights of the panel (`read-customer-model`, `create-customer-model`) | The customers: search by number or name, a card with addresses and recent orders, a new one through `AuthService.materializeUser` |
-| POS (`pos`) | a cooking point | `order-entry` (contextual) | Taking an order on a terminal. **Drawn by the client itself** — `client: {native: "pos", min: 1}`; the server owns the rights, the points and every number |
+| POS (`pos`) | a cooking point | `order-entry` (contextual) | Taking an order on a terminal, from the catalog to the placing. **Drawn by the client itself** — `client: {native: "pos", min: 1}`; the server owns the rights, the points and every number |
+
+### The POS, step by step
+
+A draft is a cart of core; every method calls core's own model in the order the storefront's
+resolvers call it, and answers `{order, message, ok}` — the whole order as core counted it, and one
+word about the step. `ok: false` is a refusal of core (an empty basket, a guest with no phone, a
+point with no dining room), **not** an error of the protocol: the receipt stays on the terminal and
+the message says what to do. The words of a refusal come from core's own table
+(`lib/order/order-errors.ts`), so the site and the terminal say the same thing.
+
+| Method | What it calls |
+|---|---|
+| `pos.order`, `pos.start`, `pos.cancel` | the drafts of this person at this point; `Order.create`; the row of `mobile_order_draft` |
+| `pos.catalog` | `Dish.getDishes` in the order's menu context — the price a promotion makes, the stock of its kitchens, and how many of a product the receipt has |
+| `pos.add`, `pos.setLine`, `pos.setLineComment` | `Order.addDish` (`addedBy: "user"`, as the site: `countCart` sums only those lines), `setCount`, `removeDish`, `setComment` |
+| `pos.serviceOptions`, `pos.setService`, `pos.setTable` | the flags of the point; `Order.setServiceType`, `pickupPoint`, `Order.table` |
+| `pos.clients`, `pos.setClient`, `pos.setCustomer` | the search of «Клиенты»; `order.user` and `order.customer`; `AuthService.materializeUser` when an account is asked for |
+| `pos.cities`, `pos.addressSearch`, `pos.setAddress`, `pos.clientAddresses` | the geo adapter and `UserLocation`; the address is priced by `countCart` |
+| `pos.timeOptions`, `pos.setTime` | `OrderHelper.initCheckout`; a slot or a maximum wait, never both (core's code 20) |
+| `pos.payments`, `pos.setPayment` | `PaymentMethod.getAvailable`; only a promise of payment is taken on a terminal |
+| `pos.promocode`, `pos.setDetails` | `Order.applyPromotionCode`; the comment, the guests, «перезвонить» |
+| `pos.check`, `pos.place` | `Order.check` and `Order.order`; the placed order leaves the drafts and turns up on the board of its point, with `orderedOnPlatform: "mobile-pos"` |
 
 «Заказы» decide nothing of their own: which orders a point leads, what a role may move an order to
 and what assigning a kitchen means are core's `ordersOfPlace`, `transitionOrder` and
