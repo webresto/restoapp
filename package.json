@@ -3,6 +3,12 @@
   "version": "0.0.0",
   "description": "RestoApp",
   "keywords": [],
+  "overrides": {
+    "adminizer": "5.2.0-build.33"
+  },
+  "resolutions": {
+    "adminizer": "5.2.0-build.33"
+  },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.30",
     "@assistant-ui/react": "^0.14.26",

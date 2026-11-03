@@ -109,7 +109,7 @@ describe("app-mobile-api in Sails", function () {
     const before = await call(token, "dishes.list", { params: {}, place: "stand-b" });
     expect(before.status).to.equal(200);
     await stand.sails.models.groupap.updateOne({ name: "Stock Manager" }, {
-      tokens: ["access-to-adminpanel", { tokenId: "stock-manager", rights: [stand.places.a.id] }],
+      tokens: ["access-to-adminpanel", { tokenId: "stock-manager", rights: [stand.places!.a.id] }],
     });
     const after = await call(token, "dishes.list", { params: {}, place: "stand-b" });
     expect(after.body.error?.code).to.equal("place_forbidden");
@@ -128,12 +128,12 @@ describe("app-mobile-api in Sails", function () {
 
   it("keeps the device in the database and signs it out after a password change", async () => {
     const token = (await login("stand-operator")).body.result.token;
-    const devices = await stand.sails.models.mobiledevice.find({ user: stand.users.operator.id });
+    const devices = await stand.sails.models.mobiledevice.find({ user: stand.users!.operator.id });
     expect(devices.length).to.be.greaterThan(0);
     expect(devices[0].tokenHash).to.not.equal(token);
 
     const passwordHash = require("password-hash");
-    await stand.sails.models.userap.updateOne({ id: stand.users.operator.id }, { passwordHashed: passwordHash.generate("changed") });
+    await stand.sails.models.userap.updateOne({ id: stand.users!.operator.id }, { passwordHashed: passwordHash.generate("changed") });
     expect((await request("GET", "/api/mobile/describe", { token })).status).to.equal(401);
   });
 

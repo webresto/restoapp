@@ -24,9 +24,11 @@ export const STAND_PASSWORD = "stand-password";
 export interface Stand {
   sails: any;
   url: string;
+  /** The directory of the sails-disk datastore, removed by `lower`. */
+  dir: string;
   /** Four users of the plan: administrator, Operator, Stock Manager, panel access without apps. */
-  users: { admin: any; operator: any; stock: any; panelOnly: any };
-  places: { a: any; b: any; pickup: any };
+  users: { admin: any; operator: any; stock: any; panelOnly: any } | null;
+  places: { a: any; b: any; pickup: any } | null;
   lower(): Promise<void>;
 }
 
@@ -34,6 +36,8 @@ export interface StandOptions {
   env?: Record<string, string>;
   /** Extra hooks by name, e.g. app-mobile-api. */
   hooks?: Record<string, unknown>;
+  /** The four users, three places — off for a stand that makes its own (tools/real-server). */
+  fixtures?: boolean;
 }
 
 function configureEnvironment(env: Record<string, string>): void {
@@ -138,7 +142,8 @@ export async function liftWithAdminpanel(options: StandOptions = {}): Promise<St
   return {
     sails,
     url: `http://127.0.0.1:${port}`,
-    ...(await fixtures(sails)),
+    dir,
+    ...(options.fixtures === false ? { users: null, places: null } : await fixtures(sails)),
     async lower() {
       await new Promise<void>((resolve) => server.close(() => resolve()));
       await new Promise<void>((resolve) => sails.lower(() => resolve()));
