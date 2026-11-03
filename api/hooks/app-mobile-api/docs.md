@@ -129,7 +129,7 @@ mobileApi.registerMethod({
 
 | App | Scope | Access | What |
 |---|---|---|---|
-| «Блюда» (`dishes`) | a cooking point | `stock-manager` (contextual) | The web Stock Manager of one point |
+| «Блюда» (`dishes`) | a cooking point | `stock-manager` (contextual) | The web Stock Manager of one point, through core's `lib/menu/stock-items` (C4) |
 | «Заказы» (`orders`) | a point, «Без кухни» among them | `order-kanban` + the `order` model rights | The orders board of one point: the two tabs with their counts, the card, the flow by buttons, «Назначить кухню» |
 | «Клиенты» (`clients`) | the server | the `Customer` model rights of the panel (`read-customer-model`, `create-customer-model`) | The customers: search by number or name, a card with addresses and recent orders, a new one through `AuthService.materializeUser` |
 | POS (`pos`) | a cooking point | `order-entry` (contextual) | Taking an order on a terminal. **Drawn by the client itself** — `client: {native: "pos", min: 1}`; the server owns the rights, the points and every number |
@@ -137,7 +137,9 @@ mobileApi.registerMethod({
 «Заказы» decide nothing of their own: which orders a point leads, what a role may move an order to
 and what assigning a kitchen means are core's `ordersOfPlace`, `transitionOrder` and
 `assignOrderKitchen` — the very functions the web board calls, so the board and the phone can never
-answer differently about one order. Baskets are never among them. `orders.list` takes `since`, epoch
+answer differently about one order. The selection itself is an indexed query over `order_stop` (core
+C2): one row per point with work to do, written by core at every transition. Baskets are never among
+them. `orders.list` takes `since`, epoch
 milliseconds: the answer is then only the rows of that tab changed at or after that moment, which is
 what the client polls with every ten seconds while the screen is open (there is no SSE).
 
