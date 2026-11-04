@@ -32,6 +32,7 @@ Every answer is JSON with `Cache-Control: no-store` and `X-Mobile-Protocol: 1`. 
 | `POST /api/mobile/auth/logout` | Bearer → `{ok: true}`, the device is revoked |
 | `GET /api/mobile/describe?lang=ru` | Bearer → the declaration; `X-Mobile-Revision` |
 | `POST /api/mobile/call/:method` | `{params, place?}` → the method's result; `X-Mobile-Revision` when signed in |
+| `GET /api/mobile/app-assets/:app/:sha256.js` | Bearer → the JS bundle of an app that comes as a script; `immutable`, 404 for any other hash |
 
 `server.about` is answered without a token: `{name, version}` — what the client shows before login.
 
@@ -115,9 +116,21 @@ mobileApi.registerMethod({
 
 - A registration is checked against the contract at start: an unknown `view`, `control`, format or
   `ui` key, a method without `access`, an input schema ajv cannot compile strictly — an error.
-- `access`: `{token: "<existing>"}`, `{tokens: [...]}` (all of them), `{token: {id: "mobile-app-…",
-  name}}` (registered by the hook in the "Mobile app" department) or `{public: true}` for queries of
-  apps without points.
+- `access`: `{token: "<existing>"}`, `{tokens: [...]}` (all of them), `{anyOf: [...]}` (any one of
+  them — the two rights of «Маркетинг», either of which opens its summary), `{token: {id:
+  "mobile-app-…", name}}` (registered by the hook in the "Mobile app" department) or
+  `{public: true}` for queries of apps without points.
+- A **field** may carry an `access` of its own: it is then dropped from the declaration of everybody
+  else, so a number they may not see is not shown as «—» either. The values are the handler's own
+  business — it asks `ctx.can(token)` and leaves the field out.
+- **Where a tap leads.** A record may carry `_open` (a row leads there instead of the list's
+  `ui.open`) and a card `_links: [{title, meta?, open}]` — the lines at the bottom of it. Both are
+  built by the server after `ctx.canOpen(method, placeId?)` says the person could call it: no right,
+  no line. A link is a hint and not a permission — the call it leads to is checked like any other.
+  The client keeps a stack of frames, so a link opens one more screen and «Назад» closes it.
+- **A screen of the client for one action**: `control: {type: "native", screen: "promotion-editor"}`
+  — the editor of a promotion (`marketing.plan.md`, Q43). A client that does not have the screen
+  draws no button, as it already does for a control it does not know.
 - A query with `model` gets `_actions` on every record: the available mutations with `ui.on` equal to
   the model, each narrowed or dropped by its `describeItem(ctx, record)`. A mutation answers
   `{item}` and gets them too. `describe(ctx)` narrows a method's input for the user, both in the
@@ -133,6 +146,72 @@ mobileApi.registerMethod({
 | «Заказы» (`orders`) | a point, «Без кухни» among them | `order-kanban` + the `order` model rights | The orders board of one point: the two tabs with their counts, the card, the flow by buttons, «Назначить кухню» |
 | «Клиенты» (`clients`) | the server | the `Customer` model rights of the panel (`read-customer-model`, `create-customer-model`) | The customers: search by number or name, a card with addresses and recent orders, a new one through `AuthService.materializeUser` |
 | POS (`pos`) | a cooking point | `order-entry` (contextual) | Taking an order on a terminal, from the catalog to the placing. **Drawn by the client itself** — `client: {native: "pos", min: 1}`; the server owns the rights, the points and every number |
+| «Маркетинг» (`marketing`) | the server | `anyOf: [promocodes-manager, promotions-manager]` | The Marketing section of the panel: the summary, the promo codes, the promotions and the applications of a code. The editor of a promotion is the client's own screen |
+| «Каналы продаж» (`channels`) | the server | `anyOf: [sales-channels-manager, sales-channels-view, sales-channels-manage]` to read, the first and the last to write | The Sales Channels page of the panel: what may create orders, whether it works and why not — core's `lib/sales-channels/` answers, words included |
+| «Настройки» (`settings`) | the server | `settings-manager` | The Settings page of the panel, one to one: every setting of the server by key, the search, the chips of the state, the value and the state in words. The value is edited on a screen of the client's own — the form is built from the JSON Schema that comes **with the record**, and every setting has one of its own. Export and import are one more such screen, on the list |
+| «Система» (`system`) | the server | `anyOf: [modules-process-upgrade, settings-manager, sales-channels-view, sales-channels-manage]`; the programs — `modules-process-upgrade` | The central place of an administrator: which server this is, what it is built of and what was installed into it, and the doors into «Настройки» and «Каналы продаж». Reading, the restart of the server, the marketplace, and installing, updating and removing as jobs (`system.plan.md`, slices A, B and C) |
+
+### «Каналы продаж», screen by screen
+
+A channel exists only together with its provider module, so the screen is about **why** a channel
+does not work and **what to do next**, not about fields (`sales-channels.plan.md`):
+
+```
+channels.list (list, chips «Все / Работают / Выключены / Нужна настройка / Ошибка», search)
+├─ channels.get (detail)
+│  ├─ channels.toggle   the operator's switch        sales-channels-manage
+│  ├─ channels.delete   with the question first      sales-channels-manage
+│  └─ _links            «Настроить» / «Настройки» / «Открыть» — addresses; «Установить провайдера» — «Система»
+└─ channels.types (list, chips «Рекомендуем / Все»; the last row of the whole list above leads here)
+   └─ channels.type (detail)
+      └─ _links         «Искать в маркетплейсе» / «Установить из маркетплейса» — «Система»; «Настройки» — an address
+```
+
+- **The words are core's.** `describeChannel()` (`lib/sales-channels/view.ts`, C29) answers the
+  flags *and* the sentences — "admin-frontend · Provider installed", "Not working: provider is not
+  installed (sales-channel-kiosk)" — the same ones the page shows, translated by the dictionary of
+  the admin panel for the language of the request (C31). A refusal of a rule arrives as a
+  `conflict` whose `message` is that sentence plus what the provider itself said, with the
+  `settingsUrl` and the `marketplaceAppId` in `details`.
+- **The two levels of the right** work by themselves: without `manage` a record carries no
+  `settingsUrl` and `describeItem` offers no action. `settings`, `publicConfig` and `secretsRef` of
+  a channel are its provider's and are in no record at all (Q55).
+- **No `since`.** A polled list would ask every provider of the server every ten seconds, each with
+  a 3 s timeout; the list answers the stored readiness and the card asks for a fresh one, which core
+  caches for a few seconds (C32).
+- **The switch is not offered without a live provider** — the page shows it locked, and a locked
+  switch is a switch that is not there; a provider's own channel cannot be deleted while its module
+  is installed, and `describeItem` takes that action away too.
+- **A line of a card is an address or «Система».** `open: {url}` is what the system browser opens;
+  a path is of this server, and the client resolves it against the address it is connected by. A
+  line into «Система» appears only when `ctx.canOpen("system.catalog")` says yes, and an install
+  also needs `modules-process-upgrade`, as the page's button does: whoever may not open the catalog
+  has no such line. A list has no line of its own, so «Типы каналов» and «Все каналы продаж в
+  маркетплейсе» are the last row of a whole list, each with an `_open` of its own.
+
+### «Маркетинг», screen by screen
+
+The home screen is the **summary** — the one screen everybody with either right of the section sees;
+everything else opens from it by a link the server built (`marketing.plan.md`, Q39):
+
+```
+marketing.home (detail, chips «7 / 30 / 90 дней»)
+├─ marketing.promocodes → marketing.promocode   promocodes-manager
+│  └─ marketing.applications {code}             + read-order-model
+├─ marketing.promotions  → marketing.promotion  promotions-manager
+│  └─ marketing.savePromotion                   a native screen of the client
+└─ marketing.applications → marketing.application
+```
+
+- What a code is, where a promotion stands, what it gives and why a code gave nothing are **core's**
+  answers (`lib/marketing/*`, plan C18–C20), words included: the panel reads the same functions, so
+  the web and the phone cannot disagree about a status, a term or «что даёт».
+- The numbers of the summary are fields with an `access`: the codes to `promocodes-manager`, the
+  promotions to `promotions-manager`, the money of the applications to both plus `read-order-model`.
+- **Two switches of a promotion** (core C22): `enable` is "works at all" — off, it applies nowhere, a
+  promo code included — and `onlyByCode` is "does not apply by itself". `setPromotionOnlyByCode` is
+  not offered on a promotion that is switched off, and `savePromotion` is not offered on one a module
+  wrote, as neither is in the web.
 
 ### The POS, step by step
 
@@ -175,6 +254,54 @@ them. `orders.list` takes `since`, epoch
 milliseconds: the answer is then only the rows of that tab changed at or after that moment, which is
 what the client polls with every ten seconds while the screen is open (there is no SSE).
 
+## Apps a module brings as JS
+
+An app may come to the client as **code**, not as a declaration of screens (`script-apps.plan.md`,
+D12): the registration names a built bundle, `script: {file}`, and the declaration carries a link to
+it with its hash — `script: {url, sha256, size, min}`. The link is `app-assets/<app>/<sha256>.js`, so
+a new build is a new URL, the client may keep what it downloaded forever, and a hash the registry
+never gave is a 404 rather than some older file. The same shape adminizer serves its own app assets
+with (`/admin/app-assets/…`, its `AssetHandler`), with a device token added.
+
+The bundle is read and hashed at registration: a missing or empty file stops the server at start, not
+a phone later. Its hash is part of the registry fingerprint, hence of every declaration revision — a
+new build is rolled out, and clients re-read `describe` by themselves.
+
+The file is looked at again whenever a declaration is built (`lib/scripts.ts`, `rereadScript`): size
+and mtime against what was read last time, and a changed file is hashed anew. So `npm run
+build:mobile` in the module, or an update of the module on a server, reaches the clients without a
+lift — the hash moves, the revision with it, and the client downloads the new code. A file caught
+half-written or removed keeps the bundle that works: it is stamped again after the body is read, and
+a file that moved meanwhile is taken at the next look, not served broken.
+
+The declaration also lists the **modules** of the server: `modules: [{id, version, kind, title, app?,
+script?}]`, `system` for what the installation is built of (`MM_SYSTEM_MODULES`) and `installed` for
+what the module manager loaded out of `modules/`. The module that brought an app names it in `app`
+and carries the same link in `script` — but only when the user may open that app.
+
+**How a module registers one.** The hook knows no modules: it emits `mobile-api:ready` at the end of
+its `initialize` and a module registers itself. In the module's hook:
+
+```js
+// `after`, not `on`: the event is sticky in Sails, so the order of the hooks does not matter, and a
+// server without the mobile API simply never fires it.
+sails.after("mobile-api:ready", () => {
+  const api = sails.hooks["app-mobile-api"];            // `registry` and `translator`
+  for (const [lang, strings] of Object.entries(mine)) api.translator.extend(lang, strings);
+  api.registry.registerApp({ id: "navigation", module: "simple-navigation", script: { file, min: 1 }, … });
+  api.registry.registerMethod({ name: "navigation.menus", app: "navigation", … });
+});
+```
+
+The bundle lives in the module (`assets/mobile/<appId>.js`, built from its own source the way its
+admin page is built), `module` is the `appId` of the module manager, and the titles are translation
+keys the module adds to the hook's translator with `extend` — the hook ships no strings of anybody
+else's app.
+
+«Навигация» of `simple-navigation` 1.8 is the first such app: the same menus and the same right as its
+admin page (`navigation-manager`), registered in `src/mobile/NavigationMobileApp.ts` there, drawn by
+`assets/mobile/navigation.js` there. Nothing of it is in this hook.
+
 A declaration may carry `client: {native, min}`: the client draws that app with a screen of its own
 instead of the universal renderer, because a POS receipt with a catalog is not a list with actions on
 a record (`order-entry.plan.md`). A client that does not know the `native` shows a «needs a newer
@@ -194,12 +321,41 @@ is placed or dropped, and the hourly cleanup removes what nobody came back to wi
 - `adapters/sails.ts` — the only place with Sails, adminizer and Waterline; `adapters/stock.ts` — core's
   web stock functions (from the controllers folder until core task C4 moves them to `lib/menu/`).
 - `apps/dishes.ts` — «Блюда»; `apps/orders.ts` — «Заказы»; `apps/clients.ts` — «Клиенты»;
-  `apps/pos.ts` — the POS. Their adapters are `adapters/stock.ts`, `adapters/orders.ts`,
-  `adapters/clients.ts` and `adapters/pos.ts`: the only files that know Waterline and core.
+  `apps/pos.ts` — the POS; `apps/marketing.ts` — «Маркетинг»; `apps/channels.ts` — «Каналы продаж»;
+  `apps/settings.ts` — «Настройки»; `apps/system.ts` — «Система». Their adapters are
+  `adapters/stock.ts`, `adapters/orders.ts`, `adapters/clients.ts`, `adapters/pos.ts`,
+  `adapters/marketing.ts`, `adapters/channels.ts`, `adapters/settings.ts` and `adapters/system.ts`:
+  the only files that know Waterline and core. The apps of modules live in the modules.
+- `adapters/system.ts` is also the only file that knows the module manager
+  (`sails.hooks['app-manager-proto']`): the rows of `Module` joined with the manager's memory, with
+  the marketplace asked at most once per module per ten minutes and never while a declaration is
+  built. `adapters/modules.ts` — the modules of the server for the declaration — is the same
+  function, so the declaration and «Система» cannot disagree; `adapters/facts.ts` — the name, the
+  version, the currency and the time zone of this server, read once a minute for both.
+- `lib/scripts.ts` — bundles of script apps: read, hashed, served by hash (`http/routes/script.ts`);
+  `adapters/modules.ts` — the modules of the server for the declaration.
 
 ## Tests
 
 - `tests/mobile-api.test.ts` — the Express application on fake deps with adminizer's real
   `AccessRightsHelper` and core's `stock-manager` check; also in the test stage of the Dockerfile.
+- `tests/mobile-api.marketing.test.ts` — «Маркетинг» on the fake deps: the rights of the section,
+  the links of a record, the two switches, the editor's action and the applications.
+- `tests/mobile-api.system.test.ts` — «Система» on the fake deps: the right of the Extensions page
+  closing the programs while the home screen stays open to the settings alone, the links the home
+  screen does not promise before an app exists, the badge of every state, the search over what is
+  installed, the three refusals of a removal in words, and the restart: closed by the right, asking
+  before «now», planning once.
+- `tests/mobile-api.system.install.test.ts` — the manager of extensions from end to end: a lifted
+  Sails, the real module manager, real archives from `tests/support/fakeRegistry.ts`, and only
+  `process.exit` replaced.
+- `tests/app-manager-restart.test.ts` — the scheduler of the module manager: a line in the log and
+  `process.exit(0)` after the answer has gone out.
+- `tests/mobile-api.scripts.test.ts` — an app that comes as JS, on a bundle of its own: the link and
+  the hash in the declaration, the bundle served only by that hash and only to a signed-in device, a
+  new build as a new link and a new revision, the modules of the server next to it, and the rights.
+- `tests/mobile-api.module-navigation.test.ts` — the app of an installed module through this hook:
+  `modules/simple-navigation` registers «Навигация» itself, and its menus are edited over the API.
 - `tests/mobile-api.sails.test.ts` — Sails with the admin panel on sails-disk
-  (`tests/support/liftWithAdminpanel.ts`): adminizer users and groups, Waterline stores, core's stock.
+  (`tests/support/liftWithAdminpanel.ts`): adminizer users and groups, Waterline stores, core's stock,
+  and «Маркетинг» against core's own promotions and codes.

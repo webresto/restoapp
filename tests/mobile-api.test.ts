@@ -675,10 +675,12 @@ describe("app-mobile-api", function () {
       expect(() => registry.registerMethod({ ...method, input: { type: "object", properties: { q: { maxLenght: 3 } } } })).to.throw(RegistrationError);
     });
 
-    it("refuses a place app without a token for its points, and a script", () => {
+    it("refuses a place app without a token for its points, and a script that is not a file", () => {
       const registry = new MobileApiRegistry();
       expect(() => registry.registerApp({ ...app, scope: "place" })).to.throw(RegistrationError);
       expect(() => registry.registerApp({ ...app, script: "x" } as any)).to.throw(RegistrationError);
+      // A script app names a built bundle (lib/scripts.ts); a path that is not there fails at start.
+      expect(() => registry.registerApp({ ...app, script: { file: "/no/such/bundle.js" } })).to.throw(RegistrationError);
     });
 
     it("registers an own token in the Mobile app department", () => {

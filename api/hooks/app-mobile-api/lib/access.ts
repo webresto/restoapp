@@ -7,7 +7,21 @@ export const PANEL_TOKEN = "access-to-adminpanel";
 export function ruleTokens(rule: AccessRule): string[] {
   if ("public" in rule) return [];
   if ("tokens" in rule) return rule.tokens;
+  if ("anyOf" in rule) return rule.anyOf;
   return [typeof rule.token === "string" ? rule.token : rule.token.id];
+}
+
+/** Whether the rule admits the user: `tokens` wants all of them, `anyOf` any one. */
+export async function allows(access: AccessPort, user: PanelUser | null, rule: AccessRule): Promise<boolean> {
+  if ("public" in rule) return true;
+  if (!user) return false;
+  const tokens = ruleTokens(rule);
+  if ("anyOf" in rule) {
+    for (const token of tokens) if (await access.checkPermission(token, user)) return true;
+    return false;
+  }
+  for (const token of tokens) if (!(await access.checkPermission(token, user))) return false;
+  return true;
 }
 
 /**
@@ -16,12 +30,7 @@ export function ruleTokens(rule: AccessRule): string[] {
  * `checkPermission` — the frozen `hasPermission` denies contextual tokens such as `stock-manager`.
  */
 export async function isAvailable(access: AccessPort, user: PanelUser | null, method: RegisteredMethod): Promise<boolean> {
-  if ("public" in method.access) return true;
-  if (!user) return false;
-  for (const token of ruleTokens(method.access)) {
-    if (!(await access.checkPermission(token, user))) return false;
-  }
-  return true;
+  return allows(access, user, method.access);
 }
 
 function kindMatches(kind: "cooking" | "pickup" | "any", place: PlaceInfo): boolean {

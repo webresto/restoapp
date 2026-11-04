@@ -8,7 +8,7 @@
     "methodName": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-zA-Z0-9][a-zA-Z0-9-]*$", "maxLength": 128 },
     "text": { "type": "string", "minLength": 1, "maxLength": 200 },
     "tone": { "enum": ["info", "warning", "success", "danger"] },
-    "format": { "enum": ["text", "number", "money", "datetime", "relative", "phone", "boolean", "enum", "image", "ref"] },
+    "format": { "enum": ["text", "number", "money", "percent", "datetime", "relative", "phone", "boolean", "enum", "image", "ref"] },
 
     "icon": {
       "description": "SVG path in a 24x24 box — AppIcon.Path in Superizer.",
@@ -26,6 +26,72 @@
       "properties": {
         "native": { "$ref": "#/definitions/id" },
         "min": { "type": "integer", "minimum": 1 }
+      }
+    },
+
+    "open": {
+      "description": "Where a tap leads. Without `app` — a method of the same app, with any params (`ui.open` is the default link of a uniform list and sends only `{id}`). With `app` — another app, and `place` is required when that app is by points. With `url` — an address outside the apps, http(s) or a path, which the client opens in the browser of the system (runtime.navigation.openUrl) and refuses otherwise: the settings page of a channel's provider module, the public address of a channel, a page of the marketplace. A path («/admin/…») is resolved by the client against the address of this server — the hook cannot know the address it is reached by. Exactly one of `method` and `url` is given. A link is built by the server after checking the rights (`ctx.canOpen`), and it is a hint and not a permission: the call it leads to is checked like any other; a client that understands neither key draws no line at all.",
+      "type": "object",
+      "additionalProperties": false,
+      "oneOf": [{ "required": ["method"] }, { "required": ["url"] }],
+      "properties": {
+        "app": { "$ref": "#/definitions/id" },
+        "method": { "$ref": "#/definitions/methodName" },
+        "params": { "type": "object" },
+        "place": { "type": "string" },
+        "title": { "$ref": "#/definitions/text" },
+        "url": { "type": "string", "minLength": 1, "maxLength": 2000, "pattern": "^(https?://|/)" }
+      }
+    },
+
+    "link": {
+      "description": "A line of a card that leads somewhere: «Применения · 12 →». The title is data (a count is in it), so it is not translated.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "open"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "meta": { "type": "string", "maxLength": 200 },
+        "open": { "$ref": "#/definitions/open" }
+      }
+    },
+
+    "scriptSource": {
+      "description": "What an app registers when its code comes as one JS file (script-apps.plan.md, D12): the built bundle inside the module that owns the app. The hook reads and hashes it at registration — the declaration carries a link and the hash, never the code.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file"],
+      "properties": {
+        "file": { "type": "string", "minLength": 1 },
+        "min": { "type": "integer", "minimum": 1 }
+      }
+    },
+
+    "scriptRef": {
+      "description": "The link to the bundle of a script app, with its hash: the hash is in the URL, so a new build is a new URL and what the client downloaded is good forever.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "sha256", "size", "min"],
+      "properties": {
+        "url": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "size": { "type": "integer", "minimum": 1 },
+        "min": { "type": "integer", "minimum": 1 }
+      }
+    },
+
+    "module": {
+      "description": "A module of this server as the app sees it: the system modules the installation is built of, and the modules installed from the marketplace. A module that brings a mobile app of its own carries that app's id and the link to its JS.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "kind"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "version": { "type": ["string", "null"] },
+        "kind": { "enum": ["system", "installed"] },
+        "title": { "type": ["string", "null"] },
+        "app": { "$ref": "#/definitions/id" },
+        "script": { "$ref": "#/definitions/scriptRef" }
       }
     },
 
@@ -53,7 +119,11 @@
         "readonly": { "type": "boolean" },
         "section": { "$ref": "#/definitions/text" },
         "specials": { "type": "array", "items": { "$ref": "#/definitions/special" } },
-        "x-titles": { "type": "object", "additionalProperties": { "$ref": "#/definitions/text" } }
+        "x-titles": { "type": "object", "additionalProperties": { "$ref": "#/definitions/text" } },
+        "access": {
+          "description": "Who may see this field. Without it — everybody the app is available to. A field the user may not see is not in their declaration at all, and its values are not computed either (the handler asks `ctx.can`).",
+          "$ref": "#/definitions/access"
+        }
       }
     },
 
@@ -69,7 +139,11 @@
       "additionalProperties": false,
       "required": ["type"],
       "properties": {
-        "type": { "enum": ["stepper", "toggle", "buttons", "form"] },
+        "type": { "enum": ["stepper", "toggle", "buttons", "form", "native"] },
+        "screen": {
+          "description": "For `native`: which built-in screen of the client runs this action — the promotion editor of `marketing.plan.md`. A client that does not know it draws no action, which is what it already does for a control it does not know.",
+          "$ref": "#/definitions/id"
+        },
         "param": { "type": "string" },
         "bind": { "type": "string" },
         "specials": { "type": "array", "items": { "$ref": "#/definitions/special" } },
@@ -138,8 +212,14 @@
           }
         },
         {
+          "description": "Every one of them.",
           "type": "object", "additionalProperties": false, "required": ["tokens"],
           "properties": { "tokens": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } } }
+        },
+        {
+          "description": "Any one of them — the two rights of the Marketing section, either of which opens its summary.",
+          "type": "object", "additionalProperties": false, "required": ["anyOf"],
+          "properties": { "anyOf": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } } }
         }
       ]
     },
@@ -178,7 +258,8 @@
         },
         "models": { "type": "object", "additionalProperties": { "$ref": "#/definitions/model" } },
         "client": { "$ref": "#/definitions/client" },
-        "script": { "description": "Reserved for apps delivered as JS (script-apps.plan.md). The first release never sends it.", "not": {} }
+        "script": { "$ref": "#/definitions/scriptSource" },
+        "module": { "description": "The module that owns this app, by its appId: that is how the modules of the declaration carry the link to their JS.", "type": "string", "minLength": 1 }
       },
       "if": { "properties": { "scope": { "const": "place" } }, "required": ["scope"] },
       "then": { "required": ["places"] },
@@ -232,7 +313,7 @@
         "models": { "type": "object", "additionalProperties": { "$ref": "#/definitions/model" } },
         "client": { "$ref": "#/definitions/client" },
         "methods": { "type": "array", "items": { "$ref": "#/definitions/declaredMethod" } },
-        "script": { "description": "Reserved. A client that cannot run scripts shows such an app as a 'Needs a newer version' tile, it neither crashes nor hides it." }
+        "script": { "$ref": "#/definitions/scriptRef" }
       }
     },
 
@@ -279,7 +360,8 @@
           }
         },
         "places": { "type": "array", "items": { "$ref": "#/definitions/place" } },
-        "apps": { "type": "array", "items": { "$ref": "#/definitions/declaredApp" } }
+        "apps": { "type": "array", "items": { "$ref": "#/definitions/declaredApp" } },
+        "modules": { "description": "Every module of this server by id: what it is built of, and what was installed into it.", "type": "array", "items": { "$ref": "#/definitions/module" } }
       }
     },
 
@@ -305,7 +387,16 @@
       "type": "object",
       "required": ["items", "nextCursor"],
       "properties": {
-        "items": { "type": "array", "items": { "type": "object", "properties": { "_actions": { "type": "array", "items": { "$ref": "#/definitions/action" } } } } },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "_actions": { "type": "array", "items": { "$ref": "#/definitions/action" } },
+              "_open": { "$ref": "#/definitions/open" }
+            }
+          }
+        },
         "nextCursor": { "type": ["string", "null"] },
         "counts": { "type": "object", "additionalProperties": { "type": "integer" } },
         "total": { "type": "integer" }
@@ -315,7 +406,16 @@
     "itemResult": {
       "type": "object",
       "required": ["item"],
-      "properties": { "item": { "type": "object", "properties": { "_actions": { "type": "array", "items": { "$ref": "#/definitions/action" } } } } }
+      "properties": {
+        "item": {
+          "type": "object",
+          "properties": {
+            "_actions": { "type": "array", "items": { "$ref": "#/definitions/action" } },
+            "_open": { "$ref": "#/definitions/open" },
+            "_links": { "type": "array", "items": { "$ref": "#/definitions/link" } }
+          }
+        }
+      }
     },
 
     "error": {

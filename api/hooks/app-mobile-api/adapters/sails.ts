@@ -11,8 +11,9 @@ import type {
   PlaceInfo,
   PowUseStore,
   PuzzlePort,
-  ServerFacts,
 } from "../lib/types";
+import { sailsModules } from "./modules";
+import { serverFacts } from "./facts";
 import { MobileError } from "../lib/errors";
 import type { MobileApiRegistry } from "../lib/registry";
 import type { Translator } from "../lib/i18n";
@@ -196,24 +197,11 @@ export function createSailsDeps(sails: any, registry: MobileApiRegistry, transla
     sails.log.warn("mobile API: cannot follow core:place-changed, points refresh once a minute", error);
   }
 
-  const facts = cached<ServerFacts>(async () => {
-    const setting = async (key: string) => {
-      const value = await Settings.get(key);
-      return typeof value === "string" && value.trim() ? value.trim() : null;
-    };
-    return {
-      name: (await setting("PROJECT_NAME")) ?? "RestoApp",
-      version: process.env.CONTAINER_VERSION || process.env.APP_VERSION || process.env.VERSION || null,
-      currency: await setting("DEFAULT_CURRENCY_ISO"),
-      timezone: (await setting("TZ")) ?? process.env.TZ ?? null,
-      locale: await setting("DEFAULT_LOCALE"),
-    };
-  });
-
   return {
     settings: readSettings(sails),
     registry,
     translator,
+    modules: sailsModules(sails),
     users: {
       findByLogin: async (login) => (await userModel().findOne({ where: { login } })) as PanelUser | null,
       findById: async (id) => (await userModel().findOne({ where: { id } })) as PanelUser | null,
@@ -226,7 +214,7 @@ export function createSailsDeps(sails: any, registry: MobileApiRegistry, transla
       getPermissionRights: (token, user) => adminizerOf(sails).accessRightsHelper.getPermissionRights(token, user),
     },
     places: { list: () => places.get() },
-    facts: () => facts.get(),
+    facts: () => serverFacts(sails),
     devices: waterlineDevices,
     powUses: waterlinePowUses,
     attempts: waterlineAttempts,

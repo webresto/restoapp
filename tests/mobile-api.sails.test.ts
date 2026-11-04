@@ -143,7 +143,10 @@ describe("app-mobile-api in Sails", function () {
 
     const admin = await signIn("stand-admin");
     const declaration = (await request("GET", "/api/mobile/describe", { token: admin })).body.result;
-    expect(declaration.apps.map((app: any) => app.id)).to.deep.equal(["dishes", "orders", "clients", "pos"]);
+    // The apps of the hook itself. A module may bring one of its own — «Навигация» of
+    // simple-navigation when that module is installed into `modules/` (D12) — and then it is here too.
+    const own = declaration.apps.map((app: any) => app.id).filter((id: string) => id !== "navigation");
+    expect(own).to.deep.equal(["dishes", "orders", "clients", "pos", "marketing", "channels", "settings", "system"]);
     expect(declaration.apps[0].places.sort()).to.deep.equal(["stand-a", "stand-b"]);
     // «Заказы» take pickup points too, and «Без кухни» is always among the administrator's.
     expect(declaration.apps[1].places.sort()).to.deep.equal(["no-kitchen", "stand-a", "stand-b", "stand-p"]);
@@ -664,5 +667,194 @@ describe("app-mobile-api in Sails", function () {
     const adminizer = stand.sails.hooks.adminpanel.adminizer;
     expect(adminizer.accessRightsHelper.getToken("stock-manager")).to.exist;
     expect(stand.sails.config.adminpanel.models.mobiledevice).to.include({ model: "mobiledevice", userAccessRelation: "user" });
+  });
+  /**
+   * «Маркетинг» against core itself: the codes, the promotions and the applications are core's own records, read
+   * through its marketing layer (plan C18-C20), and the rights are adminizer's two tokens of the section.
+   */
+  describe("«Маркетинг»", function () {
+    let codeId: string;
+    let deadCodeId: string;
+
+    before(async () => {
+      const Promotion = stand.sails.models.promotion;
+      const PromotionCode = stand.sails.models.promotioncode;
+      const promotion = async (id: string, values: Record<string, unknown>, discount: Record<string, unknown> = {}) => {
+        await (global as any).Promotion.createOrUpdate({
+          id, name: id, badge: "configured-promotion", description: `Description of ${id}`, externalId: id,
+          isJoint: true, isPublic: true, createdByUser: true, concept: ["origin"],
+          configDiscount: { discountType: "percentage", discountAmount: 10, dishes: [], groups: [], excludeModifiers: true, ...discount },
+        } as any);
+        await Promotion.update({ id }, { sortOrder: 0, ...values }).fetch();
+      };
+
+      await promotion("stand-summer", { enable: true, onlyByCode: true });
+      await promotion("stand-self", { enable: true, onlyByCode: false }, { discountType: "flat", discountAmount: 150 });
+      await promotion("stand-off", { enable: false });
+
+      codeId = (await PromotionCode.create({ code: "LETO10", description: "Лето на стенде" }).fetch()).id;
+      deadCodeId = (await PromotionCode.create({ code: "DEAD", description: "Код без рабочих акций" }).fetch()).id;
+      const soon = await PromotionCode.create({ code: "SOON", description: "Позже", startDate: "2099-01-01" }).fetch();
+      await PromotionCode.addToCollection(codeId, "promotion", "stand-summer");
+      await PromotionCode.addToCollection(deadCodeId, "promotion", "stand-off");
+      await PromotionCode.addToCollection(soon.id, "promotion", "stand-self");
+
+      // Two orders that carry a code: one that took it, one that did not. The applications are read from these.
+      const Order = stand.sails.models.order;
+      const applied = await Order.create({}).fetch();
+      await Order.update({ id: applied.id }, { state: "DONE", shortId: "7001", promotionCodeString: "LETO10", promotionCode: codeId, discountTotal: 30.5 }).fetch();
+      const refused = await Order.create({}).fetch();
+      await Order.update({ id: refused.id }, { state: "CART", shortId: "7002", promotionCodeString: "NOBODYS" }).fetch();
+
+      // The login limit is ten a minute per address, and every test of this file comes from 127.0.0.1: the
+      // attempts of the tests before are forgotten, and the three people of the section sign in once.
+      await stand.sails.models.mobileauthattempt.destroy({}).fetch();
+      for (const login of ["stand-marketer", "stand-coder", "stand-promoter"]) await signIn(login);
+    });
+
+    it("gives the section to either right, and its numbers to the right that may see them", async () => {
+      const marketer = await signIn("stand-marketer");
+      const declaration = (await request("GET", "/api/mobile/describe?lang=ru", { token: marketer })).body.result;
+      const app = declaration.apps.find((candidate: any) => candidate.id === "marketing");
+      expect(app, JSON.stringify(declaration.apps.map((a: any) => a.id))).to.not.equal(undefined);
+      expect(app).to.include({ title: "Маркетинг", home: "marketing.home" });
+
+      const summary = (await call(marketer, "marketing.home", { params: {} })).body.result.item;
+      expect(summary.codesTotal).to.equal(3);
+      expect(summary.promotionsTotal).to.be.at.least(3);
+      expect(summary.promotionsByCodeOnly).to.be.at.least(1);
+      expect(summary._links.map((link: any) => link.open.method)).to.contain("marketing.applications");
+
+      const promoter = await signIn("stand-promoter");
+      const theirs = (await call(promoter, "marketing.home", { params: {} })).body.result.item;
+      expect(theirs.codesTotal, "the promotions alone: nothing about the codes").to.equal(undefined);
+      expect((await call(promoter, "marketing.promocodes", { params: {} })).body.error.code).to.equal("forbidden");
+
+      const outsider = await signIn("stand-stock");
+      const without = (await request("GET", "/api/mobile/describe", { token: outsider })).body.result;
+      expect(without.apps.map((candidate: any) => candidate.id)).to.not.contain("marketing");
+    });
+
+    it("reads the codes as the web reads them: the status, the hours and what they give", async () => {
+      const token = await signIn("stand-coder");
+      // In Russian: the words of a term, of the hours and of what a code gives are core's catalogs.
+      const { items, counts } = (await request("POST", "/api/mobile/call/marketing.promocodes?lang=ru", { token, body: { params: {} } })).body.result;
+      const byCode = new Map(items.map((item: any) => [item.code, item]));
+      expect([...byCode.keys()].sort()).to.deep.equal(["DEAD", "LETO10", "SOON"]);
+      expect(byCode.get("LETO10")).to.include({ status: "active", worksNow: true, period: "без ограничения", schedule: "круглосуточно" });
+      expect(byCode.get("LETO10")!.gives).to.equal("−10% на всю корзину");
+      expect(byCode.get("SOON")).to.include({ status: "scheduled", worksNow: false, period: "с 01.01.2099" });
+      // Its only promotion is switched off: since C22 the code gives nothing, and says so.
+      expect(byCode.get("DEAD")!.gives).to.equal("все акции кода выключены — код ничего не даёт");
+      expect(counts).to.include({ all: 3, scheduled: 1 });
+
+      const found = (await call(token, "marketing.promocodes", { params: { q: "stand-summer" } })).body.result;
+      expect(found.items.map((item: any) => item.code), "searched by the name of a promotion of it").to.deep.equal(["LETO10"]);
+    });
+
+    it("switches a code off in the database, and core stops taking it", async () => {
+      const token = await signIn("stand-coder");
+      const off = await call(token, "marketing.setCodeEnabled", { params: { id: codeId, enable: false } });
+      expect(off.status, JSON.stringify(off.body)).to.equal(200);
+      expect(off.body.result.item).to.include({ enable: false, status: "disabled", worksNow: false });
+      expect((await stand.sails.models.promotioncode.findOne({ id: codeId })).enable).to.equal(false);
+      expect(await (global as any).PromotionCode.getValidPromotionCode("LETO10")).to.equal(null);
+
+      await call(token, "marketing.setCodeEnabled", { params: { id: codeId, enable: true } });
+      expect(await (global as any).PromotionCode.getValidPromotionCode("LETO10")).to.not.equal(null);
+    });
+
+    it("both switches of a promotion are written, and the storefront follows at once", async () => {
+      const token = await signIn("stand-promoter");
+      const automatic = () => (global as any).Promotion.getAllByConcept(["origin"]).map((promotion: any) => promotion.id);
+      expect(automatic(), "«только по коду» applies by itself nowhere").to.not.contain("stand-summer");
+      expect(automatic()).to.contain("stand-self");
+
+      const byCode = await call(token, "marketing.setPromotionOnlyByCode", { params: { id: "stand-self", onlyByCode: true } });
+      expect(byCode.body.result.item).to.include({ appliesNow: "code-only", onlyByCode: true });
+      expect(automatic(), "and it leaves the menu as soon as it is marked").to.not.contain("stand-self");
+
+      await call(token, "marketing.setPromotionOnlyByCode", { params: { id: "stand-self", onlyByCode: false } });
+      const off = await call(token, "marketing.setPromotionEnabled", { params: { id: "stand-self", enable: false } });
+      expect(off.body.result.item).to.include({ appliesNow: "disabled" });
+      expect(automatic()).to.not.contain("stand-self");
+      await call(token, "marketing.setPromotionEnabled", { params: { id: "stand-self", enable: true } });
+      expect(automatic()).to.contain("stand-self");
+    });
+
+    it("sets a promotion up from the phone, and the web reads the same record", async () => {
+      const token = await signIn("stand-promoter");
+      const saved = await call(token, "marketing.savePromotion", {
+        params: {
+          name: "Осенняя",
+          description: "−15% на борщ по коду",
+          enable: true,
+          onlyByCode: true,
+          isJoint: true,
+          sortOrder: 3,
+          configDiscount: { discountType: "percentage", discountAmount: 15, dishes: ["stand-borsch"], groups: [], serviceType: ["delivery"], minBasketTotal: 500 },
+        },
+      });
+      expect(saved.status, JSON.stringify(saved.body)).to.equal(200);
+      const item = saved.body.result.item;
+      expect(item).to.include({ name: "Осенняя", appliesNow: "code-only", discountPercent: 15, dishesCount: 1, sortOrder: 3 });
+
+      const { promotionView } = require("@webresto/core/lib/marketing/promotions");
+      const web = promotionView(await stand.sails.models.promotion.findOne({ id: item.id }));
+      expect(web).to.include({ name: "Осенняя", enable: true, onlyByCode: true, createdByUser: true });
+      expect(web.configDiscount).to.include({ discountType: "percentage", discountAmount: 15, minBasketTotal: 500 });
+      // The adapter of core holds it: a promotion saved from a phone applies without a restart.
+      expect(item.runtimeActive).to.equal(true);
+    });
+
+    it("refuses a gift product the guest could buy, in core's own words", async () => {
+      const token = await signIn("stand-promoter");
+      const refused = await call(token, "marketing.savePromotion", {
+        params: { name: "Подарок", description: "Подарок к заказу", configDiscount: { gift: { minBasketTotal: 1000, dishes: [{ dishId: "stand-borsch", amount: 1 }] } } },
+      });
+      expect(refused.status).to.equal(400);
+      expect(refused.body.error.message).to.contain("notForSale");
+    });
+
+    it("creates a code from the phone, refuses one that is taken, and links the promotion chosen", async () => {
+      const token = await signIn("stand-coder");
+      const made = await call(token, "marketing.saveCode", { params: { code: "zima30", description: "Зима", promotionId: "stand-summer" } });
+      expect(made.status, JSON.stringify(made.body)).to.equal(200);
+      expect(made.body.result.item).to.include({ code: "ZIMA30", promotionsCount: 1 });
+      const row = await stand.sails.models.promotioncode.findOne({ code: "ZIMA30" }).populate("promotion");
+      expect(row.promotion.map((promotion: any) => promotion.id)).to.deep.equal(["stand-summer"]);
+
+      const again = await call(token, "marketing.saveCode", { params: { code: "ZIMA30", description: "Ещё раз" } });
+      expect(again.status).to.equal(409);
+      expect(again.body.error.code).to.equal("conflict");
+    });
+
+    it("shows where a code was typed, and refuses the applications to whoever may not read an order", async () => {
+      const marketer = await signIn("stand-marketer");
+      const { items, counts } = (await call(marketer, "marketing.applications", { params: {} })).body.result;
+      const byTitle = new Map(items.map((item: any) => [item.title, item]));
+      expect(byTitle.get("№7001")).to.include({ code: "LETO10", status: "applied", discount: 30.5 });
+      expect(byTitle.get("№7002")).to.include({ code: "NOBODYS", status: "invalid" });
+      expect(byTitle.get("№7002")!.why).to.equal("the code is not valid or has expired");
+      expect(counts.all).to.be.at.least(2);
+
+      // The words are core's catalogs, in the language the call was made in.
+      const inRussian = await request("POST", "/api/mobile/call/marketing.applications?lang=ru", { token: marketer, body: { params: {} } });
+      const refused = inRussian.body.result.items.find((item: any) => item.title === "№7002");
+      expect(refused.why).to.equal("код не подошёл или истёк");
+
+      const card = (await call(marketer, "marketing.application", { params: { id: byTitle.get("№7001")!.id } })).body.result.item;
+      expect(card).to.include({ code: "LETO10", status: "applied" });
+
+      // The codes without the orders: the applications are not theirs to see.
+      expect((await call(await signIn("stand-coder"), "marketing.applications", { params: {} })).body.error.code).to.equal("forbidden");
+    });
+
+    it("the catalog of the editor is the real one, and says which product may be a gift", async () => {
+      const catalog = (await call(await signIn("stand-promoter"), "marketing.catalog", { params: {} })).body.result;
+      expect(catalog.groups.map((group: any) => group.id)).to.contain("stand-soups");
+      expect(catalog.items.map((item: any) => item.id)).to.contain("stand-borsch");
+      expect(catalog.items.find((item: any) => item.id === "stand-borsch")).to.include({ notForSale: false, price: 300 });
+    });
   });
 });

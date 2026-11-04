@@ -62,6 +62,23 @@ export interface PlacesPort {
   list(): Promise<PlaceInfo[]>;
 }
 
+/**
+ * A module of this installation: `system` — what the server is built of (core, graphql), `installed` —
+ * what was put into `modules/` from the marketplace. The declaration carries them so the app can tell
+ * which server it is talking to and which of its apps came with a module.
+ */
+export interface ModuleInfo {
+  id: string;
+  version: string | null;
+  kind: "system" | "installed";
+  title?: string | null;
+}
+
+export interface ModulesPort {
+  /** Every module of the server, in no particular order; the declaration sorts them by id. */
+  list(): Promise<ModuleInfo[]>;
+}
+
 export interface DeviceRecord {
   id: string;
   tokenHash: string;

@@ -21,15 +21,37 @@ export interface CallRequest {
   ip: string | null;
 }
 
-export function makeContext(deps: Pick<CallDeps, "translator">, session: Session | null, lang: string): MethodContext {
+/**
+ * The context of one call, and of one method of a declaration being built.
+ *
+ * `can` and `canOpen` are how a handler keeps a value or a link out of an answer it should not carry: the rights
+ * are adminizer's, asked through the same `checkPermission` the availability of a method goes through, so a field
+ * only some may see and a link only some may follow are decided by one source of truth.
+ */
+export function makeContext(
+  deps: Pick<CallDeps, "translator" | "registry" | "access" | "places">,
+  session: Session | null,
+  lang: string,
+): MethodContext {
+  const user = session?.user ?? null;
   return {
-    user: session?.user ?? null,
+    user,
     device: session?.device ?? null,
     lang,
     place: null,
     appPlaces: async () => [],
     t: (key) => deps.translator.t(key, lang),
-    fail: (code, message) => fail(code, message),
+    fail: (code, message, extra) => fail(code, message, extra),
+    can: async (token) => (user ? deps.access.checkPermission(token, user) : false),
+    canOpen: async (name, placeId) => {
+      const method = deps.registry.getMethod(name);
+      if (!method) return false;
+      if (!(await isAvailable(deps.access, user, method))) return false;
+      const app = deps.registry.getApp(method.app);
+      if (!app || app.scope !== "place") return true;
+      if (!user || !placeId) return false;
+      return Boolean(await checkPlace(deps.access, deps.places, user, app, placeId));
+    },
   };
 }
 

@@ -9,6 +9,7 @@ import type {
   PlacesPort,
   PowUseStore,
   PuzzlePort,
+  ModulesPort,
   ServerFacts,
   UsersPort,
 } from "../lib/types";
@@ -17,9 +18,11 @@ import { MobileApiRegistry, PROTOCOL_VERSION } from "../lib/registry";
 import { Translator } from "../lib/i18n";
 import { PowChallenge } from "../lib/auth/challenge";
 import { DeclarationBuilder } from "../lib/describe";
+import { SCRIPT_ROUTE } from "../lib/scripts";
 import authRoutes from "./routes/auth";
 import describeRoute from "./routes/describe";
 import callRoute from "./routes/call";
+import scriptRoute from "./routes/script";
 
 export const BASE_PATH = "/api/mobile";
 export const BODY_LIMIT = 64 * 1024;
@@ -31,6 +34,8 @@ export interface MobileApiDeps {
   users: UsersPort;
   access: AccessPort;
   places: PlacesPort;
+  /** The modules of this server; absent on a stand without a module manager. */
+  modules?: ModulesPort;
   facts(): Promise<ServerFacts>;
   devices: DeviceStore;
   powUses: PowUseStore;
@@ -76,7 +81,14 @@ export function createMobileApi(deps: MobileApiDeps): express.Express {
       baseDifficultyMs: () => deps.settings.captchaBaseDifficultyMs(),
       now: deps.now,
     }),
-    declarations: new DeclarationBuilder({ registry: deps.registry, access: deps.access, places: deps.places, facts: deps.facts, translator }),
+    declarations: new DeclarationBuilder({
+      registry: deps.registry,
+      access: deps.access,
+      places: deps.places,
+      modules: deps.modules,
+      facts: deps.facts,
+      translator,
+    }),
     async lang(req: Request) {
       const query = typeof req.query.lang === "string" ? req.query.lang : null;
       return translator.pick(query, req.get("accept-language"), (await deps.facts()).locale) ?? "en";
@@ -104,6 +116,8 @@ export function createMobileApi(deps: MobileApiDeps): express.Express {
   app.use(`${BASE_PATH}/auth`, authRoutes(runtime));
   app.get(`${BASE_PATH}/describe`, describeRoute(runtime));
   app.post(`${BASE_PATH}/call/:method`, callRoute(runtime));
+  // The bundle of a script app, by the hash the declaration gave (lib/scripts.ts).
+  app.get(`${BASE_PATH}${SCRIPT_ROUTE}/:app/:file`, scriptRoute(runtime));
 
   app.use((_req: Request, res: Response) => sendError(res, new MobileError("not_found", "No such endpoint")));
 

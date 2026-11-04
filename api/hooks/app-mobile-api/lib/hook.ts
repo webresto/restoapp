@@ -8,10 +8,18 @@ import { coreStock } from "../adapters/stock";
 import { coreOrders } from "../adapters/orders";
 import { coreClients } from "../adapters/clients";
 import { corePos } from "../adapters/pos";
+import { coreMarketing } from "../adapters/marketing";
+import { coreChannels } from "../adapters/channels";
+import { coreSettings } from "../adapters/settings";
+import { systemAdapter } from "../adapters/system";
 import { registerDishes } from "../apps/dishes";
 import { registerOrders } from "../apps/orders";
 import { registerClients } from "../apps/clients";
 import { registerPos } from "../apps/pos";
+import { registerMarketing } from "../apps/marketing";
+import { registerChannels } from "../apps/channels";
+import { registerSettings } from "../apps/settings";
+import { registerSystem } from "../apps/system";
 import { deviceModelConfig } from "./adminpanelConfig";
 
 declare const MobileDevice: any;
@@ -105,7 +113,16 @@ export default function createHook(sails: any) {
         registerClients(registry, clients);
         // The POS looks customers up with the same port «Клиенты» uses: one search, two doors.
         registerPos(registry, corePos(), clients);
-        // Other modules may register their apps from their own hooks, now or later.
+        registerMarketing(registry, coreMarketing());
+        registerChannels(registry, coreChannels());
+        // «Настройки»: the settings page of the panel, behind the same token it is (`settings.plan.md`).
+        registerSettings(registry, coreSettings());
+        // «Система»: the programs of this server, read where the declaration reads them (C38).
+        registerSystem(registry, systemAdapter(sails));
+        // The door for the apps of modules (docs.md): a module waits for this with `sails.after`
+        // — sticky, so the order of the hooks does not matter — and registers its app in the
+        // registry it takes from `sails.hooks["app-mobile-api"]`. «Навигация» of simple-navigation
+        // comes this way, and the hook names no module.
         sails.emit("mobile-api:ready", registry);
 
         sails.on("Adminpanel:loaded", async () => {

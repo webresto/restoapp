@@ -26,8 +26,11 @@ export interface Stand {
   url: string;
   /** The directory of the sails-disk datastore, removed by `lower`. */
   dir: string;
-  /** Four users of the plan: administrator, Operator, Stock Manager, panel access without apps. */
-  users: { admin: any; operator: any; stock: any; panelOnly: any } | null;
+  /**
+   * The users of the plan: administrator, Operator, Stock Manager, panel access without apps, and the three of
+   * the Marketing section — both its rights, the codes alone, the promotions alone.
+   */
+  users: { admin: any; operator: any; stock: any; panelOnly: any; marketer: any; coder: any; promoter: any } | null;
   places: { a: any; b: any; pickup: any } | null;
   lower(): Promise<void>;
 }
@@ -36,7 +39,7 @@ export interface StandOptions {
   env?: Record<string, string>;
   /** Extra hooks by name, e.g. app-mobile-api. */
   hooks?: Record<string, unknown>;
-  /** The four users, three places — off for a stand that makes its own (tools/real-server). */
+  /** The users and the three places — off for a stand that makes its own (tools/real-server). */
   fixtures?: boolean;
 }
 
@@ -79,6 +82,11 @@ async function fixtures(sails: any): Promise<Pick<Stand, "users" | "places">> {
   ]);
   const stock = await group("Stock Manager", ["access-to-adminpanel", { tokenId: "stock-manager", rights: [a.id, b.id] }]);
   const panel = await group("Panel only", ["access-to-adminpanel"]);
+  // The Marketing section: both its tokens are core's own (`lib/adminpanel/manifest.ts`), and the group
+  // `Marketer` of a real installation holds both. The one-right groups are what the section is checked by.
+  const marketer = await group("Marketer", ["access-to-adminpanel", "promocodes-manager", "promotions-manager", "read-order-model"]);
+  const codesOnly = await group("Promo codes only", ["access-to-adminpanel", "promocodes-manager"]);
+  const promotionsOnly = await group("Promotions only", ["access-to-adminpanel", "promotions-manager"]);
 
   const user = async (login: string, groups: any[], extra: Record<string, unknown> = {}) =>
     User.create({
@@ -98,6 +106,9 @@ async function fixtures(sails: any): Promise<Pick<Stand, "users" | "places">> {
       operator: await user("stand-operator", [operator]),
       stock: await user("stand-stock", [stock]),
       panelOnly: await user("stand-panel", [panel]),
+      marketer: await user("stand-marketer", [marketer]),
+      coder: await user("stand-coder", [codesOnly]),
+      promoter: await user("stand-promoter", [promotionsOnly]),
     },
     places: { a, b, pickup },
   };

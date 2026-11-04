@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
-import type { AccessPort, PanelUser, PlaceInfo, PlacesPort, ServerFacts } from "./types";
-import { availableApps, isAvailable, placesFor } from "./access";
+import type { AccessPort, ModuleInfo, ModulesPort, PanelUser, PlaceInfo, PlacesPort, ServerFacts } from "./types";
+import { allows, availableApps, isAvailable, placesFor } from "./access";
+import type { FieldDefinition } from "./registry";
 import { MethodContext, MobileApiRegistry, PROTOCOL_VERSION } from "./registry";
 import type { Translator } from "./i18n";
 
@@ -11,6 +12,8 @@ export interface DescribeDeps {
   registry: MobileApiRegistry;
   access: AccessPort;
   places: PlacesPort;
+  /** Absent in a stand that has no module manager: then the declaration carries no modules. */
+  modules?: ModulesPort;
   facts(): Promise<ServerFacts>;
   translator: Translator;
 }
@@ -51,8 +54,17 @@ export async function computeRevision(deps: DescribeDeps, user: PanelUser): Prom
     grants: canonicalGrants(user),
     places,
     facts: await deps.facts(),
+    // A module installed, updated or removed changes the declaration: its apps and scripts come with it.
+    modules: (await modulesOf(deps)).map((module) => [module.id, module.version, module.kind]),
   };
   return createHash("sha256").update(JSON.stringify(material)).digest("hex").slice(0, 32);
+}
+
+/** The modules of the server, sorted by id; an empty list when the stand has no module manager. */
+async function modulesOf(deps: DescribeDeps): Promise<ModuleInfo[]> {
+  if (!deps.modules) return [];
+  const modules = await deps.modules.list();
+  return [...modules].sort((a, b) => a.id.localeCompare(b.id));
 }
 
 function placeView(place: PlaceInfo, translator: Translator, lang: string) {
@@ -69,6 +81,54 @@ export class DeclarationBuilder {
   private readonly cache = new Map<string, unknown>();
 
   constructor(private readonly deps: DescribeDeps) {}
+
+  /**
+   * The models of an app as this user may see them: a field with an `access` the user does not pass is not in the
+   * declaration, and the client's own rule does the rest — "a field that is not declared is not shown". Without it
+   * the summary of «Маркетинг» would show somebody who only leads the promotions a «—» where the codes are counted.
+   */
+  private async modelsFor(
+    user: PanelUser,
+    models: Record<string, { fields: FieldDefinition[] }>,
+  ): Promise<Record<string, { fields: FieldDefinition[] }>> {
+    const result: Record<string, { fields: FieldDefinition[] }> = {};
+    for (const [name, model] of Object.entries(models)) {
+      const fields: FieldDefinition[] = [];
+      for (const field of model.fields) {
+        if (field.access && !(await allows(this.deps.access, user, field.access))) continue;
+        // `access` is the server's own business: the client has no use for it and never sees it.
+        const { access: _access, ...declaredField } = field;
+        fields.push(declaredField as FieldDefinition);
+      }
+      result[name] = { fields };
+    }
+    return result;
+  }
+
+  /**
+   * The modules of the server, and for a module that brought a mobile app — that app's id and the link
+   * to its JS. Only apps this user may open are named: the list tells what the server has, the link is
+   * there for what the user is allowed to run.
+   */
+  private async modules(user: PanelUser): Promise<unknown[]> {
+    const { registry, access } = this.deps;
+    const visible = new Set((await availableApps(access, registry, user)).map((app) => app.id));
+    const byModule = new Map<string, { app: string; script?: unknown }>();
+    for (const app of registry.listApps()) {
+      if (!app.module || !visible.has(app.id)) continue;
+      const script = registry.scriptOf(app.id);
+      byModule.set(app.module, { app: app.id, ...(script ? { script } : {}) });
+    }
+    const modules = await modulesOf(this.deps);
+    const known = new Set(modules.map((module) => module.id));
+    // A module that registered an app but which the module manager does not list (a hook of the
+    // installation itself, say) is still a module of this server as far as the app is concerned.
+    const extra = [...byModule.keys()].filter((id) => !known.has(id)).sort();
+    return [
+      ...modules.map((module) => ({ ...module, ...(byModule.get(module.id) ?? {}) })),
+      ...extra.map((id) => ({ id, version: null, kind: "installed" as const, ...byModule.get(id)! })),
+    ];
+  }
 
   async build(user: PanelUser, lang: string, revision: string, baseCtx: MethodContext): Promise<unknown> {
     const key = `${revision}\n${lang}`;
@@ -108,8 +168,10 @@ export class DeclarationBuilder {
         ...(app.category ? { category: app.category } : {}),
         home: app.home,
         scope: app.scope ?? "server",
-        ...(app.models ? { models: app.models } : {}),
+        ...(app.models ? { models: await this.modelsFor(user, app.models) } : {}),
         ...(app.client ? { client: app.client } : {}),
+        // The link to the bundle and its hash — never the code: the client downloads it itself.
+        ...(registry.scriptOf(app.id) ? { script: registry.scriptOf(app.id) } : {}),
         methods,
       };
       if (app.scope === "place") {
@@ -132,6 +194,7 @@ export class DeclarationBuilder {
         },
         places: [],
         apps,
+        modules: await this.modules(user),
       },
       lang,
     );

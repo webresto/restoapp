@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import Ajv, { ValidateFunction } from "ajv";
 import type { DeviceRecord, PanelUser, PlaceInfo } from "./types";
+import { readScript, rereadScript, scriptRef, type ScriptAsset, type ScriptSource } from "./scripts";
 import type { ErrorCode } from "./errors";
 
 const contract = require("../schema/declaration.schema.json");
@@ -13,7 +14,10 @@ const INPUT_HINT_KEYWORDS = ["x-titles", "x-format"];
 export type AccessRule =
   | { public: true }
   | { token: string | { id: string; name: string; description?: string } }
-  | { tokens: string[] };
+  /** Every one of them. */
+  | { tokens: string[] }
+  /** Any one of them: the two rights of the Marketing section, either of which opens its summary. */
+  | { anyOf: string[] };
 
 export interface AppDefinition {
   id: string;
@@ -43,6 +47,15 @@ export interface AppDefinition {
    * older than `min`) shows the «Needs a newer version» tile rather than a broken screen.
    */
   client?: { native: string; min?: number };
+  /**
+   * The app comes as one JS file from the server (`scripts.ts`): `file` is the built bundle inside the
+   * module that owns the app. The declaration carries a link to that file and its hash, never the code,
+   * and a client that cannot run scripts shows the «Needs a newer version» tile — the mechanism of
+   * `client.native`.
+   */
+  script?: ScriptSource;
+  /** The module this app came from (`appId` of the module manager); absent for the apps of the core. */
+  module?: string;
 }
 
 export interface FieldDefinition {
@@ -53,6 +66,31 @@ export interface FieldDefinition {
   section?: string;
   specials?: Array<{ value: unknown; title: string; tone?: string }>;
   "x-titles"?: Record<string, string>;
+  /**
+   * Who may see the field. Without it — everybody the app is available to; with it, the declaration of the rest
+   * does not carry it at all, so a number they may not see is not shown as «—» either. The values are the
+   * handler's own business: it asks `ctx.can` for the same token and leaves the field out.
+   */
+  access?: AccessRule;
+}
+
+/** Where a tap leads: a method of this app with its params, or one of another app. */
+export interface OpenTarget {
+  app?: string;
+  /** A method to open — or, instead of it, a [url]: exactly one of the two is given. */
+  method?: string;
+  params?: Record<string, unknown>;
+  place?: string;
+  title?: string;
+  /** An address outside the apps, opened in the browser of the system; a path is of this server. */
+  url?: string;
+}
+
+/** A line of a card that leads somewhere: «Применения · 12 →». */
+export interface RecordLink {
+  title: string;
+  meta?: string;
+  open: OpenTarget;
 }
 
 export interface MethodContext {
@@ -69,7 +107,20 @@ export interface MethodContext {
    */
   appPlaces(): Promise<PlaceInfo[]>;
   t(key: string): string;
-  fail(code: ErrorCode, message?: string): never;
+  /**
+   * Refuse the call. `details` travels in the error body (`{error: {code, message, details}}`): the refusal of
+   * a channel rule carries the `settingsUrl` of its provider and the `marketplaceAppId` to install, so the
+   * phone can offer the next step instead of only naming the problem (`sales-channels.plan.md`, C31).
+   */
+  fail(code: ErrorCode, message?: string, extra?: { details?: unknown }): never;
+  /** Whether the user holds the token — what a handler asks before computing a value only some may see. */
+  can(token: string): Promise<boolean>;
+  /**
+   * Whether this user could call the method now: it is registered, available to them, and - for an app by points -
+   * they hold `placeId` for it. A server builds no link it knows will not open (`client-lookup.plan.md`); an unknown
+   * method answers false, so a link into an app that does not exist yet simply does not appear.
+   */
+  canOpen(method: string, placeId?: string): Promise<boolean>;
 }
 
 export interface ActionOverride {
@@ -132,6 +183,8 @@ function jsonPart<T extends object>(definition: T): Partial<T> {
  */
 export class MobileApiRegistry {
   private readonly apps = new Map<string, AppDefinition>();
+  /** Bundles of the apps that come as JS: hashed at registration, and again when the file changes. */
+  private readonly scripts = new Map<string, ScriptAsset>();
   private readonly methods = new Map<string, RegisteredMethod>();
   private readonly ownTokens = new Map<string, OwnToken>();
   private tokenListener: ((token: OwnToken) => void) | null = null;
@@ -158,6 +211,13 @@ export class MobileApiRegistry {
       throw new RegistrationError(`mobileApi: app "${(definition as any)?.id}" does not match the contract`, this.checkApp.errors);
     }
     if (this.apps.has(definition.id)) throw new RegistrationError(`mobileApi: app "${definition.id}" is registered twice`);
+    if (definition.script) {
+      try {
+        this.scripts.set(definition.id, readScript(definition.id, definition.script));
+      } catch (error) {
+        throw new RegistrationError(`mobileApi: app "${definition.id}": ${(error as Error).message}`);
+      }
+    }
     this.apps.set(definition.id, { scope: "server", ...definition });
     this.cachedFingerprint = null;
   }
@@ -215,6 +275,36 @@ export class MobileApiRegistry {
     return this.methods.get(name);
   }
 
+  /**
+   * The bundle of an app that comes as JS, as its file is now.
+   *
+   * A build that happened while the server runs is picked up here, and a new hash drops the cached
+   * fingerprint — so the declaration revision moves, clients re-read `describe` and download the new
+   * code without a lift of the server (`scripts.ts`, `rereadScript`).
+   */
+  script(appId: string): ScriptAsset | undefined {
+    const kept = this.scripts.get(appId);
+    if (!kept) return undefined;
+    const now = rereadScript(kept);
+    if (now !== kept) {
+      this.scripts.set(appId, now);
+      this.cachedFingerprint = null;
+    }
+    return now;
+  }
+
+  /** What the declaration tells about that bundle: the link and the hash. */
+  scriptOf(appId: string): ReturnType<typeof scriptRef> | undefined {
+    const asset = this.script(appId);
+    return asset ? scriptRef(asset) : undefined;
+  }
+
+  /** The route serves a bundle only by the hash the declaration gave: another hash is 404, never a stale file. */
+  scriptByHash(appId: string, sha256: string): ScriptAsset | undefined {
+    const asset = this.script(appId);
+    return asset && asset.sha256 === sha256 ? asset : undefined;
+  }
+
   listApps(): AppDefinition[] {
     return [...this.apps.values()];
   }
@@ -248,9 +338,14 @@ export class MobileApiRegistry {
 
   /** Changes when any registration changes: part of every declaration revision. */
   fingerprint(): string {
+    // The files first: a bundle rebuilt since the last declaration has to move the revision, and
+    // looking at it is what drops the fingerprint kept here.
+    for (const app of [...this.scripts.keys()]) this.script(app);
     if (!this.cachedFingerprint) {
       const apps = this.listApps().map((app) => ({
         app: jsonPart(app),
+        // A new build of a script is a new declaration: the revision moves and clients re-read describe.
+        script: this.scripts.get(app.id)?.sha256 ?? null,
         methods: this.methodsOf(app.id).map(({ validate, ...method }) => jsonPart(method)),
       }));
       this.cachedFingerprint = sha256(JSON.stringify(apps));
