@@ -124,6 +124,8 @@
   "mobile.pos.error.serviceUnavailable": "Этот способ получения на точке недоступен",
   "mobile.pos.error.tableNotDineIn": "Столик указывают только для заказа в зале",
   "mobile.pos.error.noClient": "Такого клиента нет",
+  "mobile.pos.error.noSavedAddress": "Этого адреса у клиента нет",
+  "mobile.pos.error.noHouse": "Укажите улицу и номер дома",
   "mobile.pos.error.noTime": "Выберите время",
   "mobile.pos.error.noWait": "Укажите, сколько готовы ждать",
   "mobile.pos.error.noPayment": "Такого способа оплаты нет",

@@ -425,6 +425,12 @@ export function corePos(): PosPort {
 
     setAddress(place, id, address) {
       return change(place, id, async () => {
+        if (address.savedId) return useSavedAddress(id, String(address.savedId));
+        // Typed by hand: core refuses a delivery without the house number (its code 6), so the
+        // street and the number are both asked for here, before the order is touched.
+        if (!String(address.street ?? "").trim() || !String(address.home ?? "").trim()) {
+          return { key: "mobile.pos.error.noHouse", tone: DANGER };
+        }
         const line = [address.street, address.home].filter(Boolean).join(", ");
         await Order.update(
           { id },
@@ -676,6 +682,45 @@ export function corePos(): PosPort {
 }
 
 /** The line of this order, or null — a line of another order is not this caller's business. */
+/**
+ * A saved address of the customer, onto the order as it was kept.
+ *
+ * `UserLocation` holds the whole address of a delivery except the catalog node, and core wants the
+ * house number of it («Not indicated the house number», its code 6) — so the formatted line alone
+ * is not an address to deliver to, and copying the fields is the only way a saved one works.
+ */
+async function useSavedAddress(orderId: string, savedId: string): Promise<PosMessage | null> {
+  const order = await Order.findOne({ id: orderId });
+  const saved = await UserLocation.findOne({ id: savedId });
+  // Someone else's address is not an address of this order: the customer's own, or none at all.
+  if (!saved || !order?.user || String(saved.user) !== String(order.user)) {
+    return { key: "mobile.pos.error.noSavedAddress", tone: DANGER };
+  }
+  await Order.update(
+    { id: orderId },
+    {
+      address: {
+        // No node on purpose, as the saved address itself keeps none: a catalog edit must not move
+        // where the courier went (core's `UserLocation`).
+        node: null,
+        formatted: saved.formatted ?? "",
+        city: saved.city ?? null,
+        ...(saved.home ? { home: saved.home } : {}),
+        ...(saved.housing ? { housing: saved.housing } : {}),
+        ...(saved.apartment ? { apartment: saved.apartment } : {}),
+        ...(saved.entrance ? { entrance: saved.entrance } : {}),
+        ...(saved.floor ? { floor: saved.floor } : {}),
+        ...(saved.doorphone ? { doorphone: saved.doorphone } : {}),
+        ...(saved.comment ? { comment: saved.comment } : {}),
+        ...(saved.coordinate ? { coordinate: saved.coordinate } : {}),
+      },
+    },
+  ).fetch();
+  // The address decides the kitchen and the price of the delivery: both are counted here.
+  await Order.countCart({ id: orderId });
+  return null;
+}
+
 async function lineRow(orderId: string, lineId: number): Promise<any | null> {
   const line = await OrderDish.findOne({ id: lineId }).populate("dish");
   if (!line) return null;

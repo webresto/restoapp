@@ -631,10 +631,17 @@ export function registerPos(registry: MobileApiRegistry, pos: PosPort, clients: 
     title: "mobile.pos.setAddress.title",
     access,
     input: {
+      // Two ways in: a saved address of the customer, taken by its id with everything it keeps
+      // (`pos.clientAddresses`), or one typed here — and then core wants the house number too,
+      // because a line without it is not an address to deliver to (its code 6).
+      // Which of the two came is the adapter's to say, in words for the operator: ajv's strict mode
+      // has no way to put it as one schema, and «Укажите улицу и номер дома» is nicer than `invalid`.
       type: "object",
-      required: ["id", "city", "street", "home"],
+      required: ["id"],
       properties: {
         id: { type: "string", minLength: 1, maxLength: 100 },
+        /** A `UserLocation` of the order's customer: the rest of the fields are read off it. */
+        savedId: { type: "string", minLength: 1, maxLength: 100 },
         city: { type: "string", minLength: 1, maxLength: 100 },
         street: { type: "string", minLength: 1, maxLength: 200 },
         home: { type: "string", minLength: 1, maxLength: 50 },

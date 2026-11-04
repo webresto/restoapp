@@ -124,6 +124,8 @@
   "mobile.pos.error.serviceUnavailable": "This point does not take such orders",
   "mobile.pos.error.tableNotDineIn": "A table belongs to a dine-in order only",
   "mobile.pos.error.noClient": "No such customer",
+  "mobile.pos.error.noSavedAddress": "The customer has no such address",
+  "mobile.pos.error.noHouse": "Name the street and the house number",
   "mobile.pos.error.noTime": "Choose a time",
   "mobile.pos.error.noWait": "Say how long the guest will wait",
   "mobile.pos.error.noPayment": "No such payment method",

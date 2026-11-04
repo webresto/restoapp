@@ -374,6 +374,109 @@ describe("app-mobile-api in Sails", function () {
     expect(second.order.lines).to.have.length(2);
     expect(second.order.total).to.equal(960);
   });
+  it("finds a client by the search, takes their saved address to a delivery, and shows the order on the card", async () => {
+    const admin = await signIn("stand-admin");
+    const Dish = stand.sails.models.dish;
+    const Order = stand.sails.models.order;
+    const UserLocation = stand.sails.models.userlocation;
+    // A point of its own: an order really placed here would otherwise turn up among the orders the
+    // board's tests count at «Ленина, 5».
+    const place = (await stand.sails.models.place.create({
+      id: "stand-delivery", title: "Касса доставки", enable: true, isCookingPoint: true, isPickupPoint: true,
+      // A kitchen with a point on the map: that is how core's chain finds one for a delivery
+      // («nearest-geo»), and the address below carries its own coordinate, so nothing is geocoded.
+      coordinate: { lat: 55.75, lon: 37.62 },
+    }).fetch()).id;
+    const roll = await Dish.create({ id: "stand-d-roll", name: "Ролл", code: "R1", price: 350, enable: true, isDeleted: false, modifier: false }).fetch();
+
+    // The person exists before the order: made through «Клиенты», with an address of their own.
+    const client = (await call(admin, "clients.create", { params: { name: "Ольга Белова", phone: "+7 999 000 00 07" } })).body.result.item;
+    const home = await UserLocation.create({
+      user: client.id, formatted: "ул. Мира, 3", home: "3", apartment: "7", entrance: "2", comment: "код 1234",
+      coordinate: { lat: 55.752, lon: 37.615 },
+    }).fetch();
+
+    const draft = (await call(admin, "pos.start", { params: {}, place })).body.result.order;
+    await call(admin, "pos.add", { params: { id: draft.id, dishId: roll.id }, place });
+
+    // The guest sheet of the POS searches the same people «Клиенты» do, by the last digits.
+    const found = (await call(admin, "pos.clients", { params: { q: "0007" }, place })).body.result;
+    expect(found.items.map((item: any) => item.id)).to.deep.equal([client.id]);
+    expect(found.items[0].title).to.equal("Ольга Белова");
+
+    const bound = (await call(admin, "pos.setClient", { params: { id: draft.id, clientId: client.id }, place })).body.result;
+    expect(bound.order.clientId).to.equal(client.id);
+    expect(bound.order.customerName).to.equal("Ольга Белова");
+    // The chosen person is the one to call: their number is on the order, and core may be asked.
+    expect(bound.order.customerPhone, "the client's number went onto the order").to.be.a("string");
+    expect(bound.order.canCheck).to.equal(true);
+
+    // Their saved addresses — what the address sheet offers above the search.
+    const addresses = (await call(admin, "pos.clientAddresses", { params: { clientId: client.id }, place })).body.result.items;
+    expect(addresses.map((address: any) => address.formatted)).to.deep.equal(["ул. Мира, 3"]);
+    expect(addresses[0].id).to.equal(home.id);
+
+    // The stand carries no seeded settings, so the chain that finds a kitchen for a delivery is
+    // empty here and core would refuse the order with its NO_KITCHEN; a deployment has the default
+    // of the descriptor (`core/settings/kitchen_resolve_chain.json`), and a json setting is only
+    // accepted with its schema.
+    await (global as any).Settings.set("KITCHEN_RESOLVE_CHAIN", {
+      value: ["nearest-geo", "single-point"],
+      type: "json",
+      jsonSchema: { type: "array", items: { type: "string", enum: ["delivery-zone", "rms", "nearest-geo", "single-point"] }, uniqueItems: true },
+    });
+    // A zone is the only tariff of a delivery: without one core refuses the order even with soft
+    // calculation on («Delivery not allowed», its code 11). Points are [lon, lat].
+    await stand.sails.models.deliveryzone.create({
+      id: "stand-zone", name: "Центр", enable: true, sortOrder: 0, minDeliveryTime: 60, deliveryCost: 150,
+      polygon: [[37.60, 55.73], [37.65, 55.73], [37.65, 55.77], [37.60, 55.77]],
+    }).fetch();
+
+    const delivery = (await call(admin, "pos.setService", { params: { id: draft.id, serviceType: "delivery" }, place })).body.result;
+    expect(delivery.order.serviceType).to.equal("delivery");
+    // A saved address goes in by its id: core wants the house number, and only the saved record
+    // has it — a formatted line alone is refused with its code 6.
+    const addressed = (await call(admin, "pos.setAddress", { params: { id: draft.id, savedId: home.id }, place })).body.result;
+    expect(addressed.ok, JSON.stringify(addressed.message)).to.equal(true);
+    expect(addressed.order.address).to.contain("ул. Мира, 3");
+
+    // Another customer's saved address is not this order's to take.
+    const stranger = (await call(admin, "clients.create", { params: { name: "Пётр Чужой", phone: "+7 999 000 00 08" } })).body.result.item;
+    const theirs = await UserLocation.create({ user: stranger.id, formatted: "ул. Чужая, 1", home: "1" }).fetch();
+    const refused = (await request("POST", "/api/mobile/call/pos.setAddress?lang=ru", {
+      token: admin, body: { params: { id: draft.id, savedId: theirs.id }, place },
+    })).body.result;
+    expect(refused.ok).to.equal(false);
+    expect(refused.message.text).to.equal("Этого адреса у клиента нет");
+    expect(refused.order.address).to.contain("ул. Мира, 3");
+
+    // Typed by hand without the house number: a word for the operator, not an error of the protocol.
+    const noHouse = (await request("POST", "/api/mobile/call/pos.setAddress?lang=ru", {
+      token: admin, body: { params: { id: draft.id, city: "Город", street: "ул. Мира" }, place },
+    })).body.result;
+    expect(noHouse.ok).to.equal(false);
+    expect(noHouse.message.text).to.equal("Укажите улицу и номер дома");
+
+    const checked = (await call(admin, "pos.check", { params: { id: draft.id }, place })).body.result;
+    expect(checked.ok, JSON.stringify(checked.message)).to.equal(true);
+    const placed = (await call(admin, "pos.place", { params: { id: draft.id }, place })).body.result;
+    expect(placed.ok, JSON.stringify(placed.message)).to.equal(true);
+
+    // The order as core keeps it: a delivery of that account, to that address, with no pickup point.
+    const stored = await Order.findOne({ id: draft.id });
+    expect(stored.state).to.equal("ORDER");
+    expect(stored.serviceType).to.equal("delivery");
+    expect(String(stored.user)).to.equal(client.id);
+    expect(stored.address.formatted).to.contain("ул. Мира, 3");
+    // Everything the saved record knew is on the order, not only the line: that is what a courier reads.
+    expect(stored.address).to.include({ home: "3", apartment: "7", entrance: "2", comment: "код 1234" });
+    expect(stored.pickupPoint ?? null).to.equal(null);
+
+    // And the loop closes: the card of «Клиенты» lists the order just placed, and the address stayed.
+    const card = (await call(admin, "clients.get", { params: { id: client.id } })).body.result.item;
+    expect(card.orders.join("\n")).to.contain(`№${stored.shortId}`);
+    expect(card.addresses).to.deep.equal(["ул. Мира, 3"]);
+  });
 
   it("serves a table in the dining room, and keeps it on the order", async () => {
     const admin = await signIn("stand-admin");
