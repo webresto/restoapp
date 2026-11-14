@@ -472,5 +472,8 @@
   "mobile.system.job.failed": "It did not work",
   "mobile.system.field.name": "Name",
   "mobile.system.field.appId": "Identifier",
-  "mobile.system.catalog.block.none": "Available"
+  "mobile.system.catalog.block.none": "Available",
+  "mobile.app.assistant.title": "Assistant",
+  "mobile.category.help": "Help",
+  "mobile.assistant.session.title": "The panel's assistant"
 }

@@ -20,6 +20,7 @@ import { registerMarketing } from "../apps/marketing";
 import { registerChannels } from "../apps/channels";
 import { registerSettings } from "../apps/settings";
 import { registerSystem } from "../apps/system";
+import { registerAssistant } from "../apps/assistant";
 import { deviceModelConfig } from "./adminpanelConfig";
 
 declare const MobileDevice: any;
@@ -119,6 +120,28 @@ export default function createHook(sails: any) {
         registerSettings(registry, coreSettings());
         // «Система»: the programs of this server, read where the declaration reads them (C38).
         registerSystem(registry, systemAdapter(sails));
+        // «Ассистент»: the assistant of the panel's AI panel, when the panel has one (config/adminpanel.js →
+        // aiAssistant). The app asks for a short web session and talks to the panel's own agent routes.
+        const ai = sails.config.adminpanel?.aiAssistant;
+        if (ai?.enabled) {
+          const modelId: string = ai.defaultModel ?? "openharness";
+          const adminizer = () => sails.hooks.adminpanel?.adminizer;
+          registerAssistant(registry, {
+            model: () => {
+              const service = adminizer()?.aiAssistantHandler?.getModel(modelId);
+              if (!service) return null;
+              const meta = typeof service.getMetadata === "function" ? service.getMetadata() : {};
+              return { id: modelId, title: meta?.name || modelId };
+            },
+            routePrefix: () => adminizer()?.config?.routePrefix ?? "/admin",
+            sign: (user, ttlSeconds) =>
+              require("jsonwebtoken").sign(
+                { id: user.id, login: user.login, isAdministrator: Boolean(user.isAdministrator) },
+                adminizer().jwtSecret,
+                { expiresIn: ttlSeconds },
+              ),
+          }, modelId);
+        }
         // The door for the apps of modules (docs.md): a module waits for this with `sails.after`
         // — sticky, so the order of the hooks does not matter — and registers its app in the
         // registry it takes from `sails.hooks["app-mobile-api"]`. «Навигация» of simple-navigation

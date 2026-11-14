@@ -472,5 +472,8 @@
   "mobile.system.job.failed": "Не получилось",
   "mobile.system.field.name": "Название",
   "mobile.system.field.appId": "Идентификатор",
-  "mobile.system.catalog.block.none": "Доступна"
+  "mobile.system.catalog.block.none": "Доступна",
+  "mobile.app.assistant.title": "Ассистент",
+  "mobile.category.help": "Помощь",
+  "mobile.assistant.session.title": "Ассистент панели"
 }
