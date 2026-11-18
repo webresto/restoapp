@@ -193,8 +193,11 @@ export default async function modulesVersions(req: any, res: any) {
 
             if (item.appId && license) {
                 try {
+                    // The licence travels as `token` everywhere else — the catalog above and
+                    // `upgrade.js` — and one of the two names the registry does not know, so an
+                    // update of a paid module was never offered here at all (C38).
                     const response = await axios.get('https://marketplace.restoapp.org/getModuleDetails', {
-                        params: { appId: item.appId, license, channel },
+                        params: { appId: item.appId, token: license, channel },
                         timeout: 8000
                     });
                     latestVersion = response?.data?.latestVersion || '';
@@ -216,7 +219,7 @@ export default async function modulesVersions(req: any, res: any) {
                 version: currentVersion || t('unknown'),
                 latestVersion,
                 updateAvailable,
-                canRemove: !systemModuleList.includes(item.appId)
+                canRemove: !systemModuleList.includes(item.appId) && ModuleHelper.getModules()[item.appId]?.module?.modulemanager?.forbidDelete !== true
             };
         }));
 

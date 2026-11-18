@@ -1,0 +1,6 @@
+{
+  "name": "app-mobile-api",
+  "version": "1.0.0",
+  "description": "API of the RestoApp mobile admin app: apps and methods by adminizer rights, login with PoW CAPTCHA",
+  "main": "index.js"
+}

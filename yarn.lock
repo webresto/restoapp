@@ -2645,10 +2645,10 @@ adler-32@~1.3.0:
   resolved "https://registry.npmjs.org/adler-32/-/adler-32-1.3.1.tgz"
   integrity sha512-ynZ4w/nUUv5rrsR8UUGoe1VC9hZj6V5hU9Qw1HlMDJGEJw5S7TfTErWTjMys6M7vr0YWcPqs3qAr4ss0nDfP+A==
 
-adminizer@alpha:
-  version "5.1.0-build.27"
-  resolved "https://registry.npmjs.org/adminizer/-/adminizer-5.1.0-build.27.tgz"
-  integrity sha512-R64bIWBVSVS/ZOmFEk1g4To2e/QnELWJHLHf9Qep1Fsls8zCe/gzZbXdFHvlsCg1NtEIfuH2Jpa3GSimH3jUeA==
+adminizer@5.2.0-build.33, adminizer@alpha:
+  version "5.2.0-build.33"
+  resolved "https://registry.npmjs.org/adminizer/-/adminizer-5.2.0-build.33.tgz"
+  integrity sha512-jqdP1pKLYryKMixuvCCiw4Vmw/dbc7yO3L1mm7yiOisZMDy1KRFZgeyewsR6PRe9UMu8B19rKwBzJI+Ryx6BUA==
   dependencies:
     body-parser "^2.2.2"
     chalk "^5.4.1"

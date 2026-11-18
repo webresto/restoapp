@@ -1,5 +1,6 @@
 let scheduledFor = null;
 let restartTimer = null;
+let restarting = false;
 
 function getNextMidnight() {
     const midnight = new Date();
@@ -12,7 +13,11 @@ function restartProcess(delay = 1000) {
         clearTimeout(restartTimer);
         restartTimer = null;
     }
-    setTimeout(() => process.exit(0), delay);
+    restarting = true;
+    setTimeout(() => {
+        console.log('MM: restart: the process exits');
+        process.exit(0);
+    }, delay);
 }
 
 function scheduleRestart() {
@@ -30,7 +35,8 @@ function scheduleRestart() {
 function getState() {
     return {
         scheduled: Boolean(scheduledFor),
-        scheduledFor
+        scheduledFor,
+        restarting
     };
 }
 

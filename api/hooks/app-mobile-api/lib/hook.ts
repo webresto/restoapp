@@ -1,0 +1,211 @@
+import * as path from "path";
+import { MobileApiRegistry } from "./registry";
+import { Translator } from "./i18n";
+import { createMount, MobileApiMount } from "../http/mount";
+import { createMobileApi } from "../http/app";
+import { cleanup, createSailsDeps, readSettings } from "../adapters/sails";
+import { coreStock } from "../adapters/stock";
+import { coreOrders } from "../adapters/orders";
+import { coreClients } from "../adapters/clients";
+import { corePos } from "../adapters/pos";
+import { coreMarketing } from "../adapters/marketing";
+import { coreChannels } from "../adapters/channels";
+import { coreSettings } from "../adapters/settings";
+import { systemAdapter } from "../adapters/system";
+import { registerDishes } from "../apps/dishes";
+import { registerOrders } from "../apps/orders";
+import { registerClients } from "../apps/clients";
+import { registerPos } from "../apps/pos";
+import { registerMarketing } from "../apps/marketing";
+import { registerChannels } from "../apps/channels";
+import { registerSettings } from "../apps/settings";
+import { registerSystem } from "../apps/system";
+import { registerAssistant } from "../apps/assistant";
+import { deviceModelConfig } from "./adminpanelConfig";
+
+declare const MobileDevice: any;
+declare const MobileOrderDraft: any;
+
+const buildDictionary = require("sails-build-dictionary");
+
+const CLEANUP_EVERY_MS = 60 * 60 * 1000;
+
+/** The Stock Manager group of the plan: created once, by name, the points are ticked by the administrator. */
+const DEFAULT_GROUPS = [
+  {
+    name: "Stock Manager",
+    description: "Changes stock and stops at the cooking points ticked for Stock Manager in this group",
+    tokens: ["access-to-adminpanel", "stock-manager"],
+  },
+  {
+    name: "Order Taker",
+    description: "Takes orders on a terminal for the cooking points ticked for Order entry in this group, and sees the customers",
+    tokens: ["access-to-adminpanel", "order-entry", "read-customer-model", "create-customer-model"],
+  },
+];
+
+function isPrimaryWorker(): boolean {
+  try {
+    return require("@webresto/core/lib/cluster").isPrimaryWorker();
+  } catch {
+    return (process.env.NODE_APP_INSTANCE ?? "0") === "0";
+  }
+}
+
+function bindModels(sails: any): Promise<void> {
+  return new Promise((resolve, reject) => {
+    buildDictionary.optional(
+      { dirname: path.resolve(__dirname, "../models"), filter: /^([^.]+)\.(js)$/, replaceExpr: /^.*\//, flattenDirectories: true },
+      (error: unknown, models: Record<string, unknown>) => {
+        if (error) return reject(error);
+        sails.models = Object.assign(sails.models || {}, models);
+        resolve();
+      },
+    );
+  });
+}
+
+/**
+ * The app-mobile-api hook. Wired in restoapp.js, like app-manager-proto: api/hooks is not scanned.
+ *
+ * configure  — `global.mobileApi`, the middleware in front of `bodyParser`, the MobileDevice model in
+ *              the admin panel config.
+ * initialize — models; built-in apps; tokens on `Adminpanel:loaded` in every worker (always, even with
+ *              the API off: saving a group keeps only the tokens registered at that moment); the
+ *              Stock Manager group in the primary worker; the Express application once the ORM is up.
+ */
+export default function createHook(sails: any) {
+  const registry = new MobileApiRegistry();
+  const translator = new Translator();
+  const mount: MobileApiMount = createMount();
+  let cleanupTimer: NodeJS.Timeout | null = null;
+
+  return {
+    registry,
+    translator,
+
+    configure() {
+      (global as any).mobileApi = registry;
+
+      const middleware = sails.config.http.middleware;
+      middleware.mobileApi = mount;
+      const order: string[] = middleware.order;
+      if (Array.isArray(order) && !order.includes("mobileApi")) {
+        const before = order.indexOf("bodyParser");
+        order.splice(before === -1 ? 0 : before, 0, "mobileApi");
+      }
+
+      if (sails.config.adminpanel?.models && !sails.config.adminpanel.models.mobiledevice) {
+        sails.config.adminpanel.models.mobiledevice = deviceModelConfig;
+      }
+    },
+
+    async initialize(cb: (error?: Error) => void) {
+      try {
+        if (sails.config.hooks?.adminpanel === false) {
+          sails.log.warn("mobile API: the admin panel is off, /api/mobile stays unavailable");
+          return cb();
+        }
+
+        await bindModels(sails);
+        registerDishes(registry, coreStock());
+        registerOrders(registry, coreOrders());
+        const clients = coreClients();
+        registerClients(registry, clients);
+        // The POS looks customers up with the same port «Клиенты» uses: one search, two doors.
+        registerPos(registry, corePos(), clients);
+        registerMarketing(registry, coreMarketing());
+        registerChannels(registry, coreChannels());
+        // «Настройки»: the settings page of the panel, behind the same token it is (`settings.plan.md`).
+        registerSettings(registry, coreSettings());
+        // «Система»: the programs of this server, read where the declaration reads them (C38).
+        registerSystem(registry, systemAdapter(sails));
+        // «Ассистент»: the assistant of the panel's AI panel, when the panel has one (config/adminpanel.js →
+        // aiAssistant). The app asks for a short web session and talks to the panel's own agent routes.
+        const ai = sails.config.adminpanel?.aiAssistant;
+        if (ai?.enabled) {
+          const modelId: string = ai.defaultModel ?? "openharness";
+          const adminizer = () => sails.hooks.adminpanel?.adminizer;
+          registerAssistant(registry, {
+            model: () => {
+              const service = adminizer()?.aiAssistantHandler?.getModel(modelId);
+              if (!service) return null;
+              const meta = typeof service.getMetadata === "function" ? service.getMetadata() : {};
+              return { id: modelId, title: meta?.name || modelId };
+            },
+            routePrefix: () => adminizer()?.config?.routePrefix ?? "/admin",
+            sign: (user, ttlSeconds) =>
+              require("jsonwebtoken").sign(
+                { id: user.id, login: user.login, isAdministrator: Boolean(user.isAdministrator) },
+                adminizer().jwtSecret,
+                { expiresIn: ttlSeconds },
+              ),
+          }, modelId);
+        }
+        // The door for the apps of modules (docs.md): a module waits for this with `sails.after`
+        // — sticky, so the order of the hooks does not matter — and registers its app in the
+        // registry it takes from `sails.hooks["app-mobile-api"]`. «Навигация» of simple-navigation
+        // comes this way, and the hook names no module.
+        sails.emit("mobile-api:ready", registry);
+
+        sails.on("Adminpanel:loaded", async () => {
+          const adminizer = sails.hooks.adminpanel?.adminizer;
+          if (!adminizer) return;
+          const helper = adminizer.accessRightsHelper;
+          helper.registerTokens(registry.listOwnTokens());
+          registry.onOwnToken((token) => helper.registerToken(token));
+
+          if (readSettings(sails).enabled() && isPrimaryWorker()) {
+            try {
+              const { ensureDefaultGroups } = require("@webresto/core/lib/adminpanel/ensureDefaultGroups");
+              await ensureDefaultGroups(adminizer, DEFAULT_GROUPS);
+            } catch (error) {
+              sails.log.error("mobile API: the Stock Manager group was not created", error);
+            }
+          }
+        });
+
+        sails.after("hook:orm:loaded", async () => {
+          const settings = readSettings(sails);
+          let tablesReady = true;
+          if (settings.enabled()) {
+            try {
+              await MobileDevice.count({});
+              await MobileOrderDraft.count({});
+            } catch (error) {
+              tablesReady = false;
+              sails.log.error(
+                "mobile API: its tables are missing, /api/mobile answers 503. Run the hook migrations: " +
+                  "in the image they are collected by .ci/bootstrap (COLLECT_MIGRATIONS, AUTO_MIGRATION), " +
+                  "locally by `npm run dev:pg`.",
+                error,
+              );
+            }
+          }
+
+          const deps = createSailsDeps(sails, registry, translator);
+          const enabled = deps.settings.enabled;
+          deps.settings.enabled = () => tablesReady && enabled();
+          mount.attach(createMobileApi(deps));
+
+          if (tablesReady && settings.enabled() && isPrimaryWorker()) {
+            cleanupTimer = setInterval(() => {
+              cleanup(Date.now()).catch((error) => sails.log.warn("mobile API: cleanup failed", error));
+            }, CLEANUP_EVERY_MS);
+            cleanupTimer.unref();
+          }
+        });
+
+        sails.on("lifted", () => {
+          for (const problem of registry.problems()) sails.log.error(`mobile API: ${problem}`);
+        });
+        sails.on("lower", () => {
+          if (cleanupTimer) clearInterval(cleanupTimer);
+        });
+      } catch (error) {
+        sails.log.error("mobile API: initialization failed, /api/mobile stays unavailable", error);
+      }
+      return cb();
+    },
+  };
+}
