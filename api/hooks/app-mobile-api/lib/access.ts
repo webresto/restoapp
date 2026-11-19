@@ -45,13 +45,22 @@ function kindMatches(kind: "cooking" | "pickup" | "any", place: PlaceInfo): bool
  */
 export async function placesFor(access: AccessPort, places: PlacesPort, user: PanelUser, app: AppDefinition): Promise<PlaceInfo[]> {
   if (app.scope !== "place" || !app.places) return [];
-  const { token, kind, options = [] } = app.places;
-  const candidates = (await places.list()).filter((place) => kindMatches(kind, place));
-  const virtual = options.map(asVirtualPlace);
-  const rights = access.getPermissionRights(token, user);
-  if (rights === null) return [...candidates, ...virtual];
-  const granted = new Set(rights.map(String));
-  return [...candidates, ...virtual].filter((place) => granted.has(String(place.id)));
+  const { kind, options = [] } = app.places;
+  const candidates = [...(await places.list()).filter((place) => kindMatches(kind, place)), ...options.map(asVirtualPlace)];
+  // `anyOf`: a point is the person's when any one of the tokens grants it — the union, in the order of the server.
+  const granted = new Set<string>();
+  for (const token of placeTokens(app)) {
+    const rights = access.getPermissionRights(token, user);
+    if (rights === null) return candidates;
+    rights.forEach((right) => granted.add(String(right)));
+  }
+  return candidates.filter((place) => granted.has(String(place.id)));
+}
+
+/** The tokens the points of an app by points come from: `places.token`, or each of `places.anyOf`. */
+export function placeTokens(app: AppDefinition): string[] {
+  if (!app.places) return [];
+  return app.places.anyOf ?? (app.places.token ? [app.places.token] : []);
 }
 
 /** An option of the token the app shows among its points: «Без кухни» is not a `Place`. */
@@ -77,8 +86,10 @@ export async function checkPlace(
     ? asVirtualPlace(option)
     : (await places.list()).find((candidate) => String(candidate.id) === placeId);
   if (!place || (!option && !kindMatches(app.places.kind, place))) return null;
-  if (!(await access.checkPermission(app.places.token, user, { placeId: place.id }))) return null;
-  return place;
+  for (const token of placeTokens(app)) {
+    if (await access.checkPermission(token, user, { placeId: place.id })) return place;
+  }
+  return null;
 }
 
 /** Apps the user sees: those whose home method is available to them. */

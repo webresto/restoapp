@@ -175,6 +175,15 @@ export function coreMarketing(): MarketingPort {
         item.totalDiscount = Math.round(stats.totalDiscount * 100) / 100;
         item.avgDiscount = Math.round(stats.avgDiscount * 100) / 100;
         if (stats.capped) item.capped = true;
+        // The material of the summary blocks (P7): the days of the range and the codes typed most.
+        item.byDay = stats.series;
+        item.topCodes = stats.topCodes;
+        // The range before this one, for the change of the numbers. Core counts from a day onwards, so the range
+        // twice as long less this one is the previous; a selection cut by its limit gives no honest difference.
+        const wide = await applicationsLib().promotionCodeStats({ days: days * 2 });
+        item.previous = stats.capped || wide.capped
+          ? null
+          : { applications: wide.applications - stats.applications, totalDiscount: wide.totalDiscount - stats.totalDiscount };
       }
       return item;
     },

@@ -126,7 +126,7 @@ describe("app-mobile-api: «Система»", function () {
   describe("the home screen", () => {
     it("wears no badge: a server has no one word for its state", async () => {
       const home = (await appOf(await login("sysop"))).methods.find((method: any) => method.name === "system.home");
-      expect(home.ui).to.deep.equal({ view: "detail", item: { title: "title", subtitle: "subtitle" } });
+      expect(home.ui).to.deep.equal({ view: "detail", item: { title: "title", subtitle: "subtitle" }, section: "Сервер" });
     });
 
     it("tells which server this is and counts its programs", async () => {

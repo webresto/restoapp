@@ -5,6 +5,7 @@ import { createMount, MobileApiMount } from "../http/mount";
 import { createMobileApi } from "../http/app";
 import { cleanup, createSailsDeps, readSettings } from "../adapters/sails";
 import { coreStock } from "../adapters/stock";
+import { coreHome } from "../adapters/home";
 import { coreOrders } from "../adapters/orders";
 import { coreClients } from "../adapters/clients";
 import { corePos } from "../adapters/pos";
@@ -14,6 +15,7 @@ import { coreSettings } from "../adapters/settings";
 import { systemAdapter } from "../adapters/system";
 import { registerDishes } from "../apps/dishes";
 import { registerOrders } from "../apps/orders";
+import { registerHome } from "../apps/home";
 import { registerClients } from "../apps/clients";
 import { registerPos } from "../apps/pos";
 import { registerMarketing } from "../apps/marketing";
@@ -108,6 +110,8 @@ export default function createHook(sails: any) {
         }
 
         await bindModels(sails);
+        // «Главная» first: the client opens on it, and the order of registration is the order of the declaration.
+        registerHome(registry, coreHome());
         registerDishes(registry, coreStock());
         registerOrders(registry, coreOrders());
         const clients = coreClients();

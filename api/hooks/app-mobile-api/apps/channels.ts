@@ -140,8 +140,11 @@ const STATUS_SPECIALS = [
   { value: "error", title: "mobile.channels.status.error", tone: "danger" },
 ];
 
+/** P2: the tones of the statuses; a channel that is switched off is `muted`, not news. */
+const STATUS_TONES = { ready: "success", needs_setup: "warning", draft: "info", disabled: "muted", error: "danger" };
+
 const CHANNEL_FIELDS: FieldDefinition[] = [
-  { name: "status", title: "mobile.channels.field.status", format: "enum", readonly: true, specials: STATUS_SPECIALS },
+  { name: "status", title: "mobile.channels.field.status", format: "enum", readonly: true, specials: STATUS_SPECIALS, "x-tones": STATUS_TONES },
   { name: "statusMessage", title: "mobile.channels.field.statusMessage", format: "text", readonly: true },
   { name: "providerText", title: "mobile.channels.field.provider", format: "text", readonly: true },
   { name: "providerHint", title: "mobile.channels.field.nextStep", format: "text", readonly: true },

@@ -8,6 +8,7 @@ on:
       - next
       - dev
       - places
+      - dev-2.8
   workflow_dispatch: {}
 
 permissions:

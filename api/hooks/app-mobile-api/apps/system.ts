@@ -188,6 +188,9 @@ const STATE_SPECIALS = [
   { value: "migrations", title: "mobile.system.state.migrations", tone: "danger" },
 ];
 
+/** P2: the same tones, but a program that is switched off is `muted` — off is not an alarm. */
+const STATE_TONES = { ok: "success", system: "info", update: "warning", "not-loaded": "warning", disabled: "muted", migrations: "danger" };
+
 const SERVER_FIELDS: FieldDefinition[] = [
   { name: "version", title: "mobile.system.field.version", format: "text", readonly: true, section: "mobile.system.section.server" },
   { name: "timezone", title: "mobile.system.field.timezone", format: "text", readonly: true, section: "mobile.system.section.server" },
@@ -205,7 +208,7 @@ const SERVER_FIELDS: FieldDefinition[] = [
 ];
 
 const MODULE_FIELDS: FieldDefinition[] = [
-  { name: "state", title: "mobile.system.field.state", format: "enum", readonly: true, specials: STATE_SPECIALS },
+  { name: "state", title: "mobile.system.field.state", format: "enum", readonly: true, specials: STATE_SPECIALS, "x-tones": STATE_TONES },
   { name: "description", title: "mobile.system.field.description", format: "text", readonly: true },
   { name: "version", title: "mobile.system.field.version", format: "text", readonly: true, section: "mobile.system.section.version" },
   { name: "latestVersion", title: "mobile.system.field.latestVersion", format: "text", readonly: true, section: "mobile.system.section.version" },
@@ -317,7 +320,8 @@ export function registerSystem(registry: MobileApiRegistry, system: SystemPort):
     input: { type: "object", properties: {} },
     // No badge: the card of a server has no one word for its state — what is going on with it is
     // said by the lines of «Что сейчас», and a badge with nothing in it draws «—».
-    ui: { view: "detail", item: { title: "title", subtitle: "subtitle" } },
+    // P5: the first section is the home one; the programs and the marketplace follow for whoever leads them.
+    ui: { view: "detail", item: { title: "title", subtitle: "subtitle" }, section: "mobile.system.sections.server" },
     handler: async (_params: Record<string, never>, ctx: MethodContext) => ({ item: await serverCard(ctx) }),
   });
 
@@ -417,6 +421,14 @@ export function registerSystem(registry: MobileApiRegistry, system: SystemPort):
       chips: "kind",
       open: "system.module",
       empty: "mobile.system.modules.empty",
+      section: "mobile.system.sections.programs",
+      columns: [
+        { field: "state", width: "narrow" },
+        { field: "kind", width: "narrow" },
+        { field: "version", align: "end" },
+        { field: "latestVersion", align: "end" },
+        { field: "description", width: "wide" },
+      ],
     },
     handler: async (params: { q?: string; kind: string; cursor?: string }, ctx) => {
       const offset = decodeCursor(params.cursor, ctx);
@@ -465,6 +477,7 @@ export function registerSystem(registry: MobileApiRegistry, system: SystemPort):
       search: "q",
       open: "system.catalogItem",
       empty: "mobile.system.catalog.empty",
+      section: "mobile.system.sections.marketplace",
     },
     handler: async (params: { q?: string; appId?: string; tags?: string; cursor?: string }, ctx) => {
       const offset = decodeCursor(params.cursor, ctx);
@@ -525,6 +538,7 @@ export function registerSystem(registry: MobileApiRegistry, system: SystemPort):
     on: "catalogItem" | "module",
     describeItem: (record: any) => false | undefined,
     confirm?: string,
+    primary = false,
   ) {
     registry.registerMethod({
       name: `system.${kind}`,
@@ -539,6 +553,8 @@ export function registerSystem(registry: MobileApiRegistry, system: SystemPort):
         placement: ["detail"],
         control: { type: "native", screen: "module-progress" },
         ...(confirm ? { confirm } : {}),
+        // P3: installing a program of the marketplace, updating one of the server — the main button of the card.
+        ...(primary ? { primary: true } : {}),
       },
       describeItem: (_ctx, record) => describeItem(record),
       handler: async ({ appId, job }: { appId: string; job?: string }, ctx) => {
@@ -557,8 +573,8 @@ export function registerSystem(registry: MobileApiRegistry, system: SystemPort):
     });
   }
 
-  registerJobAction("install", "catalogItem", (record) => (record?.block ? false : undefined));
-  registerJobAction("update", "module", (record) => (record?.state === "update" ? undefined : false));
+  registerJobAction("install", "catalogItem", (record) => (record?.block ? false : undefined), undefined, true);
+  registerJobAction("update", "module", (record) => (record?.state === "update" ? undefined : false), undefined, true);
   registerJobAction(
     "remove",
     "module",

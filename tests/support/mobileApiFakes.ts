@@ -187,16 +187,23 @@ export class FakeStock implements StockPort {
 }
 
 
+type FakeOrderLine = { title: string; amount: number; note?: string; value: number };
+
 /**
  * Four orders at three points, moved by core's own state flow: the rows are in memory, the rules
  * are not. One order waits at «Без кухни», as one that reached the staff without one does.
  */
 export class FakeOrders implements OrdersPort {
   rows = [
-    { id: "o1", number: "AAAA1111", place: "p1", state: "ORDER", customerName: "Иван", phone: "+70000000001", method: "delivery", address: "ул. Ленина, 5", comment: "Домофон 12", total: 1200, deliveryCost: 200, paid: false, createdAt: 1000, updatedAt: 1000 },
-    { id: "o2", number: "BBBB2222", place: "p2", state: "ORDER", customerName: "Пётр", phone: "+70000000002", method: "pickup", address: null as string | null, comment: null as string | null, total: 540, deliveryCost: 0, paid: true, createdAt: 2000, updatedAt: 2000 },
-    { id: "o3", number: "CCCC3333", place: "p1", state: "DONE", customerName: "Анна", phone: "+70000000003", method: "delivery", address: "пр. Мира, 3", comment: null as string | null, total: 800, deliveryCost: 150, paid: true, createdAt: 3000, updatedAt: 3000 },
-    { id: "o4", number: "DDDD4444", place: NO_KITCHEN, state: "ORDER", customerName: "Ольга", phone: "+70000000004", method: "delivery", address: "ул. Садовая, 1", comment: null as string | null, total: 300, deliveryCost: 100, paid: false, createdAt: 4000, updatedAt: 4000 },
+    {
+      id: "o1", number: "AAAA1111", place: "p1", state: "ORDER", customerName: "Иван", phone: "+70000000001", method: "delivery", address: "ул. Ленина, 5", comment: "Домофон 12", total: 1200, deliveryCost: 200, paid: false, createdAt: 1000, updatedAt: 1000,
+      // The lines of the card, a modifier on one of them, and what ЛЕТО10 took off: what `totals` is made of.
+      lines: [{ title: "Борщ", amount: 1, value: 300 }, { title: "Плов", amount: 2, note: "Острый", value: 900 }] as FakeOrderLine[],
+      customerId: "u1" as string | null, discount: 120, promoCode: "ЛЕТО10" as string | null, table: null as string | null,
+    },
+    { id: "o2", number: "BBBB2222", place: "p2", state: "ORDER", customerName: "Пётр", phone: "+70000000002", method: "pickup", address: null as string | null, comment: null as string | null, total: 540, deliveryCost: 0, paid: true, createdAt: 2000, updatedAt: 2000, lines: [{ title: "Морс", amount: 3, value: 360 }] as FakeOrderLine[], customerId: null, discount: 0, promoCode: null, table: null },
+    { id: "o3", number: "CCCC3333", place: "p1", state: "DONE", customerName: "Анна", phone: "+70000000003", method: "delivery", address: "пр. Мира, 3", comment: null as string | null, total: 800, deliveryCost: 150, paid: true, createdAt: 3000, updatedAt: 3000, lines: [{ title: "Плов", amount: 1, value: 450 }] as FakeOrderLine[], customerId: null, discount: 0, promoCode: null, table: null },
+    { id: "o4", number: "DDDD4444", place: NO_KITCHEN, state: "ORDER", customerName: "Ольга", phone: "+70000000004", method: "delivery", address: "ул. Садовая, 1", comment: null as string | null, total: 300, deliveryCost: 100, paid: false, createdAt: 4000, updatedAt: 4000, lines: [{ title: "Борщ", amount: 1, value: 300 }] as FakeOrderLine[], customerId: null, discount: 0, promoCode: null, table: null },
   ];
   /** Every move that went through, as the journal of core would have it. */
   moves: Array<{ id: string; to: string; device: string | null }> = [];
@@ -227,7 +234,19 @@ export class FakeOrders implements OrdersPort {
       paid: row.paid,
       allowedTransitions: getAllowedOrderTransitionsByRole(row.state, isOperatorUser(user)),
       placeId: row.place,
+      itemsCount: row.lines.reduce((sum, line) => sum + line.amount, 0),
+      table: row.table ?? null,
+      customerId: row.customerId ?? null,
+      basketTotal: row.lines.reduce((sum, line) => sum + line.value, 0),
+      discount: row.discount ?? 0,
+      promoCode: row.promoCode ?? null,
+      promoLabel: row.promoCode ? "−10%" : null,
+      ...(withContents ? { lines: row.lines.map((line) => ({ ...line })) } : {}),
     };
+  }
+
+  async countSince(place: string, from: number) {
+    return this.rows.filter((row) => row.place === place && row.createdAt >= from).length;
   }
 
   private of(place: string, id: string) {
@@ -307,8 +326,29 @@ export class FakeClients implements ClientsPort {
   async get(id: string) {
     const row = this.rows.find((candidate) => candidate.id === id);
     if (!row) return null;
-    const card: ClientCard = { ...row, addresses: row.id === "u1" ? ["ул. Ленина, 5, кв. 12"] : [], orders: row.id === "u1" ? ["№1001 · 2026-05-12 · 1200 · DONE"] : [] };
+    const mine = row.id === "u1";
+    const card: ClientCard = {
+      ...row,
+      addresses: mine ? ["ул. Ленина, 5, кв. 12"] : [],
+      orders: mine ? ["№1001 · 2026-05-12 · 1200 · DONE"] : [],
+      // One order at a point the operators hold, one at a point only the dispatcher does.
+      recent: mine
+        ? [
+            { id: "o1", number: "1001", at: Date.UTC(2026, 4, 12, 12), total: 1200, state: "DONE", placeId: "p1" },
+            { id: "o2", number: "1002", at: Date.UTC(2026, 4, 10, 12), total: 1500, state: "DONE", placeId: "p2" },
+          ]
+        : [],
+    };
     return card;
+  }
+
+  /** u1 has bought three times, u3 once and was rejected once (which does not count); u2 never. */
+  async money(ids: string[]) {
+    const all: Record<string, { spent: number; count: number; lastOrderAt: number | null }> = {
+      u1: { spent: 3600, count: 3, lastOrderAt: Date.UTC(2026, 4, 12, 12) },
+      u3: { spent: 450, count: 1, lastOrderAt: Date.UTC(2026, 3, 1, 12) },
+    };
+    return new Map(ids.filter((id) => all[id]).map((id) => [id, { ...all[id] }]));
   }
 
   /** As `materializeUser` is: the same number answers with the person who already has it. */
@@ -760,6 +800,9 @@ export class FakeMarketing implements MarketingPort {
     { id: "o-3", shortId: "1003", code: "DEAD", status: "invalid", discount: 0, createdAt: 1_762_200_000_000, why: "все акции кода выключены — код ничего не даёт", orderState: "CART" },
   ];
 
+  /** The range before the one asked, as core tells it: null — a capped selection, no honest difference. */
+  previousRange: { applications: number; totalDiscount: number } | null = { applications: 2, totalDiscount: 100 };
+
   dishes: CatalogDish[] = [
     { id: "d1", name: "Борщ", code: "B1", parentGroup: "g1", price: 300, notForSale: false, promo: false },
     { id: "d2", name: "Плов", code: "P1", parentGroup: "g1", price: 450, notForSale: false, promo: false },
@@ -880,6 +923,24 @@ export class FakeMarketing implements MarketingPort {
       item.totalDiscount = shown.reduce((sum, row) => sum + row.discount, 0);
       item.avgDiscount = shown.length ? item.totalDiscount / shown.length : 0;
       item.capped = false;
+      // The material of the summary blocks, as core's `promotionCodeStats` gives it: by day (UTC here, so a run
+      // does not depend on the timezone), the codes typed most, and the range before — two applications, 100 ₽.
+      const byDay = new Map<string, { date: string; applications: number; discount: number }>();
+      const byCode = new Map<string, { code: string; applications: number; discount: number }>();
+      for (const row of shown) {
+        const date = new Date(row.createdAt).toISOString().slice(0, 10);
+        const day = byDay.get(date) ?? { date, applications: 0, discount: 0 };
+        day.applications += 1;
+        day.discount += row.discount;
+        byDay.set(date, day);
+        const code = byCode.get(row.code) ?? { code: row.code, applications: 0, discount: 0 };
+        code.applications += 1;
+        code.discount += row.discount;
+        byCode.set(row.code, code);
+      }
+      item.byDay = [...byDay.values()].sort((a, b) => a.date.localeCompare(b.date));
+      item.topCodes = [...byCode.values()].sort((a, b) => b.applications - a.applications);
+      item.previous = this.previousRange;
     }
     return item as any;
   }
@@ -1637,6 +1698,8 @@ export async function makeFakes(): Promise<Fakes> {
     makeUser(19, "sysop", [{ name: "Extensions", tokens: ["access-to-adminpanel", "modules-process-upgrade"] }]),
     // Only the settings: «Система» opens, its programs do not.
     makeUser(20, "settler", [{ name: "Settings", tokens: ["access-to-adminpanel", "settings-manager"] }]),
+    // Reads customers and the orders of p1: the money of a customer, and the way into the orders of that point only.
+    makeUser(21, "clerk", [{ name: "Clerk", tokens: ["access-to-adminpanel", "read-customer-model", ordersGrant("p1"), "read-order-model"] }]),
   ];
   const users = new Map(usersList.map((user) => [user.login, user]));
   const places: PlaceInfo[] = [

@@ -26,10 +26,21 @@ export interface AppDefinition {
   icon?: { path: string };
   category?: string;
   home: string;
-  /** "place": every call carries exactly one point the user holds for `places.token`. */
+  /**
+   * P4: a query of this app, without required params, answering a number — «Заказы · 8» in the menu. The
+   * declaration carries it only to whoever may call it; 0 or no answer is no badge.
+   */
+  badge?: string;
+  /** "place": every call carries exactly one point the user holds for `places.token` (or one of `places.anyOf`). */
   scope?: "server" | "place";
   places?: {
-    token: string;
+    /** Exactly one of `token` and `anyOf`. */
+    token?: string;
+    /**
+     * The points granted by any one of these contextual tokens: «Главная» is of every point where the person sees
+     * the orders or the stock. What each block of such an app shows is still asked per token by its handler.
+     */
+    anyOf?: string[];
     kind: "cooking" | "pickup" | "any";
     /**
      * Options of the same token that are not points of the server but which the app shows among
@@ -66,6 +77,8 @@ export interface FieldDefinition {
   section?: string;
   specials?: Array<{ value: unknown; title: string; tone?: string }>;
   "x-titles"?: Record<string, string>;
+  /** P2: the tone of each value of an `enum` field, `muted` included (`valueTone`). */
+  "x-tones"?: Record<string, string>;
   /**
    * Who may see the field. Without it — everybody the app is available to; with it, the declaration of the rest
    * does not carry it at all, so a number they may not see is not shown as «—» either. The values are the
@@ -360,6 +373,12 @@ export class MobileApiRegistry {
       const home = this.methods.get(app.home);
       if (!home) problems.push(`app "${app.id}": home method "${app.home}" is not registered`);
       else if (home.app !== app.id) problems.push(`app "${app.id}": home method "${app.home}" belongs to another app`);
+      if (app.badge) {
+        const badge = this.methods.get(app.badge);
+        if (!badge) problems.push(`app "${app.id}": badge method "${app.badge}" is not registered`);
+        else if (badge.app !== app.id || badge.kind !== "query") problems.push(`app "${app.id}": badge method "${app.badge}" must be a query of the app`);
+        else if ((badge.input.required ?? []).length) problems.push(`app "${app.id}": badge method "${app.badge}" must have no required params`);
+      }
     }
     for (const method of this.methods.values()) {
       const open = method.ui?.open;
@@ -368,6 +387,18 @@ export class MobileApiRegistry {
       const app = this.apps.get(method.app)!;
       if (on && on !== "list" && !app.models?.[on] && !this.methodsOf(app.id).some((other) => other.model === on)) {
         problems.push(`method "${method.name}": ui.on "${on}" names no model of app "${app.id}"`);
+      }
+      // Hints that name fields: a column or a board of a field the model does not declare is drawn as nothing.
+      const fields = method.model ? app.models?.[method.model]?.fields : undefined;
+      if (fields) {
+        const named = new Map(fields.map((field) => [field.name, field]));
+        for (const column of method.ui?.columns ?? []) {
+          if (!named.has(column.field)) problems.push(`method "${method.name}": ui.columns names "${column.field}", not a field of "${method.model}"`);
+        }
+        const board = method.ui?.board;
+        if (board && named.get(board.field)?.format !== "enum") {
+          problems.push(`method "${method.name}": ui.board.field "${board.field}" is not an enum field of "${method.model}"`);
+        }
       }
     }
     return problems;

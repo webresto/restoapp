@@ -97,7 +97,7 @@ describe("app-mobile-api «Заказы»", function () {
       expect(orders).to.include({ title: "Заказы", scope: "place", home: "orders.list" });
       expect(orders.places).to.deep.equal(["p1", "p2", NO_KITCHEN]);
       expect(orders.methods.map((method: any) => method.name))
-        .to.deep.equal(["orders.list", "orders.get", "orders.setState", "orders.assignKitchen"]);
+        .to.deep.equal(["orders.list", "orders.get", "orders.setState", "orders.assignKitchen", "orders.badge"]);
       expect(declaration.places.find((place: any) => place.id === NO_KITCHEN))
         .to.deep.equal({ id: NO_KITCHEN, title: "Без кухни", address: null });
     });
@@ -109,7 +109,14 @@ describe("app-mobile-api «Заказы»", function () {
       const [listMethod, , setState, assignKitchen] = orders.methods;
 
       expect(listMethod.ui).to.deep.include({ view: "list", search: "q", chips: "tab", open: "orders.get" });
-      expect(listMethod.ui.item).to.deep.equal({ title: "title", subtitle: "summary", meta: "createdAt", value: "total", badge: "state" });
+      expect(listMethod.ui.item).to.deep.equal({
+        title: "title", subtitle: "summary", meta: "createdAt", value: "total", badge: "state", detail: "where", note: "itemsText",
+      });
+      // The fields the new keys name are declared, so a client may draw them like any other.
+      const fields = orders.models.order.fields.map((field: any) => field.name);
+      expect(fields).to.include.members(["where", "itemsCount", "itemsText"]);
+      // The card: the lines with the totals under them, one `list` block of the summary.
+      expect(orders.methods[1].ui.summary).to.deep.equal([{ type: "list", field: "lines", title: "Состав", totals: "totals" }]);
       expect(listMethod.input.properties.tab["x-titles"]).to.deep.equal({ active: "Активные", done: "Завершённые" });
       expect(setState.ui.control).to.deep.equal({ type: "buttons", param: "to", tones: { DONE: "success", REJECT: "danger" } });
       expect(setState.ui.confirm).to.equal("Отклонить заказ? Клиент получит уведомление.");
@@ -144,7 +151,7 @@ describe("app-mobile-api «Заказы»", function () {
       const token = await login("watcher");
       const declaration = (await request("GET", "/api/mobile/describe", { token })).body.result;
 
-      expect(declaration.apps[0].methods.map((method: any) => method.name)).to.deep.equal(["orders.list", "orders.get"]);
+      expect(declaration.apps[0].methods.map((method: any) => method.name)).to.deep.equal(["orders.list", "orders.get", "orders.badge"]);
       expect((await call(token, "orders.setState", { params: { id: "o1", to: "COOKING" }, place: "p1" })).body.error.code)
         .to.equal("forbidden");
       // A record of a read-only user carries no actions at all.
@@ -161,7 +168,29 @@ describe("app-mobile-api «Заказы»", function () {
       expect(result.counts).to.deep.equal({ active: 1, done: 1 });
       expect(result.total).to.equal(1);
       expect(result.nextCursor).to.equal(null);
-      expect(result.items[0]).to.include({ title: "№ AAAA1111", summary: "Иван · delivery", state: "ORDER", total: 1200 });
+      expect(result.items[0]).to.include({ title: "№ AAAA1111", summary: "Иван · Доставка", state: "ORDER", total: 1200 });
+    });
+
+    it("tells on a row where the order goes and how many portions it has, and over the list the day of the point", async () => {
+      const token = await login("operator");
+      fakes.orders.rows[0].createdAt = Date.now();
+      const { result } = await list(token, "p1");
+
+      expect(result.items[0]).to.include({ where: "ул. Ленина, 5", itemsCount: 3, itemsText: "3 поз." });
+      expect(result.description).to.equal("Ленина, 5 · сегодня 1 заказ, 1 в работе");
+      // No lines on a row: the list shows how many, the card shows which.
+      expect(result.items[0]).to.not.have.property("lines");
+
+      // A table of the dining room is where a dine-in order goes; a pickup is «Самовывоз».
+      Object.assign(fakes.orders.rows[2], { method: "dine-in", table: "5" });
+      const done = (await list(token, "p1", { tab: "done" })).result;
+      expect(done.items[0]).to.include({ where: "Стол 5", itemsText: "1 поз." });
+      const dispatcher = await login("dispatcher");
+      expect((await list(dispatcher, "p2")).result.items[0]).to.include({ where: "Самовывоз", itemsText: "3 поз." });
+
+      const english = (await request("POST", "/api/mobile/call/orders.list?lang=en", { token, body: { params: {}, place: "p1" } })).body.result;
+      expect(english.description).to.equal("Ленина, 5 · 1 order today, 1 in progress");
+      expect(english.items[0].itemsText).to.equal("3 items");
     });
 
     it("lists the finished orders of the other tab", async () => {
@@ -204,6 +233,35 @@ describe("app-mobile-api «Заказы»", function () {
         paid: false,
       });
       expect(result.item.contents).to.equal("1 × Борщ\n2 × Плов");
+      expect(result.item.lines).to.deep.equal([
+        { title: "Борщ", amount: 1, value: 300, format: "money" },
+        { title: "Плов", amount: 2, note: "Острый", value: 900, format: "money" },
+      ]);
+      expect(result.item.totals).to.deep.equal([
+        { title: "Блюда", value: 1200, format: "money" },
+        { title: "Доставка", value: 200, format: "money" },
+        { title: "Промокод ЛЕТО10 · −10%", value: -120, format: "money", tone: "success" },
+        { title: "Итого", value: 1200, format: "money", strong: true },
+      ]);
+      expect(result.item.customerId).to.equal("u1");
+      // The operator may not read customers: no door to a card that would not open.
+      expect(result.item).to.not.have.property("_links");
+    });
+
+    it("leads from the card of an order to the customer's, for whoever may open it", async () => {
+      const token = await login("admin");
+      const { item } = (await call(token, "orders.get", { params: { id: "o1" }, place: "p1" })).body.result;
+      expect(item._links).to.deep.equal([
+        { title: "Карточка клиента", meta: "Иван", open: { app: "clients", method: "clients.get", params: { id: "u1" } } },
+      ]);
+
+      // Without a discount or a delivery the totals are the dishes and the sum.
+      const plain = (await call(token, "orders.get", { params: { id: "o3" }, place: "p1" })).body.result.item;
+      expect(plain.totals.map((line: any) => line.title)).to.deep.equal(["Блюда", "Доставка", "Итого"]);
+      Object.assign(fakes.orders.rows[2], { deliveryCost: 0 });
+      const pickup = (await call(token, "orders.get", { params: { id: "o3" }, place: "p1" })).body.result.item;
+      expect(pickup.totals.map((line: any) => line.title)).to.deep.equal(["Блюда", "Итого"]);
+      expect(pickup).to.not.have.property("_links");
     });
 
     it("finds an order by number, phone and customer, and nothing by a stranger's name", async () => {

@@ -1,4 +1,4 @@
-import type { ClientCard, ClientItem, ClientsPort } from "../apps/clients";
+import type { ClientCard, ClientItem, ClientMoney, ClientOrder, ClientsPort } from "../apps/clients";
 
 /**
  * «Клиенты» on core's own models and functions.
@@ -66,6 +66,32 @@ function orderLine(order: any): string {
   return [`№${number}`, date, order.total ?? 0, order.state].filter((part) => part !== "" && part !== null).join(" · ");
 }
 
+/** The orders that count as bought: placed and not rejected (core's own states — `OrderStateFlow`). */
+const BOUGHT_STATES = ["ORDER", "COOKING", "ON_THE_WAY", "DONE"];
+/** Upper bound of orders one money query reads for a page of customers. */
+const MONEY_SCAN_LIMIT = 20000;
+
+/** When the order was placed, epoch milliseconds: `orderedAt` is seconds, `createdAt` milliseconds. */
+function placedAt(order: any): number {
+  return Number(order.orderedAt) ? Number(order.orderedAt) * 1000 : Number(order.createdAt) || 0;
+}
+
+function ownerOf(order: any): string {
+  return String(order.user && typeof order.user === "object" ? order.user.id : order.user);
+}
+
+function toOrder(order: any): ClientOrder {
+  const { orderPlaceKey } = require(`${CORE}/lib/order/orders-of-place`);
+  return {
+    id: String(order.id),
+    number: order.rmsOrderNumber || order.shortId || String(order.id).slice(0, 8),
+    at: placedAt(order),
+    total: typeof order.total === "number" ? order.total : 0,
+    state: order.state || "",
+    placeId: orderPlaceKey(order),
+  };
+}
+
 export function coreClients(): ClientsPort {
   return {
     async list({ q }) {
@@ -102,8 +128,26 @@ export function coreClients(): ClientsPort {
         ...toItem(user),
         addresses: locations.map((location: any) => location.formatted).filter(Boolean),
         orders: orders.map(orderLine),
+        recent: orders.map(toOrder),
       };
       return card;
+    },
+
+    async money(ids) {
+      const result = new Map<string, ClientMoney>();
+      if (!ids.length) return result;
+      const orders = await Order.find({ where: { user: { in: ids }, state: { in: BOUGHT_STATES } }, limit: MONEY_SCAN_LIMIT });
+      for (const order of orders) {
+        const owner = ownerOf(order);
+        const counted = result.get(owner) ?? { spent: 0, count: 0, lastOrderAt: null };
+        counted.spent += typeof order.total === "number" ? order.total : 0;
+        counted.count += 1;
+        const at = placedAt(order);
+        if (at && (counted.lastOrderAt === null || at > counted.lastOrderAt)) counted.lastOrderAt = at;
+        result.set(owner, counted);
+      }
+      for (const counted of result.values()) counted.spent = Math.round(counted.spent * 100) / 100;
+      return result;
     },
 
     async create({ name, phone, email }) {

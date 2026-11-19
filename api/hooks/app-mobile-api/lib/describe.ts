@@ -167,6 +167,8 @@ export class DeclarationBuilder {
         ...(app.icon ? { icon: app.icon } : {}),
         ...(app.category ? { category: app.category } : {}),
         home: app.home,
+        // The counter only for whoever may call it: a badge that answers `forbidden` is no badge.
+        ...(app.badge && methods.some((method) => method.name === app.badge) ? { badge: app.badge } : {}),
         scope: app.scope ?? "server",
         ...(app.models ? { models: await this.modelsFor(user, app.models) } : {}),
         ...(app.client ? { client: app.client } : {}),

@@ -391,6 +391,46 @@ describe("app-mobile-api", function () {
       expect((await call(token, "clients.get", { params: { id: "nope" } })).body.error.code).to.equal("not_found");
     });
 
+    it("tells what a customer spent only to whoever may read orders", async () => {
+      const taker = await login("taker");
+      const plain = (await call(taker, "clients.list", { params: {} })).body.result.items;
+      expect(plain.find((item: any) => item.id === "u1")).to.not.have.any.keys("spent", "averageCheck", "lastOrderAt");
+      const takerCard = (await call(taker, "clients.get", { params: { id: "u1" } })).body.result.item;
+      expect(takerCard).to.not.have.any.keys("spent", "averageCheck");
+      // The orders are there, without their money and without a way into a board the taker does not have.
+      expect(takerCard.recentOrders).to.deep.equal([{ title: "№ 1001 · 12 мая" }, { title: "№ 1002 · 10 мая" }]);
+      const takerFields = (await request("GET", "/api/mobile/describe?lang=ru", { token: taker })).body.result
+        .apps.find((app: any) => app.id === "clients").models.client.fields.map((field: any) => field.name);
+      expect(takerFields).to.not.include("spent");
+
+      const clerk = await login("clerk");
+      const items = (await call(clerk, "clients.list", { params: {} })).body.result.items;
+      expect(items.find((item: any) => item.id === "u1")).to.include({ spent: 3600, averageCheck: 1200, lastOrderAt: Date.UTC(2026, 4, 12, 12) });
+      // Nobody's money is still money: a customer who never bought spent nothing.
+      expect(items.find((item: any) => item.id === "u2")).to.include({ spent: 0, averageCheck: 0 });
+      expect(items.find((item: any) => item.id === "u2")).to.not.have.property("lastOrderAt");
+
+      const declaration = (await request("GET", "/api/mobile/describe?lang=ru", { token: clerk })).body.result;
+      const app = declaration.apps.find((candidate: any) => candidate.id === "clients");
+      expect(app.models.client.fields.filter((field: any) => ["spent", "averageCheck", "lastOrderAt"].includes(field.name)).map((field: any) => field.format))
+        .to.deep.equal(["money", "money", "datetime"]);
+      expect(app.methods.find((method: any) => method.name === "clients.get").ui.summary).to.deep.equal([
+        { type: "metric", field: "orderCount", format: "number" },
+        { type: "metric", field: "spent", format: "money" },
+        { type: "metric", field: "averageCheck", format: "money" },
+        { type: "list", field: "recentOrders", title: "Последние заказы" },
+      ]);
+
+      const card = (await call(clerk, "clients.get", { params: { id: "u1" } })).body.result.item;
+      expect(card).to.include({ spent: 3600, averageCheck: 1200 });
+      expect(card).to.not.have.property("recent");
+      // The order of p1 opens on the clerk's board; the one of p2 is not theirs to open.
+      expect(card.recentOrders).to.deep.equal([
+        { title: "№ 1001 · 12 мая", value: 1200, format: "money", _open: { app: "orders", method: "orders.get", params: { id: "o1" }, place: "p1" } },
+        { title: "№ 1002 · 10 мая", value: 1500, format: "money" },
+      ]);
+    });
+
     it("does not fork a second profile for a number that is already somebody's", async () => {
       const token = await login("taker");
       const created = (await call(token, "clients.create", { params: { name: "Новый", phone: "+7 999 555 00 33" } })).body.result.item;

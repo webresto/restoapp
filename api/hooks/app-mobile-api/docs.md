@@ -93,6 +93,11 @@ is one of the token's options in the group form), its title is a translation key
 and `ctx.place.id` is its id in the handler. `ctx.appPlaces()` answers with every point of the app
 this user holds — for a method whose own input names one, as «Назначить кухню» does.
 
+Instead of one `token`, an app may take its points from several: `places: {anyOf: [...], kind}`. A point is the
+person's when any one of the tokens grants it, and a call is admitted at a point when any one of them grants it
+there. «Главная» does so — it is of every point where the person sees the orders or the stock — and its handler
+then asks per block which of the rights the person holds at this point (`ctx.canOpen("orders.list", place)`).
+
 ## Registering an app
 
 `global.mobileApi` (also `sails.hooks['app-mobile-api'].registry`; `mobile-api:ready` is emitted with
@@ -138,10 +143,69 @@ mobileApi.registerMethod({
 - Every mutation goes to core's audit log, scope `mobile-api`: user, device, point, record, params
   (or what `audit(params, result)` returns), `req.ip` under "trust proxy".
 
+### Optional UI hints (P1–P7)
+
+Every one of them is optional, `PROTOCOL_VERSION` stays 1: an older client ignores them and draws as
+before; a value outside the closed set is drawn as without the key. The shapes are in
+`schema/declaration.schema.json` (`column`, `board`, `summaryBlock`, `valueTone`), the single source
+the client and cloud-panel copy; the plan is `restoapp-mobile-admin/_plan/04-protocol.md`.
+
+| # | Where | Key | What |
+|---|---|---|---|
+| P1 | `ui` of a `list` | `columns: [{field, align?: start\|end, width?: narrow\|wide}]` | The table on a Medium+ window: the column of `item.title` first (never listed), then these, headed by the fields' titles. A field the model does not declare is skipped (`problems()` logs it) |
+| P2 | an `enum` field, next to `x-titles` | `x-tones: {value: info\|warning\|success\|danger\|muted}` | The tone of a value wherever it is drawn. `muted` (done, over, off) is only for `x-tones`; `specials` and `control.tones` keep the four tones an older client knows |
+| P3 | `ui` of an action | `primary: true` | The main write button of a record; of a `buttons` control — its first value |
+| P4 | the app | `badge: "<method>"` | A query of the app without required params (only `place` for an app by points) answering a number. Declared only to whoever may call it; `0` — no badge |
+| P5 | `ui` of a `list`/`detail` query | `section` | A translation key: the section of the app, in the order of `methods`, the first one being `home`; fewer than two — no sections |
+| P6 | `ui` of a `list` | `board: {field, order}` | The board on Medium+: a column per value of the enum `field` in `order` (heads `x-titles`, tones `x-tones`); a value not in `order` is on no column |
+| P7 | `ui` of a `detail` | `summary: [block]` | `metric {field, delta?}`, `series {field}` (`[{x, y}]`), `list {field, totals?}` (`[{title, value?, format?, amount?, note?, _open?}]`; `totals` names the field of the lines drawn under them, `[{title, value, format?, tone?, strong?}]`), `share {field}` (`[{title, value}]`). The arrays and the deltas are in the record and **never declared in the model**, so an older client shows the card it always did |
+| — | `ui.item` of a `list` | `detail`, `note` | Two more fields of a row: `detail` a third line, drawn with the icon of the method; `note` a short note bottom left. Both declared in the model like any field of a row |
+| — | the answer of a `list` | `description` | A line over the list, data in the language of the request (not a key); absent — no line |
+
+What the shipped apps say:
+
+- «Заказы»: `badge: "orders.badge"` — the orders of the point under way (the «Активные» count of the
+  list, the point and the rights of the list); `x-titles` + `x-tones` on `state` (a finished order
+  `muted`); `columns` and `board: {field: "state", order: [ORDER, COOKING, ON_THE_WAY, DONE]}` on
+  `orders.list` (a rejected order is on no column); `primary` on `orders.setState` — the way forward
+  comes first in core's transitions. A row of `orders.list` carries `where` (the address of a delivery,
+  «Самовывоз», «Стол 5» / «В зале») as `ui.item.detail` and `itemsText` («6 поз.», the sum of the amounts
+  of the lines this point makes, also as the number `itemsCount`) as `ui.item.note`; the answer carries
+  `description` — «Ленина, 5 · сегодня 14 заказов, 9 в работе» (the point, the orders placed there
+  since midnight, the «Активные» count). The card (`orders.get`) carries `lines` —
+  `[{title, amount, note?, value, format: "money"}]`, `note` the modifiers and the comment of a line —
+  and `totals` — «Блюда», «Доставка» (only above 0), «Промокод ЛЕТО10 · −10%» (only with a discount,
+  `tone: success`, a negative value; «Скидка» without a code), «Итого» (`strong`) — drawn by one block
+  `{type: "list", field: "lines", totals: "totals"}`; `contents` stays for an older client. With an
+  account behind the order the card has `customerId`, and — for whoever may open `clients.get` — a
+  `_links` line «Карточка клиента» to it.
+- «Клиенты»: with `read-order-model` (the right «Маркетинг» counts its money by — what a customer spent
+  is the money of their orders) a row and the card carry `spent` (the totals of their placed, not
+  rejected orders), `averageCheck` and `lastOrderAt`, declared `money`/`datetime` with that `access`.
+  The card: `metric` of `orderCount`, `spent`, `averageCheck`, and a `list` of `recentOrders`
+  — `{title: "№ 1323 · 18 нояб", value?, format?, _open?}`, the money with the same right, `_open` to
+  `orders.get` at the order's point for whoever holds that point.
+- «Маркетинг»: sections «Сводка / Акции / Промокоды / Применения» (`marketing.home`,
+  `marketing.promotions`, `marketing.promocodes`, `marketing.applications`); `columns` on the three
+  lists; `x-tones` on the status of a code, where a promotion stands and the outcome of an
+  application. The summary: `metric` of the applications, the discount and the average one, each with
+  a `delta` against the range just before (`*Delta`, in %, absent when there was nothing before or a
+  selection was capped), `metric` of the active codes and the promotions that apply by themselves, a
+  `series` of the applications by day (`applicationsByDay`), a `share` of the codes typed most
+  (`codesShare`) and a `list` of their discount (`codesDiscount`). The blocks are the same for
+  everybody: a number somebody may not see is neither declared nor in the record, and its block is
+  not drawn.
+- «Система»: sections «Сервер / Программы / Маркетплейс» (`system.home`, `system.modules`,
+  `system.catalog`); `columns` and `x-tones` (`disabled` — `muted`) of the programs; `primary` on
+  `system.install` and `system.update`.
+- «Каналы продаж»: `x-tones` of the status (`disabled` — `muted`). «Блюда», «Клиенты», «Настройки»:
+  `columns` of their lists.
+
 ## The apps it ships
 
 | App | Scope | Access | What |
 |---|---|---|---|
+| «Главная» (`home`) | a point of the orders or of the stock (`places.anyOf`) | `anyOf: [order-kanban, stock-manager]`; the money — `orders-report` | The day of a point at a glance, one query `home.summary`: the revenue, by hour and the average check with their change against the same weekday a week ago (with the orders report), the orders and the kitchen by stage (with the orders of the point), the stop list and what sells (with the stock of the point). A key the person may not see is not in the record. **Drawn by the client itself** — `client: {native: "home", min: 1}`; an older client shows its tiles |
 | «Блюда» (`dishes`) | a cooking point | `stock-manager` (contextual) | The web Stock Manager of one point, through core's `lib/menu/stock-items` (C4) |
 | «Заказы» (`orders`) | a point, «Без кухни» among them | `order-kanban` + the `order` model rights | The orders board of one point: the two tabs with their counts, the card, the flow by buttons, «Назначить кухню» |
 | «Клиенты» (`clients`) | the server | the `Customer` model rights of the panel (`read-customer-model`, `create-customer-model`) | The customers: search by number or name, a card with addresses and recent orders, a new one through `AuthService.materializeUser` |
@@ -346,6 +410,10 @@ is placed or dropped, and the hourly cleanup removes what nobody came back to wi
   screen does not promise before an app exists, the badge of every state, the search over what is
   installed, the three refusals of a removal in words, and the restart: closed by the right, asking
   before «now», planning once.
+- `tests/mobile-api.ui-hints.test.ts` — the optional hints P1–P7: the closed sets of the contract, the declaration
+  of the shipped apps against it in both languages (every column a declared field, the sections in order, the
+  board's values titled and toned), `orders.badge` as a number by the point and the right, and the summary of
+  «Маркетинг» with its arrays and deltas, none of them declared.
 - `tests/mobile-api.system.install.test.ts` — the manager of extensions from end to end: a lifted
   Sails, the real module manager, real archives from `tests/support/fakeRegistry.ts`, and only
   `process.exit` replaced.

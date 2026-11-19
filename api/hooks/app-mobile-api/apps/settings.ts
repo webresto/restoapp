@@ -264,6 +264,12 @@ export function registerSettings(registry: MobileApiRegistry, settings: Settings
       chips: "kind",
       open: "settings.get",
       empty: "mobile.settings.empty",
+      columns: [
+        { field: "valueText", width: "wide" },
+        { field: "type", width: "narrow" },
+        { field: "state" },
+        { field: "module" },
+      ],
     },
     handler: async (params: { q?: string; kind: string; cursor?: string }, ctx) => {
       const offset = decodeCursor(params.cursor, ctx);

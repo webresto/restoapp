@@ -36,6 +36,61 @@ export interface MarketingSummary {
   avgDiscount?: number;
   /** A selection was cut by its limit: the screen says so instead of quietly showing a part. */
   capped?: boolean;
+  /**
+   * What the summary blocks are made of (P7), with the money only. The app turns them into the fields the
+   * blocks name and drops these: none of it is a field of the model.
+   */
+  byDay?: Array<{ date: string; applications: number; discount: number }>;
+  topCodes?: Array<{ code: string; applications: number; discount: number }>;
+  /** The same numbers for the range just before this one; null — they cannot be told honestly (a capped selection). */
+  previous?: { applications: number; totalDiscount: number } | null;
+}
+
+/** One block of the summary (P7). */
+type SummaryBlock = Record<string, unknown> & { type: "metric" | "series" | "list" | "share"; field: string };
+
+/**
+ * P7: the blocks of the summary over its card. The fields of `metric` are the declared numbers (a number somebody
+ * may not see is neither declared nor in the record, and a block of it is not drawn); the deltas and the arrays are
+ * in the record only — never declared, so a client that knows no summary shows the card it always showed.
+ */
+const SUMMARY_BLOCKS: SummaryBlock[] = [
+  { type: "metric", field: "applications", format: "number", delta: "applicationsDelta" },
+  { type: "metric", field: "totalDiscount", format: "money", delta: "totalDiscountDelta" },
+  { type: "metric", field: "avgDiscount", format: "money", delta: "avgDiscountDelta" },
+  { type: "metric", field: "codesActive", format: "number" },
+  { type: "metric", field: "promotionsSelf", format: "number" },
+  { type: "series", field: "applicationsByDay", title: "mobile.marketing.summary.byDay", format: "number" },
+  { type: "share", field: "codesShare", title: "mobile.marketing.summary.codesShare" },
+  { type: "list", field: "codesDiscount", title: "mobile.marketing.summary.codesDiscount" },
+];
+
+/** The change from `previous` to `current` in %, one decimal; nothing to compare with — no change at all. */
+function change(current: number, previous: number): number | undefined {
+  if (!(previous > 0)) return undefined;
+  return Math.round(((current - previous) / previous) * 1000) / 10;
+}
+
+/** The record of the summary with the values of its blocks, and without what they were made of. */
+function withSummaryBlocks(summary: MarketingSummary): Record<string, unknown> {
+  const { byDay, topCodes, previous, ...item } = summary;
+  const result: Record<string, unknown> = { ...item };
+  if (previous && item.applications !== undefined && item.totalDiscount !== undefined) {
+    const deltas = {
+      applicationsDelta: change(item.applications, previous.applications),
+      totalDiscountDelta: change(item.totalDiscount, previous.totalDiscount),
+      avgDiscountDelta: previous.applications > 0 && item.avgDiscount !== undefined
+        ? change(item.avgDiscount, previous.totalDiscount / previous.applications)
+        : undefined,
+    };
+    for (const [name, value] of Object.entries(deltas)) if (value !== undefined) result[name] = value;
+  }
+  if (byDay) result.applicationsByDay = byDay.map((day) => ({ x: day.date, y: day.applications }));
+  if (topCodes) {
+    result.codesShare = topCodes.map((code) => ({ title: code.code, value: code.applications }));
+    result.codesDiscount = topCodes.map((code) => ({ title: code.code, value: Math.round(code.discount * 100) / 100, format: "money" }));
+  }
+  return result;
 }
 
 export interface CodeItem {
@@ -200,12 +255,21 @@ const STATUS_SPECIALS = [
   { value: "disabled", title: "mobile.marketing.status.disabled", tone: "danger" },
 ];
 
+/** P2: the tones of a code's status; one that is over or switched off is `muted` — nothing to act on. */
+const STATUS_TONES = { active: "success", scheduled: "info", expired: "muted", disabled: "muted" };
+
 const APPLIES_SPECIALS = [
   { value: "self", title: "mobile.marketing.applies.self", tone: "success" },
   { value: "code-only", title: "mobile.marketing.applies.code-only", tone: "info" },
   { value: "out-of-hours", title: "mobile.marketing.applies.out-of-hours", tone: "warning" },
   { value: "disabled", title: "mobile.marketing.applies.disabled", tone: "danger" },
 ];
+
+/** P2: where a promotion stands; a promotion that is off is `muted`. */
+const APPLIES_TONES = { self: "success", "code-only": "info", "out-of-hours": "warning", disabled: "muted" };
+
+/** P2: an application the code gave nothing on is a warning, one it gave something on is a success. */
+const APPLICATION_TONES = { applied: "success", invalid: "warning" };
 
 const APPLICATION_SPECIALS = [
   { value: "applied", title: "mobile.marketing.application.applied", tone: "success" },
@@ -225,7 +289,7 @@ const SUMMARY_FIELDS: FieldDefinition[] = [
 ];
 
 const CODE_FIELDS: FieldDefinition[] = [
-  { name: "status", title: "mobile.marketing.field.status", format: "enum", readonly: true, specials: STATUS_SPECIALS },
+  { name: "status", title: "mobile.marketing.field.status", format: "enum", readonly: true, specials: STATUS_SPECIALS, "x-tones": STATUS_TONES },
   { name: "worksNow", title: "mobile.marketing.field.worksNow", format: "boolean", readonly: true },
   { name: "description", title: "mobile.marketing.field.description", format: "text", readonly: true },
   { name: "gives", title: "mobile.marketing.field.gives", format: "text", readonly: true, section: "mobile.marketing.section.gives" },
@@ -242,7 +306,7 @@ const CODE_FIELDS: FieldDefinition[] = [
 ];
 
 const PROMOTION_FIELDS: FieldDefinition[] = [
-  { name: "appliesNow", title: "mobile.marketing.field.appliesNow", format: "enum", readonly: true, specials: APPLIES_SPECIALS },
+  { name: "appliesNow", title: "mobile.marketing.field.appliesNow", format: "enum", readonly: true, specials: APPLIES_SPECIALS, "x-tones": APPLIES_TONES },
   { name: "badge", title: "mobile.marketing.field.badge", format: "text", readonly: true },
   { name: "enable", title: "mobile.marketing.field.promotionEnable", format: "boolean", readonly: true },
   { name: "onlyByCode", title: "mobile.marketing.field.onlyByCode", format: "boolean", readonly: true },
@@ -286,7 +350,7 @@ const PROMOTION_FIELDS: FieldDefinition[] = [
 ];
 
 const APPLICATION_FIELDS: FieldDefinition[] = [
-  { name: "status", title: "mobile.marketing.field.applicationStatus", format: "enum", readonly: true, specials: APPLICATION_SPECIALS },
+  { name: "status", title: "mobile.marketing.field.applicationStatus", format: "enum", readonly: true, specials: APPLICATION_SPECIALS, "x-tones": APPLICATION_TONES },
   { name: "code", title: "mobile.marketing.field.code", format: "text", readonly: true },
   { name: "why", title: "mobile.marketing.field.why", format: "text", readonly: true },
   { name: "discount", title: "mobile.marketing.field.discount", format: "money", readonly: true, section: "mobile.marketing.section.order" },
@@ -407,7 +471,13 @@ export function registerMarketing(registry: MobileApiRegistry, marketing: Market
     access: section,
     model: "summary",
     input: { type: "object", properties: { days: DAYS } },
-    ui: { view: "detail", item: { title: "title", subtitle: "subtitle" }, chips: "days" },
+    ui: {
+      view: "detail",
+      item: { title: "title", subtitle: "subtitle" },
+      chips: "days",
+      section: "mobile.marketing.sections.summary",
+      summary: SUMMARY_BLOCKS,
+    },
     handler: async ({ days }: { days: string }, ctx: MethodContext) => {
       const [mayCodes, mayPromotions, mayOrders] = await Promise.all([ctx.can(CODES), ctx.can(PROMOTIONS), ctx.can(ORDERS)]);
       const item = await marketing.summary({
@@ -430,8 +500,118 @@ export function registerMarketing(registry: MobileApiRegistry, marketing: Market
       if (await ctx.canOpen("marketing.applications")) {
         links.push(link(counted(ctx.t("mobile.marketing.link.applications"), item.applications ?? 0), { method: "marketing.applications" }));
       }
-      return { item: { ...item, _links: links } };
+      return { item: { ...withSummaryBlocks(item), _links: links } };
     },
+  });
+
+  // ---- the promotions ----
+
+  registry.registerMethod({
+    name: "marketing.promotions",
+    app: "marketing",
+    kind: "query",
+    title: "mobile.marketing.promotions.title",
+    access: promotions,
+    model: "promotion",
+    input: {
+      type: "object",
+      properties: {
+        q: { type: "string", maxLength: 100 },
+        filter: PROMOTION_FILTER,
+        /** The promotions of one code: where the card of a code leads. */
+        code: { type: "string", maxLength: 100 },
+        cursor: { type: "string", maxLength: 200 },
+      },
+    },
+    ui: {
+      view: "list",
+      item: { title: "name", subtitle: "gives", meta: "schedule", badge: "appliesNow" },
+      search: "q",
+      chips: "filter",
+      open: "marketing.promotion",
+      empty: "mobile.marketing.promotions.empty",
+      section: "mobile.marketing.sections.promotions",
+      columns: [
+        // What it gives is the subtitle of a row and no field of the model: the columns are what the model declares.
+        { field: "appliesNow", width: "narrow" },
+        { field: "discountType" },
+        { field: "schedule", width: "wide" },
+        { field: "promotionCodes" },
+        { field: "kind", width: "narrow" },
+      ],
+    },
+    handler: async (params: { q?: string; filter: string; code?: string; cursor?: string }, ctx) => {
+      const offset = decodeCursor(params.cursor, ctx);
+      const { items, counts } = await marketing.promotions({
+        q: params.q?.trim() || undefined,
+        filter: params.filter === "all" ? undefined : params.filter,
+        code: params.code?.trim() || undefined,
+        lang: ctx.lang,
+      });
+      return { ...page(items, offset, PAGE_SIZE), counts };
+    },
+  });
+
+  registry.registerMethod({
+    name: "marketing.promotion",
+    app: "marketing",
+    kind: "query",
+    title: "mobile.marketing.promotion.title",
+    access: promotions,
+    model: "promotion",
+    input: { type: "object", required: ["id"], properties: { id: ID } },
+    ui: { view: "detail", item: { title: "name", subtitle: "gives", badge: "appliesNow" } },
+    handler: async ({ id }: { id: string }, ctx) => {
+      const item = await marketing.promotion(id, ctx.lang);
+      if (!item) return ctx.fail("not_found", "No such promotion");
+      return { item: { ...item, _links: await promotionLinks(ctx, item) } };
+    },
+  });
+
+  /** The links of a promotion's card: the codes it works through. */
+  async function promotionLinks(ctx: MethodContext, item: PromotionItem): Promise<RecordLink[]> {
+    if (!item.promotionCodes || !(await ctx.canOpen("marketing.promocodes"))) return [];
+    return [link(ctx.t("mobile.marketing.link.codesOfPromotion"), { method: "marketing.promocodes", params: { q: item.name } }, item.promotionCodes)];
+  }
+
+  registry.registerMethod({
+    name: "marketing.setPromotionEnabled",
+    app: "marketing",
+    kind: "mutation",
+    title: "mobile.marketing.setPromotionEnabled.title",
+    access: promotions,
+    input: { type: "object", required: ["id", "enable"], properties: { id: ID, enable: { type: "boolean" } } },
+    ui: {
+      view: "action",
+      on: "promotion",
+      placement: ["row", "detail"],
+      control: { type: "toggle", param: "enable", bind: "enable" },
+      confirm: "mobile.marketing.setPromotionEnabled.confirm",
+    },
+    handler: async ({ id, enable }: { id: string; enable: boolean }, ctx) => {
+      const item = await marketing.setPromotionEnabled(id, enable, ctx.lang);
+      if (!item) return ctx.fail("not_found", "No such promotion");
+      return { item: { ...item, _links: await promotionLinks(ctx, item) } };
+    },
+    audit: ({ id, enable }) => ({ record: id, params: { enable } }),
+  });
+
+  registry.registerMethod({
+    name: "marketing.setPromotionOnlyByCode",
+    app: "marketing",
+    kind: "mutation",
+    title: "mobile.marketing.setPromotionOnlyByCode.title",
+    access: promotions,
+    input: { type: "object", required: ["id", "onlyByCode"], properties: { id: ID, onlyByCode: { type: "boolean" } } },
+    ui: { view: "action", on: "promotion", placement: ["detail"], control: { type: "toggle", param: "onlyByCode", bind: "onlyByCode" } },
+    // A promotion that is switched off applies nowhere, so "only by code" is nothing to say about it.
+    describeItem: (_ctx, record: PromotionItem) => (record?.enable === false ? false : undefined),
+    handler: async ({ id, onlyByCode }: { id: string; onlyByCode: boolean }, ctx) => {
+      const item = await marketing.setPromotionOnlyByCode(id, onlyByCode, ctx.lang);
+      if (!item) return ctx.fail("not_found", "No such promotion");
+      return { item: { ...item, _links: await promotionLinks(ctx, item) } };
+    },
+    audit: ({ id, onlyByCode }) => ({ record: id, params: { onlyByCode } }),
   });
 
   // ---- the promo codes ----
@@ -454,6 +634,14 @@ export function registerMarketing(registry: MobileApiRegistry, marketing: Market
       chips: "status",
       open: "marketing.promocode",
       empty: "mobile.marketing.promocodes.empty",
+      section: "mobile.marketing.sections.codes",
+      columns: [
+        { field: "status", width: "narrow" },
+        { field: "description", width: "wide" },
+        { field: "gives", width: "wide" },
+        { field: "period" },
+        { field: "worksNow", width: "narrow" },
+      ],
     },
     handler: async (params: { q?: string; status: string; cursor?: string }, ctx) => {
       const offset = decodeCursor(params.cursor, ctx);
@@ -535,107 +723,6 @@ export function registerMarketing(registry: MobileApiRegistry, marketing: Market
       return { item: { ...saved.item, _links: await codeLinks(ctx, saved.item) } };
     },
     audit: (params, result: { item?: CodeItem }) => ({ record: result?.item?.id ?? null, params: { code: params.code } }),
-  });
-
-  // ---- the promotions ----
-
-  registry.registerMethod({
-    name: "marketing.promotions",
-    app: "marketing",
-    kind: "query",
-    title: "mobile.marketing.promotions.title",
-    access: promotions,
-    model: "promotion",
-    input: {
-      type: "object",
-      properties: {
-        q: { type: "string", maxLength: 100 },
-        filter: PROMOTION_FILTER,
-        /** The promotions of one code: where the card of a code leads. */
-        code: { type: "string", maxLength: 100 },
-        cursor: { type: "string", maxLength: 200 },
-      },
-    },
-    ui: {
-      view: "list",
-      item: { title: "name", subtitle: "gives", meta: "schedule", badge: "appliesNow" },
-      search: "q",
-      chips: "filter",
-      open: "marketing.promotion",
-      empty: "mobile.marketing.promotions.empty",
-    },
-    handler: async (params: { q?: string; filter: string; code?: string; cursor?: string }, ctx) => {
-      const offset = decodeCursor(params.cursor, ctx);
-      const { items, counts } = await marketing.promotions({
-        q: params.q?.trim() || undefined,
-        filter: params.filter === "all" ? undefined : params.filter,
-        code: params.code?.trim() || undefined,
-        lang: ctx.lang,
-      });
-      return { ...page(items, offset, PAGE_SIZE), counts };
-    },
-  });
-
-  registry.registerMethod({
-    name: "marketing.promotion",
-    app: "marketing",
-    kind: "query",
-    title: "mobile.marketing.promotion.title",
-    access: promotions,
-    model: "promotion",
-    input: { type: "object", required: ["id"], properties: { id: ID } },
-    ui: { view: "detail", item: { title: "name", subtitle: "gives", badge: "appliesNow" } },
-    handler: async ({ id }: { id: string }, ctx) => {
-      const item = await marketing.promotion(id, ctx.lang);
-      if (!item) return ctx.fail("not_found", "No such promotion");
-      return { item: { ...item, _links: await promotionLinks(ctx, item) } };
-    },
-  });
-
-  /** The links of a promotion's card: the codes it works through. */
-  async function promotionLinks(ctx: MethodContext, item: PromotionItem): Promise<RecordLink[]> {
-    if (!item.promotionCodes || !(await ctx.canOpen("marketing.promocodes"))) return [];
-    return [link(ctx.t("mobile.marketing.link.codesOfPromotion"), { method: "marketing.promocodes", params: { q: item.name } }, item.promotionCodes)];
-  }
-
-  registry.registerMethod({
-    name: "marketing.setPromotionEnabled",
-    app: "marketing",
-    kind: "mutation",
-    title: "mobile.marketing.setPromotionEnabled.title",
-    access: promotions,
-    input: { type: "object", required: ["id", "enable"], properties: { id: ID, enable: { type: "boolean" } } },
-    ui: {
-      view: "action",
-      on: "promotion",
-      placement: ["row", "detail"],
-      control: { type: "toggle", param: "enable", bind: "enable" },
-      confirm: "mobile.marketing.setPromotionEnabled.confirm",
-    },
-    handler: async ({ id, enable }: { id: string; enable: boolean }, ctx) => {
-      const item = await marketing.setPromotionEnabled(id, enable, ctx.lang);
-      if (!item) return ctx.fail("not_found", "No such promotion");
-      return { item: { ...item, _links: await promotionLinks(ctx, item) } };
-    },
-    audit: ({ id, enable }) => ({ record: id, params: { enable } }),
-  });
-
-  registry.registerMethod({
-    name: "marketing.setPromotionOnlyByCode",
-    app: "marketing",
-    kind: "mutation",
-    title: "mobile.marketing.setPromotionOnlyByCode.title",
-    access: promotions,
-    input: { type: "object", required: ["id", "onlyByCode"], properties: { id: ID, onlyByCode: { type: "boolean" } } },
-    ui: { view: "action", on: "promotion", placement: ["detail"], control: { type: "toggle", param: "onlyByCode", bind: "onlyByCode" } },
-    // A promotion that is switched off applies nowhere, so "only by code" is nothing to say about it.
-    describeItem: (_ctx, record: PromotionItem) => (record?.enable === false ? false : undefined),
-    handler: async ({ id, onlyByCode }: { id: string; onlyByCode: boolean }, ctx) => {
-      const item = await marketing.setPromotionOnlyByCode(id, onlyByCode, ctx.lang);
-      if (!item) return ctx.fail("not_found", "No such promotion");
-      return { item: { ...item, _links: await promotionLinks(ctx, item) } };
-    },
-    audit: ({ id, onlyByCode }) => ({ record: id, params: { onlyByCode } }),
   });
 
   // ---- the editor of a promotion: a screen the client draws itself (Q43) ----
@@ -776,6 +863,14 @@ export function registerMarketing(registry: MobileApiRegistry, marketing: Market
       chips: "status",
       open: "marketing.application",
       empty: "mobile.marketing.applications.empty",
+      section: "mobile.marketing.sections.applications",
+      columns: [
+        { field: "status", width: "narrow" },
+        { field: "code" },
+        { field: "why", width: "wide" },
+        { field: "discount", align: "end" },
+        { field: "createdAt", align: "end" },
+      ],
     },
     handler: async (params: { code?: string; status: string; from?: string; to?: string; cursor?: string }, ctx) => {
       const offset = decodeCursor(params.cursor, ctx);

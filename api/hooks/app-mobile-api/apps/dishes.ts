@@ -124,6 +124,13 @@ export function registerDishes(registry: MobileApiRegistry, stock: StockPort): v
       chips: "filter",
       open: "dishes.get",
       empty: "mobile.dishes.empty",
+      columns: [
+        { field: "groupTitle", width: "wide" },
+        { field: "code", width: "narrow" },
+        { field: "price", align: "end" },
+        { field: "balance", align: "end", width: "narrow" },
+        { field: "placeEnable", width: "narrow" },
+      ],
     },
     handler: async (params: { filter: "limited" | "stop" | "all"; q?: string; cursor?: string }, ctx) => {
       const placeId = placeOf(ctx);

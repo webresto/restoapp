@@ -94,8 +94,10 @@ describe("app-mobile-api in Sails", function () {
     const describe = await request("GET", "/api/mobile/describe?lang=ru", { token });
     expect(describe.status, JSON.stringify(describe.body)).to.equal(200);
     const declaration = describe.body.result;
-    expect(declaration.apps.map((app: any) => app.id)).to.deep.equal(["dishes"]);
+    // «Главная» of the same points comes first, with the stock block only (apps/home.ts).
+    expect(declaration.apps.map((app: any) => app.id)).to.deep.equal(["home", "dishes"]);
     expect(declaration.apps[0].places.sort()).to.deep.equal(["stand-a", "stand-b"]);
+    expect(declaration.apps[1].places.sort()).to.deep.equal(["stand-a", "stand-b"]);
   });
 
   it("writes stock at one point through core, as the web stock reads it", async () => {
@@ -135,8 +137,10 @@ describe("app-mobile-api in Sails", function () {
   it("gives an Operator «Заказы» and no «Блюда», a panel-only user nothing, the administrator both", async () => {
     const operator = await signIn("stand-operator");
     const operatorApps = (await request("GET", "/api/mobile/describe", { token: operator })).body.result.apps;
-    expect(operatorApps.map((app: any) => app.id)).to.deep.equal(["orders"]);
-    expect(operatorApps[0].places).to.deep.equal(["stand-a", "no-kitchen"]);
+    expect(operatorApps.map((app: any) => app.id)).to.deep.equal(["home", "orders"]);
+    // «Главная» is of the points themselves: «Без кухни» is an option of the orders, not a point.
+    expect(operatorApps[0].places).to.deep.equal(["stand-a"]);
+    expect(operatorApps[1].places).to.deep.equal(["stand-a", "no-kitchen"]);
 
     const panelOnly = await signIn("stand-panel");
     expect((await request("GET", "/api/mobile/describe", { token: panelOnly })).body.result.apps).to.deep.equal([]);
@@ -146,13 +150,15 @@ describe("app-mobile-api in Sails", function () {
     // The apps of the hook itself. A module may bring one of its own — «Навигация» of
     // simple-navigation when that module is installed into `modules/` (D12) — and then it is here too.
     const own = declaration.apps.map((app: any) => app.id).filter((id: string) => id !== "navigation");
-    expect(own).to.deep.equal(["dishes", "orders", "clients", "pos", "marketing", "channels", "settings", "system"]);
-    expect(declaration.apps[0].places.sort()).to.deep.equal(["stand-a", "stand-b"]);
+    expect(own).to.deep.equal(["home", "dishes", "orders", "clients", "pos", "marketing", "channels", "settings", "system"]);
+    expect(declaration.apps[1].places.sort()).to.deep.equal(["stand-a", "stand-b"]);
     // «Заказы» take pickup points too, and «Без кухни» is always among the administrator's.
-    expect(declaration.apps[1].places.sort()).to.deep.equal(["no-kitchen", "stand-a", "stand-b", "stand-p"]);
+    expect(declaration.apps[2].places.sort()).to.deep.equal(["no-kitchen", "stand-a", "stand-b", "stand-p"]);
+    // «Главная» is of every point, pickup ones too, and «Без кухни» is not a point of it.
+    expect(declaration.apps[0].places.sort()).to.deep.equal(["stand-a", "stand-b", "stand-p"]);
     // The POS is read at a kitchen, so its points are the cooking ones; and it says that the client
     // draws it, which is the only thing that makes it different from the three above.
-    const pos = declaration.apps[3];
+    const pos = declaration.apps[4];
     expect(pos.client).to.deep.equal({ native: "pos", min: 1 });
     expect(pos.places.sort()).to.deep.equal(["stand-a", "stand-b"]);
   });
@@ -269,6 +275,19 @@ describe("app-mobile-api in Sails", function () {
     expect(drafts.map((order: any) => order.id)).to.not.include(draft.id);
     const board = (await call(admin, "orders.list", { params: {}, place })).body.result;
     expect(board.items.map((item: any) => item.id)).to.include(draft.id);
+
+    // Its card: the lines core counted, the totals, and the way to the customer it was taken for.
+    const card = (await call(admin, "orders.get", { params: { id: draft.id }, place })).body.result.item;
+    expect(card.lines.reduce((sum: number, line: any) => sum + line.value, 0)).to.be.greaterThan(0);
+    expect(card.totals[card.totals.length - 1]).to.deep.equal({ title: "Total", value: 1770, format: "money", strong: true });
+    expect(card.customerId).to.equal(withGuest.order.clientId);
+    expect(card._links[0].open).to.deep.equal({ app: "clients", method: "clients.get", params: { id: withGuest.order.clientId } });
+
+    // And what the customer spent is that order.
+    const customer = (await call(admin, "clients.get", { params: { id: withGuest.order.clientId } })).body.result.item;
+    expect(customer).to.include({ spent: 1770, averageCheck: 1770 });
+    expect(customer.recentOrders[0]).to.include({ value: 1770, format: "money" });
+    expect(customer.recentOrders[0]._open).to.deep.equal({ app: "orders", method: "orders.get", params: { id: draft.id }, place });
   });
 
   it("chooses the modifiers of a dish through core: the line keeps what was chosen, and the price with it", async () => {
@@ -622,6 +641,12 @@ describe("app-mobile-api in Sails", function () {
     const cardB = (await call(admin, "orders.get", { params: { id: routed }, place: "stand-b" })).body.result.item;
     expect(cardA.contents, "each kitchen sees what it has to make").to.equal("1 × Борщ рут");
     expect(cardB.contents).to.equal("2 × Плов рут");
+    // The same lines as data, and the portions on the rows of each board.
+    expect(cardA.lines.map((line: any) => [line.title, line.amount])).to.deep.equal([["Борщ рут", 1]]);
+    expect(cardB.lines.map((line: any) => [line.title, line.amount, line.value])).to.deep.equal([["Плов рут", 2, 900]]);
+    expect(atA.items.find((item: any) => item.id === routed)).to.include({ itemsCount: 1, itemsText: "1 item" });
+    expect(atB.items.find((item: any) => item.id === routed).itemsCount).to.equal(2);
+    expect(atA.description).to.match(/ · \d+ orders? today, \d+ in progress$/);
 
     const fromSecond = await call(admin, "orders.setState", { params: { id: routed, to: "COOKING" }, place: "stand-b" });
     expect(fromSecond.status, JSON.stringify(fromSecond.body)).to.equal(409);

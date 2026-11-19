@@ -1,6 +1,7 @@
 import type {
   AssignKitchenOutcome,
   OrderItem,
+  OrderLine,
   OrdersActor,
   OrdersPort,
   SetStateOutcome,
@@ -23,26 +24,109 @@ const transitions = () => require(`${CORE}/lib/order/transitionOrder`);
 const kitchens = () => require(`${CORE}/lib/order/assignKitchen`);
 const stateFlow = () => require(`${CORE}/lib/order/OrderStateFlow`);
 
+declare const Dish: any;
+declare const PromotionCode: any;
+
+/** Whether this point makes the line: its own kitchen, or — without one — the leading point. */
+function lineIsOurs(line: any, place: string, leading: boolean): boolean {
+  const at = line.cookingPoint && typeof line.cookingPoint === "object" ? line.cookingPoint.id : line.cookingPoint;
+  return at ? String(at) === place : leading;
+}
+
+function amountOf(line: any): number {
+  return typeof line.amount === "number" ? line.amount : 1;
+}
+
 /**
- * The lines of the order this point has to make, in the order they were added: "2 × Борщ".
+ * The lines of the order this point has to make, in the order they were added.
  *
  * A line names its own kitchen only when a route planner gave it one; a line without one is cooked
  * at the leading point. So a kitchen that is not the leading one sees only what it was given — the
  * plan's «состав — строки этой точки» — and everyone else sees the whole order.
+ *
+ * The note of a line is its modifiers («Тонкое тесто · 2 × Сыр») and its comment; the value is what core
+ * counted for the line (`itemTotal`), or the price times the amount when it counted nothing.
  */
-async function contentsOf(orderId: string, place: string, leading: boolean): Promise<string> {
-  const lines = await OrderDish.find({ where: { order: orderId } }).populate("dish").sort("createdAt ASC");
-  return lines
-    .filter((line: any) => {
-      const at = line.cookingPoint && typeof line.cookingPoint === "object" ? line.cookingPoint.id : line.cookingPoint;
-      return at ? String(at) === place : leading;
-    })
-    .map((line: any) => {
-      const name = line.dish?.name ?? line.dish?.title ?? line.dish?.id ?? "—";
-      const amount = typeof line.amount === "number" ? line.amount : 1;
-      return `${amount} × ${name}`;
-    })
-    .join("\n");
+async function linesOf(orderId: string, place: string, leading: boolean): Promise<OrderLine[]> {
+  const rows = await OrderDish.find({ where: { order: orderId } }).populate("dish").sort("createdAt ASC");
+  const ours = rows.filter((line: any) => lineIsOurs(line, place, leading));
+  const modifierIds = [...new Set(ours.flatMap((line: any) => (Array.isArray(line.modifiers) ? line.modifiers : []).map((modifier: any) => String(modifier?.id ?? ""))).filter(Boolean))];
+  const modifiers = modifierIds.length ? await Dish.find({ where: { id: { in: modifierIds } } }) : [];
+  const modifierName = new Map(modifiers.map((dish: any) => [String(dish.id), dish.name ?? String(dish.id)]));
+  return ours.map((line: any) => {
+    const amount = amountOf(line);
+    const named = (Array.isArray(line.modifiers) ? line.modifiers : []).map((modifier: any) => {
+      const name = modifier?.dish?.name ?? modifierName.get(String(modifier?.id)) ?? null;
+      if (!name) return null;
+      const times = typeof modifier.amount === "number" ? modifier.amount : 1;
+      return times > 1 ? `${times} × ${name}` : name;
+    });
+    const note = [...named, line.comment || null].filter(Boolean).join(" · ");
+    // A line core has not counted yet carries zeros: the price of the dish is then the honest number.
+    const price = typeof line.itemPrice === "number" && line.itemPrice > 0 ? line.itemPrice : typeof line.dish?.price === "number" ? line.dish.price : 0;
+    const value = typeof line.itemTotal === "number" && line.itemTotal > 0 ? line.itemTotal : price * amount;
+    return {
+      title: line.dish?.name ?? line.dish?.title ?? line.name ?? line.dish?.id ?? "—",
+      amount,
+      ...(note ? { note } : {}),
+      value: Math.round(value * 100) / 100,
+    };
+  });
+}
+
+/** "2 × Борщ", one line each — the text field the card had before it had lines. */
+function contentsText(lines: OrderLine[]): string {
+  return lines.map((line) => `${line.amount} × ${line.title}`).join("\n");
+}
+
+/**
+ * How many portions each of these orders has at this point, in one query: the number on a row of the list.
+ */
+async function portionsOf(orders: any[], place: string, orderPlaceKey: (order: any) => string): Promise<Map<string, number>> {
+  const ids = orders.map((order) => String(order.id));
+  const result = new Map<string, number>(ids.map((id) => [id, 0]));
+  if (!ids.length) return result;
+  const leading = new Map(orders.map((order) => [String(order.id), orderPlaceKey(order) === place]));
+  const rows = await OrderDish.find({ where: { order: { in: ids } } });
+  for (const line of rows) {
+    const id = String(typeof line.order === "object" ? line.order?.id : line.order);
+    if (!result.has(id) || !lineIsOurs(line, place, leading.get(id) ?? false)) continue;
+    result.set(id, (result.get(id) ?? 0) + amountOf(line));
+  }
+  return result;
+}
+
+/**
+ * «−10%» for a code all of whose promotions take the same percentage off — the words of the totals line.
+ * A flat discount or a mix of promotions says nothing: the line already carries the money.
+ */
+async function promoLabelOf(code: unknown): Promise<string | null> {
+  if (!code) return null;
+  try {
+    const id = typeof code === "object" ? (code as any).id : code;
+    const row = await PromotionCode.findOne({ id: String(id) }).populate("promotion");
+    const percents = new Set(
+      (row?.promotion ?? []).map((promotion: any) => {
+        const config = promotion?.configDiscount ?? {};
+        return config.discountType === "percentage" && Number(config.discountAmount) > 0 ? Number(config.discountAmount) : NaN;
+      }),
+    );
+    if (percents.size !== 1) return null;
+    const [percent] = [...percents] as number[];
+    return Number.isFinite(percent) ? `−${percent}%` : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The code that was taken, as typed; null when none was or it was refused (`promotionCode` is empty then). */
+function promoCodeOf(order: any): string | null {
+  const taken = order?.promotionCode !== null && order?.promotionCode !== undefined && order?.promotionCode !== "";
+  return taken && order.promotionCodeString ? String(order.promotionCodeString) : null;
+}
+
+function numberOr(value: unknown, fallback = 0): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
 function phoneOf(order: any): string {
@@ -83,13 +167,17 @@ export function coreOrders(): OrdersPort {
   /**
    * One order as the protocol has it. `summary` is the second line of a row: who and how.
    *
-   * The lines of the order are read only when the card asks for them: a list of fifty orders does
-   * not show them, and reading them would be fifty queries for nothing.
+   * The lines of the order are read only when the card asks for them (`place` given): a list of fifty orders
+   * does not show them — it shows how many portions there are, which `list` counts in one query for all rows.
    */
-  async function toItem(order: any, user: unknown, place: string | null = null): Promise<OrderItem> {
+  async function toItem(order: any, user: unknown, place: string | null = null, portions: number | null = null): Promise<OrderItem> {
     const number = order.shortId || String(order.id).slice(-8);
     const customerName = order?.customer?.name || "";
     const method = order.serviceType || "delivery";
+    const lines = place ? await linesOf(String(order.id), place, orderPlaceKey(order) === place) : null;
+    const discountTotal = numberOr(order.discountTotal);
+    const promoCode = promoCodeOf(order);
+    const owner = order.user && typeof order.user === "object" ? order.user.id : order.user;
     return {
       id: String(order.id),
       number,
@@ -103,12 +191,20 @@ export function coreOrders(): OrdersPort {
       method,
       address: addressOf(order),
       comment: order.comment || null,
-      contents: place ? await contentsOf(String(order.id), place, orderPlaceKey(order) === place) : "",
+      contents: lines ? contentsText(lines) : "",
       deliveryCost: typeof order?.delivery?.cost === "number" ? order.delivery.cost : 0,
       total: typeof order.total === "number" ? order.total : 0,
       paid: Boolean(order.paid),
       allowedTransitions: getAllowedOrderTransitionsByRole(order.state || "NEW", isOperatorUser(user)),
       placeId: orderPlaceKey(order),
+      itemsCount: lines ? lines.reduce((sum, line) => sum + line.amount, 0) : portions ?? 0,
+      table: method === "dine-in" && order.table ? String(order.table) : null,
+      customerId: owner ? String(owner) : null,
+      basketTotal: numberOr(order.basketTotal),
+      discount: discountTotal > 0 ? discountTotal : numberOr(order.promotionFlatDiscount),
+      promoCode,
+      promoLabel: lines && promoCode ? await promoLabelOf(order.promotionCode) : null,
+      ...(lines ? { lines } : {}),
     };
   }
 
@@ -126,7 +222,19 @@ export function coreOrders(): OrdersPort {
   return {
     async list(place, { tab, since, user }) {
       const rows = await selectOrders(place, { tab, since });
-      return Promise.all(rows.map((order: any) => toItem(order, user)));
+      const portions = await portionsOf(rows, place, orderPlaceKey);
+      return Promise.all(rows.map((order: any) => toItem(order, user, null, portions.get(String(order.id)) ?? 0)));
+    },
+
+    async countSince(place, from) {
+      // The board's own selection: what is under way, and what ended within its window — a day is inside both.
+      const [active, done] = await Promise.all([selectOrders(place, { tab: "active" }), selectOrders(place, { tab: "done" })]);
+      const seen = new Set<string>();
+      for (const order of [...active, ...done]) {
+        const at = order.orderedAt ? order.orderedAt * 1000 : millis(order.createdAt);
+        if (at >= from) seen.add(String(order.id));
+      }
+      return seen.size;
     },
 
     async counts(place) {

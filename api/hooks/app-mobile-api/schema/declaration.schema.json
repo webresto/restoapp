@@ -8,6 +8,12 @@
     "methodName": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-zA-Z0-9][a-zA-Z0-9-]*$", "maxLength": 128 },
     "text": { "type": "string", "minLength": 1, "maxLength": 200 },
     "tone": { "enum": ["info", "warning", "success", "danger"] },
+
+    "valueTone": {
+      "description": "The tone of a value in `x-tones` (P2): the tones of `tone` and `muted` — grey: done, cancelled, switched off. Only `x-tones` may say `muted`: `specials` and `control.tones` keep the four tones an older client knows.",
+      "enum": ["info", "warning", "success", "danger", "muted"]
+    },
+
     "format": { "enum": ["text", "number", "money", "percent", "datetime", "relative", "phone", "boolean", "enum", "image", "ref"] },
 
     "icon": {
@@ -120,6 +126,11 @@
         "section": { "$ref": "#/definitions/text" },
         "specials": { "type": "array", "items": { "$ref": "#/definitions/special" } },
         "x-titles": { "type": "object", "additionalProperties": { "$ref": "#/definitions/text" } },
+        "x-tones": {
+          "description": "P2. The tone of each value of an `enum` field, wherever it is shown as a badge, a dot or a column of a board. A value not here (or a tone not in the set) is drawn as without the key.",
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/valueTone" }
+        },
         "access": {
           "description": "Who may see this field. Without it — everybody the app is available to. A field the user may not see is not in their declaration at all, and its values are not computed either (the handler asks `ctx.can`).",
           "$ref": "#/definitions/access"
@@ -151,6 +162,77 @@
       }
     },
 
+    "column": {
+      "description": "P1. A column of the table of a `list` on a Medium+ window. Its head is the `title` of the model's field; a field the model does not declare is skipped.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field"],
+      "properties": {
+        "field": { "type": "string", "minLength": 1 },
+        "align": { "enum": ["start", "end"] },
+        "width": { "enum": ["narrow", "wide"] }
+      }
+    },
+
+    "board": {
+      "description": "P6. A board of a `list` on a Medium+ window: its columns are the values of the enum field `field` in the order of `order` (heads — `x-titles`, tones — `x-tones`); a record whose value is not in `order` is not on the board. On Compact — the list with a tab per value.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "order"],
+      "properties": {
+        "field": { "type": "string", "minLength": 1 },
+        "order": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+
+    "summaryBlock": {
+      "description": "P7. A block of the summary of a `detail`. `metric` — a number of the record (`delta`: the field with its change in %, the sign gives the tone); `series` — the field is an array [{x: string, y: number}]; `list` — [{title, value?, format?, amount?, note?}] (`amount` — «2 ×» before the title, `note` — a second line under it), with `totals` the field of the lines under them [{title, value, format?, tone?, strong?}]; `share` — [{title, value: number}]. The array fields are not declared in the model, so an older client shows the card of the declared fields. A client skips a block of a type it does not know.",
+      "type": "object",
+      "required": ["type", "field"],
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "metric" },
+            "field": { "type": "string", "minLength": 1 },
+            "title": { "$ref": "#/definitions/text" },
+            "format": { "$ref": "#/definitions/format" },
+            "delta": { "type": "string", "minLength": 1 }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "series" },
+            "field": { "type": "string", "minLength": 1 },
+            "title": { "$ref": "#/definitions/text" },
+            "format": { "$ref": "#/definitions/format" }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "list" },
+            "field": { "type": "string", "minLength": 1 },
+            "title": { "$ref": "#/definitions/text" },
+            "totals": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The field of the totals drawn under the lines, an array of the same shape [{title, value, format?, tone?, strong?}]: `tone` colours the value (a discount is `success`), `strong` is the line of the sum."
+            }
+          }
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "share" },
+            "field": { "type": "string", "minLength": 1 },
+            "title": { "$ref": "#/definitions/text" }
+          }
+        }
+      ]
+    },
+
     "ui": {
       "description": "Screen hints, version 1. Exactly these keys; anything else is refused at registration.",
       "type": "object",
@@ -167,7 +249,15 @@
             "meta": { "type": "string" },
             "value": { "type": "string" },
             "badge": { "type": "string" },
-            "image": { "type": "string" }
+            "image": { "type": "string" },
+            "detail": {
+              "type": "string",
+              "description": "The field of a third line of a row, drawn with the icon of the method (`orders.list`: `where` — the address, «Самовывоз», the table). A client that does not know it draws no such line."
+            },
+            "note": {
+              "type": "string",
+              "description": "The field of a short note at the bottom left of a row (`orders.list`: `itemsText` — «6 поз.»)."
+            }
           }
         },
         "groupBy": { "type": "string" },
@@ -181,7 +271,28 @@
         "confirm": { "$ref": "#/definitions/text" },
         "specials": { "type": "array", "items": { "$ref": "#/definitions/special" } },
         "bind": { "type": "string" },
-        "param": { "type": "string" }
+        "param": { "type": "string" },
+        "columns": {
+          "description": "P1, `list`: the columns of the table on a Medium+ window, in order, after the column of the record's title (`item.title`), which is always first and is not listed here. Without it — the columns of `item`.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/column" }
+        },
+        "primary": {
+          "description": "P3, an action (a mutation with `on`): the main write button of the record — one; of several, the first. With `control: buttons` of several values, the first value is the main button. The other write actions are secondary.",
+          "type": "boolean"
+        },
+        "section": {
+          "description": "P5, `list` or `detail` of a query: the section of the app it is, already in the language of the request. The sections are the methods with `section` in the order of `methods`, the first one being `home`; fewer than two — no sections.",
+          "$ref": "#/definitions/text"
+        },
+        "board": { "$ref": "#/definitions/board" },
+        "summary": {
+          "description": "P7, `detail`: the summary blocks over the card.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/summaryBlock" }
+        }
       }
     },
 
@@ -235,14 +346,20 @@
         "icon": { "$ref": "#/definitions/icon" },
         "category": { "$ref": "#/definitions/text" },
         "home": { "$ref": "#/definitions/methodName" },
+        "badge": {
+          "description": "P4. A method of this app counting what waits for the user: kind query, no required params (`place` only for an app by points), the result is a number. 0 or no answer — no badge.",
+          "$ref": "#/definitions/methodName"
+        },
         "scope": { "enum": ["server", "place"] },
         "places": {
-          "description": "Where the points of a scope:'place' app come from: the points granted by this contextual token, as in the web.",
+          "description": "Where the points of a scope:'place' app come from: the points granted by this contextual token, as in the web — or, with `anyOf`, by any one of these tokens («Главная»: the points of the orders and of the stock).",
           "type": "object",
           "additionalProperties": false,
-          "required": ["token", "kind"],
+          "required": ["kind"],
+          "oneOf": [{ "required": ["token"] }, { "required": ["anyOf"] }],
           "properties": {
             "token": { "type": "string", "minLength": 1 },
+            "anyOf": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
             "kind": { "enum": ["cooking", "pickup", "any"] },
             "options": {
               "description": "Options of the same token the app shows among its points although they are not Places — «Без кухни» of «Заказы». Titles are translation keys.",
@@ -308,6 +425,7 @@
         "icon": { "$ref": "#/definitions/icon" },
         "category": { "type": "string" },
         "home": { "$ref": "#/definitions/methodName" },
+        "badge": { "$ref": "#/definitions/methodName" },
         "scope": { "enum": ["server", "place"] },
         "places": { "type": "array", "items": { "type": "string" } },
         "models": { "type": "object", "additionalProperties": { "$ref": "#/definitions/model" } },
@@ -399,7 +517,11 @@
         },
         "nextCursor": { "type": ["string", "null"] },
         "counts": { "type": "object", "additionalProperties": { "type": "integer" } },
-        "total": { "type": "integer" }
+        "total": { "type": "integer" },
+        "description": {
+          "type": "string",
+          "description": "A line over the list in the language of the request, data and not a key: «Ленина, 5 · сегодня 14 заказов, 9 в работе». Absent — no line."
+        }
       }
     },
 
