@@ -64,6 +64,22 @@ describe("app-mobile-api", function () {
       expect(response.body.error).to.include({ code: "unavailable", retryable: true });
     });
 
+    it("lets the web build of the app (another origin) through CORS", async () => {
+      const origin = "http://192.168.1.11:17313";
+      const preflight = await request("OPTIONS", "/api/mobile/auth/login", {
+        headers: { origin, "access-control-request-method": "POST", "access-control-request-headers": "authorization,content-type" },
+      });
+      expect(preflight.status).to.equal(204);
+      expect(preflight.headers.get("access-control-allow-origin")).to.equal("*");
+      expect(preflight.headers.get("access-control-allow-methods")).to.include("POST");
+      expect(preflight.headers.get("access-control-allow-headers")).to.include("Authorization");
+
+      const describe = await request("GET", "/api/mobile/describe", { headers: { origin } });
+      expect(describe.status).to.equal(401);
+      expect(describe.headers.get("access-control-allow-origin")).to.equal("*");
+      expect(describe.headers.get("access-control-expose-headers")).to.include("X-Mobile-Revision");
+    });
+
     it("answers 404 in JSON inside the prefix, with no-store and the protocol header", async () => {
       const response = await request("GET", "/api/mobile/nothing");
       expect(response.status).to.equal(404);

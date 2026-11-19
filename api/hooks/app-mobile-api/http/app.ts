@@ -102,6 +102,18 @@ export function createMobileApi(deps: MobileApiDeps): express.Express {
   // it does not inherit the setting of Sails, so it is set here from the same value.
   app.set("trust proxy", deps.settings.trustProxy ?? false);
 
+  // The web build of the touch app runs on another origin. The API is bearer-only (no cookies), so any
+  // origin may call it; the app reads X-Mobile-Protocol / X-Mobile-Revision, so they are exposed.
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Expose-Headers", "X-Mobile-Protocol, X-Mobile-Revision, Retry-After");
+    if (req.method !== "OPTIONS") return next();
+    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, Accept-Language");
+    res.set("Access-Control-Max-Age", "600");
+    res.status(204).end();
+  });
+
   app.use((req: Request, res: Response, next: NextFunction) => {
     res.set("Cache-Control", "no-store");
     res.set("X-Mobile-Protocol", String(PROTOCOL_VERSION));
