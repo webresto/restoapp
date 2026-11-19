@@ -4,6 +4,9 @@
  */
 module.exports = {
   tableName: "mobile_auth_attempt",
+  // Not in the storefront's GraphQL: the mobile API's own records (devices, sign-in attempts, drafts) are
+  // nobody's public data — and a `userap` link has no type there, so the schema would not even build.
+  graphql: { public: false },
   attributes: {
     label: { type: "string", required: true },
     at: { type: "number", required: true },
