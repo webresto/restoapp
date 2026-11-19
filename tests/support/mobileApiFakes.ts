@@ -1781,8 +1781,23 @@ export async function listen(app: any): Promise<{ url: string; close(): Promise<
 }
 
 export async function solve(task: number[]): Promise<string> {
+  // crypto-puzzle's own `solve` loses a leading zero byte of the 32-byte key (BigEnc.decode), so one puzzle in
+  // ~256 fails to decrypt with an OperationError. The app's solver pads the key (KotlinPuzzleSolver, KEY_BYTES);
+  // so does this one — the same steps, the key left-padded to 32 bytes.
   const adminizerDir = path.dirname(require.resolve("adminizer"));
   const entry = require.resolve("crypto-puzzle", { paths: [adminizerDir] });
-  const Puzzle = (await import(pathToFileURL(entry).href)).default;
-  return Puzzle.solve(Uint8Array.from(task));
+  const dist = path.dirname(entry);
+  const load = async (specifier: string) => (await import(pathToFileURL(specifier).href)).default ?? (await import(pathToFileURL(specifier).href));
+  const from = (name: string) => require.resolve(name, { paths: [dist] });
+  const Archiver = await load(path.join(dist, "archiver.js"));
+  const { sfme } = await import(pathToFileURL(path.join(dist, "utils.js")).href);
+  const BigEnc = await load(from("bigint-encoding"));
+  const Encryptor = await load(from("tiny-encryptor"));
+  const U8 = await load(from("uint8-encoding"));
+  const [n, a, t, Ck, Cm] = Archiver.unarchive(Uint8Array.from(task));
+  const b = sfme(a, t, n);
+  const raw: Uint8Array = BigEnc.decode(Ck - b);
+  const key = new Uint8Array(32);
+  key.set(raw, 32 - raw.length);
+  return U8.decode(await Encryptor.decrypt(Cm, key));
 }
