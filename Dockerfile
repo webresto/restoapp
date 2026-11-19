@@ -80,14 +80,17 @@ WORKDIR /app
 COPY --from=cacher_modules /app/ .
 # Dev dependencies (mocha, tsx, chai) are not in --production install
 # so we install them on top with npm
-RUN npm install --ignore-scripts \
+# npm reconciles the whole tree on install: `file:./local_modules/*` are gone here (removed in cacher_modules),
+# so it would drop @webresto/core and graphql from node_modules. Keep them aside and put them back.
+RUN cp -a node_modules/@webresto /tmp/webresto && npm install --ignore-scripts \
     mocha \
     tsx \
     chai \
     dotenv \
     @types/mocha \
     @types/chai \
-    @types/node
+    @types/node \
+ && rm -rf node_modules/@webresto && mv /tmp/webresto node_modules/@webresto
 # tests/mobile-api.test.ts: the mobile API (api/hooks/app-mobile-api) on fake deps, with the real
 # AccessRightsHelper of the installed adminizer; tests/mobile-api.sails.test.ts needs the lifted stand
 # and runs with `npm test`.
