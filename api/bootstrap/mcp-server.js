@@ -32,6 +32,7 @@ module.exports.default = async function (sails) {
     'health':       'Application health and liveness checks.',
     'admin-info':   'Admin and instance metadata: versions, environment info.',
     'modules-info': 'Installed modules / packages and their metadata.',
+    'modules':      'Module jobs of the module manager: install, update, remove a marketplace module, read a job. A restart loads the new code.',
     'menu':         'Public menu catalogue: browse groups, dishes and single items.',
     'restart':      'Process control: restart the application.',
     'upload-image': 'Upload images to the media library.',
