@@ -126,6 +126,9 @@ module.exports.adminpanel = {
   },
   // the menu under the brand, after «Админ-панель»: the storefront, in a new tab
   sections: [{ id: 'site', title: 'Site', link: '/', type: 'blank', icon: 'storefront' }],
+  // Help panel (adminizer 5.2+). The articles come from whoever registers a documentation
+  // service: now the admin-frontend module (mobile app section).
+  documentation: { enabled: true },
   aiAssistant: {
     // This must be enabled before Adminizer starts, otherwise it never creates
     // aiAssistantHandler for model registration.
