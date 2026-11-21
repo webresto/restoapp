@@ -34,6 +34,10 @@ export interface ServerState {
   version: string | null;
   timezone: string | null;
   currency: string | null;
+  /** When the process that answered started (ms): «Работает 3 дн 4 ч» on the card. Null — not known. */
+  startedAt?: number | null;
+  /** Composed by the app from [startedAt]: how long the server has been running, in the person's words. */
+  uptime?: string;
   /** What the installation is built of (`MM_SYSTEM_MODULES`) and what was installed into it. */
   systemCount: number;
   installedCount: number;
@@ -41,6 +45,15 @@ export interface ServerState {
   updatesCount: number;
   /** Modules whose migrations on disk are not the migrations the database has processed. */
   migrationsPending: number;
+  /**
+   * Modules installed, updated or removed since this process started: on the disk and in the table, not yet in
+   * the running code (their hooks run only at the start). Absent — not known.
+   */
+  changedSinceStart?: { appId: string; name: string; version: string | null; removed: boolean }[];
+  /** The module manager's own «restart required» (migrations it ran after the start). */
+  restartRequired?: boolean;
+  /** Composed by the app: P12 — the note over the card, «Нужен перезапуск сервера». */
+  notice?: { tone: string; title: string; text?: string; actions?: { title: string; method: string; input: Record<string, unknown>; tone?: string }[] };
   /** The restart of the application, as the worker that answered knows it. */
   restartScheduled: boolean;
   restartAt: number | null;
@@ -193,6 +206,8 @@ const STATE_TONES = { ok: "success", system: "info", update: "warning", "not-loa
 
 const SERVER_FIELDS: FieldDefinition[] = [
   { name: "version", title: "mobile.system.field.version", format: "text", readonly: true, section: "mobile.system.section.server" },
+  { name: "uptime", title: "mobile.system.field.uptime", format: "text", readonly: true, section: "mobile.system.section.server" },
+  { name: "startedAt", title: "mobile.system.field.startedAt", format: "datetime", readonly: true, section: "mobile.system.section.server" },
   { name: "timezone", title: "mobile.system.field.timezone", format: "text", readonly: true, section: "mobile.system.section.server" },
   { name: "currency", title: "mobile.system.field.currency", format: "text", readonly: true, section: "mobile.system.section.server" },
   { name: "systemCount", title: "mobile.system.field.systemCount", format: "number", readonly: true, section: "mobile.system.section.programs", access: programs },
@@ -268,7 +283,7 @@ function link(title: string, open: OpenTarget, meta?: string): RecordLink {
   return meta ? { title, meta, open } : { title, open };
 }
 
-/** "Программы · 4" — a count belongs in the title of a link, which is data and is not translated. */
+/** "Модули · 4" — a count belongs in the title of a link, which is data and is not translated. */
 function counted(title: string, count: number): string {
   return `${title} · ${count}`;
 }
@@ -321,7 +336,14 @@ export function registerSystem(registry: MobileApiRegistry, system: SystemPort):
     // No badge: the card of a server has no one word for its state — what is going on with it is
     // said by the lines of «Что сейчас», and a badge with nothing in it draws «—».
     // P5: the first section is the home one; the programs and the marketplace follow for whoever leads them.
-    ui: { view: "detail", item: { title: "title", subtitle: "subtitle" }, section: "mobile.system.sections.server" },
+    // P12: the note «Нужен перезапуск сервера» over the card, when modules changed since the start (a client that does
+    // not know the block skips it; «Что сейчас» still says a restart is planned).
+    ui: {
+      view: "detail",
+      item: { title: "title", subtitle: "subtitle" },
+      section: "mobile.system.sections.server",
+      summary: [{ type: "notice", field: "notice", covers: ["restartText"] }],
+    },
     handler: async (_params: Record<string, never>, ctx: MethodContext) => ({ item: await serverCard(ctx) }),
   });
 
@@ -329,11 +351,14 @@ export function registerSystem(registry: MobileApiRegistry, system: SystemPort):
   async function serverCard(ctx: MethodContext) {
       const item = await system.server();
       const mayPrograms = await ctx.can(MODULES_TOKEN);
+      if (item.startedAt) item.uptime = uptimeText(ctx, Date.now() - item.startedAt);
       // The state of the server is the business of whoever may change it: a person who only leads
       // the settings is not told that a restart is scheduled, because they cannot act on it.
       if (mayPrograms) {
         if (item.restarting) item.restartText = ctx.t("mobile.system.restart.restarting");
         else if (item.restartScheduled) item.restartText = ctx.t("mobile.system.restart.scheduled");
+        const notice = restartNotice(ctx, item);
+        if (notice) item.notice = notice;
         if (item.migrationsPending > 0) {
           item.migrationsText = `${ctx.t("mobile.system.migrations.pending")} · ${item.migrationsPending}`;
         }
@@ -345,6 +370,44 @@ export function registerSystem(registry: MobileApiRegistry, system: SystemPort):
         if (!item.licensed) item.marketplaceText = ctx.t("mobile.system.marketplace.noLicense");
       }
       return { ...item, _links: await homeLinks(ctx, item, mayPrograms) };
+  }
+
+  /**
+   * P12: «Нужен перезапуск сервера» — modules changed since the start are not running yet. Says which, whether the
+   * restart is already planned, and offers to plan it for the night; «Перезапустить сейчас» stays the card's own
+   * button, which asks «you sure?» first. Null when nothing waits for a restart.
+   */
+  function restartNotice(ctx: MethodContext, item: ServerState): ServerState["notice"] | null {
+    if (item.restarting) return { tone: "info", title: ctx.t("mobile.system.restart.restarting") };
+    const changed = item.changedSinceStart ?? [];
+    if (!changed.length && !item.restartRequired) return null;
+    const names = changed.map((m) => (m.removed ? `${m.name} (${ctx.t("mobile.system.restartNeeded.removed")})` : m.version ? `${m.name} ${m.version}` : m.name));
+    const what = names.length
+      ? `${ctx.t("mobile.system.restartNeeded.modules")}: ${names.join(", ")}. ${ctx.t("mobile.system.restartNeeded.after")}`
+      : ctx.t("mobile.system.restartNeeded.migrations");
+    const when = item.restartScheduled ? ctx.t("mobile.system.restart.scheduled") : ctx.t("mobile.system.restartNeeded.choose");
+    return {
+      tone: "warning",
+      title: ctx.t("mobile.system.restartNeeded.title"),
+      text: `${what} ${when}`,
+      ...(item.restartScheduled
+        ? {}
+        : { actions: [{ title: ctx.t("mobile.system.restart.midnight"), method: "system.restart", input: { when: "midnight" } }] }),
+    };
+  }
+
+  /** «3 дн 4 ч», «5 ч 12 мин», «7 мин»: the two largest units, as a person says how long something has run. */
+  function uptimeText(ctx: MethodContext, ms: number): string {
+    const minutes = Math.max(0, Math.floor(ms / 60_000));
+    const days = Math.floor(minutes / 1440);
+    const hours = Math.floor((minutes % 1440) / 60);
+    const rest = minutes % 60;
+    const d = ctx.t("mobile.system.unit.days");
+    const h = ctx.t("mobile.system.unit.hours");
+    const m = ctx.t("mobile.system.unit.minutes");
+    if (days > 0) return hours > 0 ? `${days} ${d} ${hours} ${h}` : `${days} ${d}`;
+    if (hours > 0) return rest > 0 ? `${hours} ${h} ${rest} ${m}` : `${hours} ${h}`;
+    return `${Math.max(rest, 1)} ${m}`;
   }
 
   /**

@@ -116,7 +116,7 @@ describe("app-mobile-api: «Система»", function () {
 
       expect(await fieldsOf("sysop")).to.include.members(["systemCount", "installedCount", "disabledCount", "updatesCount", "restartText"]);
       // The settings alone: the version of the server, and not a word about its modules.
-      expect(await fieldsOf("settler")).to.deep.equal(["version", "timezone", "currency"]);
+      expect(await fieldsOf("settler")).to.deep.equal(["version", "uptime", "startedAt", "timezone", "currency"]);
       // `access` is the server's own business and never travels.
       const fields = (await appOf(await login("sysop"))).models.serverCard.fields;
       expect(fields.every((field: any) => field.access === undefined)).to.equal(true);
@@ -126,7 +126,38 @@ describe("app-mobile-api: «Система»", function () {
   describe("the home screen", () => {
     it("wears no badge: a server has no one word for its state", async () => {
       const home = (await appOf(await login("sysop"))).methods.find((method: any) => method.name === "system.home");
-      expect(home.ui).to.deep.equal({ view: "detail", item: { title: "title", subtitle: "subtitle" }, section: "Сервер" });
+      expect(home.ui).to.deep.equal({
+        view: "detail", item: { title: "title", subtitle: "subtitle" }, section: "Сервер", summary: [{ type: "notice", field: "notice", covers: ["restartText"] }],
+      });
+    });
+
+    it("asks for a restart when modules changed since the start: which, whether it is planned, and a button for the night", async () => {
+      const token = await login("sysop");
+      expect((await call(token, "system.home")).body.result.item.notice).to.equal(undefined);
+      fakes.system.changedSinceStart = [
+        { appId: "admin-frontend", name: "admin-frontend", version: "2.8.0", removed: false },
+        { appId: "old-module", name: "old-module", version: null, removed: true },
+      ];
+      try {
+        const answer = await call(token, "system.home");
+        expect(validItem(answer.body.result), JSON.stringify(validItem.errors)).to.equal(true);
+        const notice = answer.body.result.item.notice;
+        expect(notice).to.deep.equal({
+          tone: "warning",
+          title: "Нужен перезапуск сервера",
+          text: "Изменены модули: admin-frontend 2.8.0, old-module (удалён). Сервер работает со старым кодом: новые страницы и функции этих модулей появятся после перезапуска. Перезапустите сейчас или запланируйте на полночь.",
+          actions: [{ title: "Перезапустить в полночь", method: "system.restart", input: { when: "midnight" } }],
+        });
+        // Planned: the note says so and has no button any more; «Перезапустить сейчас» is the card's own.
+        await call(token, "system.restart", { when: "midnight" });
+        const planned = (await call(token, "system.home")).body.result.item;
+        expect(planned.notice.text).to.match(/запланирована на 00:00/);
+        expect(planned.notice.actions).to.equal(undefined);
+        // Somebody who only leads the settings is not told: they cannot act on it.
+        expect((await call(await login("settler"), "system.home")).body.result.item.notice).to.equal(undefined);
+      } finally {
+        fakes.system.changedSinceStart = [];
+      }
     });
 
     it("tells which server this is and counts its programs", async () => {
@@ -145,11 +176,16 @@ describe("app-mobile-api: «Система»", function () {
         updatesCount: 1,
         migrationsPending: 1,
       });
+      // How long it has been running, next to its version: the two largest units, and when it started.
+      expect(item.uptime).to.equal("3 дн 4 ч");
+      expect(item.startedAt).to.be.a("number");
+      const fields = (await appOf(await login("sysop"))).models.serverCard.fields.map((field: any) => [field.name, field.title]);
+      expect(fields.slice(0, 3)).to.deep.equal([["version", "Версия"], ["uptime", "Работает"], ["startedAt", "Запущен"]]);
     });
 
     it("leads to the programs, and to no app this person could not open", async () => {
       // A link is built only after `ctx.canOpen` says yes, so the home screen promises nothing.
-      expect(await linksOf(await login("sysop"))).to.deep.equal(["Программы · 6", "Маркетплейс"]);
+      expect(await linksOf(await login("sysop"))).to.deep.equal(["Модули · 6", "Маркетплейс"]);
     });
 
     it("leads to a neighbour app only for whoever holds its right", async () => {
@@ -157,8 +193,8 @@ describe("app-mobile-api: «Система»", function () {
       expect(await linksOf(await login("channeler"))).to.deep.equal(["Каналы продаж"]);
       // The Extensions right is not the settings right: the line is not drawn for somebody who
       // would be refused behind it.
-      expect(await linksOf(await login("sysop"))).to.deep.equal(["Программы · 6", "Маркетплейс"]);
-      expect(await linksOf(await login("admin"))).to.deep.equal(["Программы · 6", "Маркетплейс", "Настройки", "Каналы продаж"]);
+      expect(await linksOf(await login("sysop"))).to.deep.equal(["Модули · 6", "Маркетплейс"]);
+      expect(await linksOf(await login("admin"))).to.deep.equal(["Модули · 6", "Маркетплейс", "Настройки", "Каналы продаж"]);
     });
 
     it("says in words that a restart is scheduled, that a wizard waits and that there is no licence", async () => {
@@ -304,7 +340,7 @@ describe("app-mobile-api: «Система»", function () {
       expect(all.result.items.map((item: any) => item.id)).to.deep.equal(["stand-hello", "stand-paid"]);
       expect((await call(token, "system.catalog", { q: "здоровает" })).body.result.items.map((item: any) => item.id)).to.deep.equal(["stand-hello"]);
       const card = (await call(token, "system.catalogItem", { id: "stand-hello" })).body.result.item;
-      expect(card.stateText).to.equal("Доступна");
+      expect(card.stateText).to.equal("Доступен");
       expect(card._actions.map((action: any) => action.method)).to.deep.equal(["system.install"]);
     });
 
@@ -318,7 +354,7 @@ describe("app-mobile-api: «Система»", function () {
 
     it("says in words what a licence does not cover, and offers no button for it", async () => {
       const card = (await call(await login("sysop"), "system.catalogItem", { id: "stand-paid" })).body.result.item;
-      expect(card.stateText).to.equal("Недоступна по лицензии");
+      expect(card.stateText).to.equal("Недоступен по лицензии");
       expect(card._actions).to.deep.equal([]);
     });
 
@@ -343,11 +379,11 @@ describe("app-mobile-api: «Система»", function () {
       const token = await login("sysop");
       const cases: [string, any, string, string][] = [
         ["busy", { appId: "stand-slow", kind: "install" }, "conflict", "Сейчас идёт другое задание, дождитесь его конца: stand-slow"],
-        ["installed", null, "conflict", "Эта программа уже установлена"],
-        ["not_found", null, "not_found", "Такой программы на сервере нет"],
-        ["system", null, "conflict", "Системную программу удалить нельзя"],
-        ["forbidden", null, "conflict", "Программа запрещает своё удаление"],
-        ["dependents", { dependents: ["stand-child", "other"] }, "conflict", "Удалить нельзя, от неё зависят: stand-child, other"],
+        ["installed", null, "conflict", "Этот модуль уже установлен"],
+        ["not_found", null, "not_found", "Такого модуля на сервере нет"],
+        ["system", null, "conflict", "Системный модуль удалить нельзя"],
+        ["forbidden", null, "conflict", "Модуль запрещает своё удаление"],
+        ["dependents", { dependents: ["stand-child", "other"] }, "conflict", "Удалить нельзя, от него зависят: stand-child, other"],
         ["outside", null, "conflict", "the manager's own text"],
       ];
       for (const [reason, details, code, words] of cases) {
@@ -371,7 +407,7 @@ describe("app-mobile-api: «Система»", function () {
       job.log = ["line one", "line two"];
       expect(await look()).to.deep.include({
         state: "done",
-        doneText: "Программа установлена",
+        doneText: "Модуль установлен",
         restartText: "Перезагрузка запланирована на 00:00 по времени сервера.",
         log: "line one\nline two",
       });
@@ -379,11 +415,11 @@ describe("app-mobile-api: «Система»", function () {
       job.state = "failed";
       job.restartScheduled = false;
       const failures: [any, string][] = [
-        [{ reason: "license", message: "x", details: null }, "Программа недоступна по вашей лицензии"],
-        [{ reason: "registry", message: "x", details: null }, "Маркетплейс не отдал программу, попробуйте позже"],
+        [{ reason: "license", message: "x", details: null }, "Модуль недоступен по вашей лицензии"],
+        [{ reason: "registry", message: "x", details: null }, "Маркетплейс не отдал модуль, попробуйте позже"],
         [
           { reason: "incompatible", message: "x", details: { missingModules: ["a"], outdatedModules: [{ module: "@webresto/core", currentVersion: "2.6.0", requiredVersion: "2.7.0" }] } },
-          "Программа не подходит этому серверу. Нет того, что ей нужно: a Нужен @webresto/core ≥ 2.7.0, установлен 2.6.0",
+          "Модуль не подходит этому серверу. Нет того, что ему нужно: a Нужен @webresto/core ≥ 2.7.0, установлен 2.6.0",
         ],
         [{ reason: "failed", message: "disk is full", details: null }, "Не получилось: disk is full"],
       ];
@@ -398,7 +434,7 @@ describe("app-mobile-api: «Система»", function () {
     it("says a job is forgotten when the server has restarted", async () => {
       const answer = await call(await login("sysop"), "system.job", { id: "nobody-knows" });
       expect(answer.body.error.code).to.equal("not_found");
-      expect(answer.body.error.message).to.equal("Сервер не помнит это задание: скорее всего, он перезапустился. Проверьте список программ.");
+      expect(answer.body.error.message).to.equal("Сервер не помнит это задание: скорее всего, он перезапустился. Проверьте список модулей.");
     });
 
     it("offers an update only where there is one", async () => {
@@ -411,18 +447,18 @@ describe("app-mobile-api: «Система»", function () {
     });
   });
 
-  describe("the programs", () => {
+  describe("the modules", () => {
     it("lists them with the badge each state deserves", async () => {
       const answer = await call(await login("sysop"), "system.modules");
       expect(validList(answer.body.result), JSON.stringify(validList.errors)).to.equal(true);
       const badges = Object.fromEntries(answer.body.result.items.map((item: any) => [item.appId, item.stateText]));
       expect(badges).to.deep.equal({
-        "@webresto/core": "Системная",
-        "@webresto/graphql": "Системная",
+        "@webresto/core": "Системный",
+        "@webresto/graphql": "Системный",
         // The version an update would bring is in the badge, as "Доступна версия X" is in the web.
         "simple-navigation": "Обновление 1.8.3",
         "shop-front": "Работает",
-        "old-module": "Выключена",
+        "old-module": "Выключен",
         "broken-module": "Миграции не прошли",
       });
       expect(answer.body.result.counts).to.deep.equal({ all: 6, installed: 4, system: 2, disabled: 1 });
@@ -495,9 +531,9 @@ describe("app-mobile-api: «Система»", function () {
       const token = await login("sysop");
       // The three refusals of the web and of C44, each in words: a person who cannot remove a
       // program reads why, instead of meeting a 409 later.
-      expect((await cardOf(token, "@webresto/core")).removeText).to.equal("Системную программу удалить нельзя");
-      expect((await cardOf(token, "shop-front")).removeText).to.equal("Программа запрещает своё удаление");
-      expect((await cardOf(token, "simple-navigation")).removeText).to.equal("Удалить нельзя, от неё зависят: shop-front");
+      expect((await cardOf(token, "@webresto/core")).removeText).to.equal("Системный модуль удалить нельзя");
+      expect((await cardOf(token, "shop-front")).removeText).to.equal("Модуль запрещает своё удаление");
+      expect((await cardOf(token, "simple-navigation")).removeText).to.equal("Удалить нельзя, от него зависят: shop-front");
       expect((await cardOf(token, "old-module")).removeText).to.equal(undefined);
     });
 
@@ -538,13 +574,13 @@ describe("app-mobile-api: «Система»", function () {
       expect(card._actions.map((action: any) => action.method)).to.include("system.remove");
       const remove = (await appOf(token)).methods.find((method: any) => method.name === "system.remove");
       expect(remove.ui.control).to.deep.include({ type: "native", screen: "module-progress" });
-      expect(remove.ui.confirm).to.equal("Удалить программу? Её файлы и настройки будут удалены.");
+      expect(remove.ui.confirm).to.equal("Удалить модуль? Его файлы и настройки будут удалены.");
     });
 
     it("offers no removal of what cannot be removed: the card says why instead", async () => {
       const card = await cardOf(await login("admin"), "@webresto/core");
       expect(card._actions.map((action: any) => action.method)).to.not.include("system.remove");
-      expect(card.removeText).to.equal("Системную программу удалить нельзя");
+      expect(card.removeText).to.equal("Системный модуль удалить нельзя");
     });
   });
 });

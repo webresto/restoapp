@@ -120,6 +120,7 @@ describe("«Система»: installing, updating and removing, on the real mod
     const home = (await call("system.home")).body.result.item;
     expect(home._links.map((link: any) => link.title)).to.include("Маркетплейс");
     expect(home.restartText).to.equal(undefined);
+    expect(home.notice).to.equal(undefined);
 
     // The marketplace: a word finds it, and its card has the button.
     expect(await catalogIds()).to.include("stand-hello");
@@ -135,7 +136,7 @@ describe("«Система»: installing, updating and removing, on the real mod
     // Installing: the job ends, and asks for a restart in words.
     const installed = await runJob("system.install", "stand-hello");
     expect(installed.state, JSON.stringify(installed)).to.equal("done");
-    expect(installed.doneText).to.equal("Программа установлена");
+    expect(installed.doneText).to.equal("Модуль установлен");
     expect(installed.restartText).to.equal("Перезагрузка запланирована на 00:00 по времени сервера.");
     expect(installed.log).to.include("Module stand-hello installed successfully");
 
@@ -149,10 +150,15 @@ describe("«Система»: installing, updating and removing, on the real mod
     // The marketplace does not offer it any more, and the card it was opened from says so.
     expect(await catalogIds()).to.not.include("stand-hello");
     const closed = (await call("system.install", { appId: "stand-hello", job: installed.id })).body.result.item;
-    expect(closed.stateText).to.equal("Установлена");
+    expect(closed.stateText).to.equal("Установлен");
     expect(closed.jobId).to.equal(undefined);
     expect(actionsOf(closed)).to.deep.equal([]);
-    expect((await call("system.home")).body.result.item.restartText).to.equal("Перезагрузка запланирована на 00:00 по времени сервера.");
+    const after = (await call("system.home")).body.result.item;
+    expect(after.restartText).to.equal("Перезагрузка запланирована на 00:00 по времени сервера.");
+    // The card asks for the restart: the module is in the table, its hooks run only at the next start.
+    expect(after.notice).to.include({ tone: "warning", title: "Нужен перезапуск сервера" });
+    expect(after.notice.text).to.include("Изменены модули: ").and.to.include("1.0.0").and.to.include("запланирована на 00:00");
+    expect(after.notice.actions).to.equal(undefined);
 
     // No update yet, so no button for one.
     expect(actionsOf(await card("stand-hello"))).to.not.include("system.update");
@@ -167,7 +173,7 @@ describe("«Система»: installing, updating and removing, on the real mod
     // Updating.
     const updated = await runJob("system.update", "stand-hello");
     expect(updated.state, JSON.stringify(updated)).to.equal("done");
-    expect(updated.doneText).to.equal("Программа обновлена");
+    expect(updated.doneText).to.equal("Модуль обновлён");
     expect(updated.restartText).to.equal("Перезагрузка запланирована на 00:00 по времени сервера.");
     expect(installedVersion("stand-hello")).to.equal("1.1.0");
     const fresh = await card("stand-hello");
@@ -178,13 +184,13 @@ describe("«Система»: installing, updating and removing, on the real mod
     expect(actionsOf(fresh)).to.include("system.remove");
     const removed = await runJob("system.remove", "stand-hello");
     expect(removed.state, JSON.stringify(removed)).to.equal("done");
-    expect(removed.doneText).to.equal("Программа удалена");
+    expect(removed.doneText).to.equal("Модуль удалён");
     expect(removed.restartText).to.equal("Перезагрузка запланирована на 00:00 по времени сервера.");
     expect(fs.existsSync(path.join(modulesPath, "stand-hello"))).to.equal(false);
     expect(fs.readFileSync(listFile, "utf8")).to.not.include("stand-hello");
     expect((await call("system.module", { id: "stand-hello" })).status).to.equal(404);
     const gone = (await call("system.remove", { appId: "stand-hello", job: removed.id })).body.result.item;
-    expect(gone.stateText).to.equal("Удалена");
+    expect(gone.stateText).to.equal("Удалён");
     expect(actionsOf(gone)).to.deep.equal([]);
     expect(await catalogIds()).to.include("stand-hello");
     registry.reset();
@@ -220,16 +226,16 @@ describe("«Система»: installing, updating and removing, on the real mod
 
   it("says why it did not install, in words, and leaves nothing behind", async () => {
     const paid = await runJob("system.install", "stand-paid");
-    expect(paid).to.deep.include({ state: "failed", errorText: "Программа недоступна по вашей лицензии" });
+    expect(paid).to.deep.include({ state: "failed", errorText: "Модуль недоступен по вашей лицензии" });
 
     const future = await runJob("system.install", "stand-future");
     expect(future).to.deep.include({
       state: "failed",
-      errorText: "Программа не подходит этому серверу. Нет того, что ей нужно: @webresto/core",
+      errorText: "Модуль не подходит этому серверу. Нет того, что ему нужно: @webresto/core",
     });
 
     const lost = await runJob("system.install", "stand-gone");
-    expect(lost).to.deep.include({ state: "failed", errorText: "Маркетплейс не отдал программу, попробуйте позже" });
+    expect(lost).to.deep.include({ state: "failed", errorText: "Маркетплейс не отдал модуль, попробуйте позже" });
 
     for (const job of [paid, future, lost]) expect(job.restartText, job.appId).to.equal(undefined);
     expect(fs.readdirSync(modulesPath).filter((name) => name !== ".gitkeep")).to.deep.equal([]);
@@ -238,28 +244,28 @@ describe("«Система»: installing, updating and removing, on the real mod
   it("says why it will not remove, in words, on the card and on the call", async () => {
     // A system module.
     const core = await card("restocore");
-    expect(core.removeText).to.equal("Системную программу удалить нельзя");
+    expect(core.removeText).to.equal("Системный модуль удалить нельзя");
     expect(actionsOf(core)).to.not.include("system.remove");
     expect((await call("system.remove", { appId: "restocore" })).body.error).to.deep.include({
       code: "conflict",
-      message: "Системную программу удалить нельзя",
+      message: "Системный модуль удалить нельзя",
     });
 
     // One that forbids it about itself (C44).
     expect((await runJob("system.install", "stand-locked")).state).to.equal("done");
     const locked = await card("stand-locked");
-    expect(locked.removeText).to.equal("Программа запрещает своё удаление");
+    expect(locked.removeText).to.equal("Модуль запрещает своё удаление");
     expect(actionsOf(locked)).to.not.include("system.remove");
-    expect((await call("system.remove", { appId: "stand-locked" })).body.error.message).to.equal("Программа запрещает своё удаление");
+    expect((await call("system.remove", { appId: "stand-locked" })).body.error.message).to.equal("Модуль запрещает своё удаление");
     expect(fs.existsSync(path.join(modulesPath, "stand-locked"))).to.equal(true);
 
     // One others depend on.
     expect((await runJob("system.install", "stand-hello")).state).to.equal("done");
     expect((await runJob("system.install", "stand-child")).state).to.equal("done");
     const needed = await card("stand-hello");
-    expect(needed.removeText).to.equal("Удалить нельзя, от неё зависят: stand-child");
+    expect(needed.removeText).to.equal("Удалить нельзя, от него зависят: stand-child");
     expect(actionsOf(needed)).to.not.include("system.remove");
-    expect((await call("system.remove", { appId: "stand-hello" })).body.error.message).to.equal("Удалить нельзя, от неё зависят: stand-child");
+    expect((await call("system.remove", { appId: "stand-hello" })).body.error.message).to.equal("Удалить нельзя, от него зависят: stand-child");
 
     // And when the dependent goes, it can go too.
     expect((await runJob("system.remove", "stand-child")).state).to.equal("done");
@@ -267,10 +273,10 @@ describe("«Система»: installing, updating and removing, on the real mod
   });
 
   it("says that an installed program is installed, and that an absent one is absent", async () => {
-    expect((await call("system.install", { appId: "stand-locked" })).body.error.message).to.equal("Эта программа уже установлена");
+    expect((await call("system.install", { appId: "stand-locked" })).body.error.message).to.equal("Этот модуль уже установлен");
     expect((await call("system.update", { appId: "stand-absent" })).body.error).to.deep.include({
       code: "not_found",
-      message: "Такой программы на сервере нет",
+      message: "Такого модуля на сервере нет",
     });
   });
 

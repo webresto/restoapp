@@ -131,7 +131,7 @@ let shared: { sails: any; adapter: SystemAdapter } | null = null;
 
 /**
  * One adapter per worker: the declaration, the home card and the list of programs share its cache of
- * rows and its answers of the marketplace, so opening «Программы» does not ask the registry again
+ * rows and its answers of the marketplace, so opening «Модули» does not ask the registry again
  * about what `describe` has just asked.
  */
 export function systemAdapter(sails: any): SystemAdapter {
@@ -148,6 +148,34 @@ export function coreSystem(sails: any, facts: () => Promise<ServerFacts>): Syste
     rows = null;
     latest.clear();
     marketplace = null;
+  }
+
+  /**
+   * What the Module table said when this process was lifted: appId → version. The installer loads a new module
+   * into the memory of the manager at once, but the hooks of a module (its routes, its pages, its `initialize`)
+   * run only when the server starts — so a module installed, updated or removed since then is on the disk and in
+   * the table, and not yet in the running code. The card of the server asks for a restart while there is one.
+   */
+  let atStart: Map<string, string | null> | null = null;
+  const takeSnapshot = async () => {
+    try {
+      atStart = new Map((await readRows()).filter((row) => !row.isSystem).map((row) => [row.appId, row.version]));
+    } catch (error) {
+      sails.log?.warn?.("mobile API: the modules at the start are not known, no restart will be asked for", error);
+    }
+  };
+  if (typeof sails.on === "function") sails.on("lifted", () => void takeSnapshot());
+
+  /** Modules changed since the start of this process: «sales-channel-vk 2.8.0», «old-module (удалён)». */
+  async function changedSinceStart(all: Row[]): Promise<{ appId: string; name: string; version: string | null; removed: boolean }[]> {
+    if (!atStart) return [];
+    const now = new Map(all.filter((row) => !row.isSystem).map((row) => [row.appId, row]));
+    const changed: { appId: string; name: string; version: string | null; removed: boolean }[] = [];
+    for (const [appId, row] of now) {
+      if (!atStart.has(appId) || atStart.get(appId) !== row.version) changed.push({ appId, name: row.name, version: row.version, removed: false });
+    }
+    for (const appId of atStart.keys()) if (!now.has(appId)) changed.push({ appId, name: appId, version: null, removed: true });
+    return changed;
   }
 
   const manager = () => sails.hooks?.["app-manager-proto"];
@@ -475,6 +503,8 @@ export function coreSystem(sails: any, facts: () => Promise<ServerFacts>): Syste
         version,
         timezone: zone,
         currency: fact.currency ?? null,
+        // The worker that answered: with several of them each has its own start, close enough to the server's.
+        startedAt: Math.round(Date.now() - process.uptime() * 1000),
         systemCount: all.filter((row) => row.isSystem).length,
         installedCount: all.filter((row) => !row.isSystem).length,
         disabledCount: all.filter((row) => !row.enable).length,
@@ -482,6 +512,9 @@ export function coreSystem(sails: any, facts: () => Promise<ServerFacts>): Syste
           Boolean,
         ).length,
         migrationsPending: all.filter((row) => pendingMigrations(row, supported)).length,
+        changedSinceStart: await changedSinceStart(all),
+        // The manager's own flag: migrations it ran after the start need the code to start again.
+        restartRequired: Boolean(sails.config?.modulemanager?.state?.restartRequired),
         restartScheduled: Boolean(restart.scheduled),
         restartAt: restart.scheduledFor ? Date.parse(restart.scheduledFor) : null,
         restarting: Boolean(restart.restarting),

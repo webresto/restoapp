@@ -1532,6 +1532,11 @@ export class FakeSystem implements SystemPort {
     };
   }
 
+  /** Started three days, four hours and a minute ago — «Работает 3 дн 4 ч». */
+  /** Modules installed, updated or removed since the start: the card asks for a restart. */
+  changedSinceStart: { appId: string; name: string; version: string | null; removed: boolean }[] = [];
+  startedAt: number | null = Date.now() - ((3 * 24 + 4) * 60 + 1) * 60_000;
+
   async server(): Promise<ServerState> {
     return {
       id: "server",
@@ -1540,6 +1545,9 @@ export class FakeSystem implements SystemPort {
       version: "5.2.0-build.33",
       timezone: "Europe/Moscow",
       currency: "RUB",
+      startedAt: this.startedAt,
+      changedSinceStart: this.changedSinceStart,
+      restartRequired: false,
       systemCount: this.cards.filter((card) => card.kind === "system").length,
       installedCount: this.cards.filter((card) => card.kind === "installed").length,
       disabledCount: this.cards.filter((card) => !card.enable).length,

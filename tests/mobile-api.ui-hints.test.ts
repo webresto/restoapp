@@ -173,11 +173,11 @@ describe("app-mobile-api: the optional UI hints (P1–P7)", function () {
       ]);
       expect(sections(appIn(declaration, "system"))).to.deep.equal([
         ["system.home", "Сервер"],
-        ["system.modules", "Программы"],
+        ["system.modules", "Модули"],
         ["system.catalog", "Маркетплейс"],
       ]);
       expect(sections(appIn(await declarationOf(token, "en"), "system")).map(([, title]: string[]) => title))
-        .to.deep.equal(["Server", "Programs", "Marketplace"]);
+        .to.deep.equal(["Server", "Modules", "Marketplace"]);
 
       // P6: the board of the orders, on the enum field with titles and tones for every column.
       const board = methodIn(orders, "orders.list").ui.board;

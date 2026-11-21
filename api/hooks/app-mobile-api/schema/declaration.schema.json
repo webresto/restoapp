@@ -229,6 +229,16 @@
             "field": { "type": "string", "minLength": 1 },
             "title": { "$ref": "#/definitions/text" }
           }
+        },
+        {
+          "description": "P12. The field is an object {tone: info|warning|success|danger, title, text?, actions?: [{title, method, input, tone?}]}: a coloured note over the card — what happened and one thing to do about it («Нужен перезапуск сервера»). An action calls `method` of the same app with `input` as it is, then the record is read again. `covers` — fields of the record the note already says, not drawn again in the card. No field in the record — no note.",
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "notice" },
+            "field": { "type": "string", "minLength": 1 },
+            "title": { "$ref": "#/definitions/text" },
+            "covers": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+          }
         }
       ]
     },

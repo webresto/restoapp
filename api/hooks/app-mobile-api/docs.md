@@ -195,7 +195,7 @@ What the shipped apps say:
   (`codesShare`) and a `list` of their discount (`codesDiscount`). The blocks are the same for
   everybody: a number somebody may not see is neither declared nor in the record, and its block is
   not drawn.
-- «Система»: sections «Сервер / Программы / Маркетплейс» (`system.home`, `system.modules`,
+- «Система»: sections «Сервер / Модули / Маркетплейс» (`system.home`, `system.modules`,
   `system.catalog`); `columns` and `x-tones` (`disabled` — `muted`) of the programs; `primary` on
   `system.install` and `system.update`.
 - «Каналы продаж»: `x-tones` of the status (`disabled` — `muted`). «Блюда», «Клиенты», «Настройки»:
