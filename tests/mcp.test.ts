@@ -364,3 +364,154 @@ describe("McpServer — schema example generation", function () {
     expect(tool.call.example).to.include("/mcp/call/typed");
   });
 });
+
+// ---------- compact views ----------
+
+describe("McpServer — compact views", function () {
+  let mcp: any;
+  let handle: Function;
+
+  beforeEach(function () {
+    delete process.env.MCP_DEFAULT_VIEW;
+    mcp = requireFreshMcp();
+    mcp.registerGroup({ name: "promotions", description: "Promotions and discounts." });
+    mcp.registerTool({
+      name: "promotion-create",
+      group: "promotions",
+      description: "Create a promotion. A long text about every field that only the tool view carries.",
+      shortDescription: "Create a promotion.",
+      mode: "protected",
+      schema: {
+        type: "object",
+        properties: { name: { type: "string" }, discount: { type: "number" }, enable: { type: "boolean" } },
+        required: ["name", "discount"],
+      },
+      handler: async () => "created",
+    });
+    mcp.registerTool({
+      name: "promotion-list",
+      group: "promotions",
+      description: "List promotions.",
+      mode: "public",
+      handler: async () => [],
+    });
+    mcp.registerTool({
+      name: "health",
+      group: "health",
+      description: "Liveness.",
+      mode: "public",
+      handler: async () => "ok",
+    });
+    handle = mcp.middleware();
+  });
+
+  afterEach(function () {
+    delete process.env.MCP_DEFAULT_VIEW;
+    delete process.env.MCP_ADMIN_KEY;
+  });
+
+  async function get(url: string, headers: Record<string, string> = {}) {
+    const query = Object.fromEntries(new URLSearchParams(url.split("?")[1] ?? ""));
+    const res = makeRes();
+    await handle(makeReq({ method: "GET", url, query, headers }), res, () => { throw new Error("next() should not be called"); });
+    return res;
+  }
+
+  it("catalog() lists groups with the names of their tools only", function () {
+    const catalog = mcp.catalog("all");
+    expect(catalog.groupCount).to.equal(2);
+    expect(catalog.toolCount).to.equal(3);
+    expect(catalog.groups).to.deep.equal([
+      { name: "health", tools: ["health"] },
+      { name: "promotions", description: "Promotions and discounts.", tools: ["promotion-create", "promotion-list"] },
+    ]);
+  });
+
+  it("catalog('public') leaves protected tools out", function () {
+    const names = mcp.catalog("public").groups.flatMap((g: any) => g.tools);
+    expect(names).to.have.members(["promotion-list", "health"]);
+  });
+
+  it("describeGroup() gives a one-liner and the parameter names, no schema", function () {
+    const group = mcp.describeGroup("promotions");
+    expect(group.toolCount).to.equal(2);
+    expect(group.tools[0]).to.deep.equal({
+      name: "promotion-create",
+      mode: "protected",
+      description: "Create a promotion.",
+      params: "name*, discount*, enable",
+    });
+    expect(group.tools[1]).to.not.have.property("params");
+    expect(mcp.describeGroup("nope")).to.equal(null);
+  });
+
+  it("describeTools() gives the schema of the named tools and similar names for the rest", function () {
+    const described = mcp.describeTools(["promotion-create", "create-promotion"]);
+    expect(described.tools).to.have.length(1);
+    expect(described.tools[0].schema.required).to.deep.equal(["name", "discount"]);
+    expect(described.tools[0].description).to.contain("A long text");
+    expect(described.tools[0]).to.not.have.property("call");
+    expect(described.notFound).to.deep.equal([{ name: "create-promotion", similar: ["promotion-create", "promotion-list"] }]);
+  });
+
+  it("listTools() and listGroups() keep their shape", function () {
+    const tool = mcp.listTools("all", "promotions")[0];
+    expect(tool).to.have.keys(["name", "group", "description", "shortDescription", "mode", "schema"]);
+    expect(mcp.listGroups().map((g: any) => g.name)).to.include("promotions");
+  });
+
+  it("GET /mcp stays the full catalogue by default", async function () {
+    const res = await get("/mcp");
+    expect(res._body).to.have.property("endpoints");
+    expect(res._body).to.not.have.property("view");
+    expect(res._body.groups.find((g: any) => g.name === "health").tools[0]).to.have.property("call");
+  });
+
+  it("GET /mcp?view=compact answers with groups and tool names", async function () {
+    const res = await get("/mcp?view=compact");
+    expect(res._body.view).to.equal("compact");
+    expect(res._body.auth).to.equal("unauthenticated");
+    expect(res._body).to.not.have.property("endpoints");
+    expect(res._body.usage.group).to.contain("?view=compact");
+    expect(res._body.groups).to.deep.equal([
+      { name: "health", tools: ["health"] },
+      { name: "promotions", description: "Promotions and discounts.", tools: ["promotion-list"] },
+    ]);
+  });
+
+  it("MCP_DEFAULT_VIEW=compact switches the default, ?view=full and ?flat=1 bring the old answers", async function () {
+    process.env.MCP_DEFAULT_VIEW = "compact";
+    expect((await get("/mcp"))._body.view).to.equal("compact");
+    expect((await get("/mcp"))._body.usage.group).to.not.contain("view=");
+    expect((await get("/mcp?view=full"))._body).to.have.property("endpoints");
+    expect((await get("/mcp?flat=1"))._body.tools[0]).to.have.property("call");
+    expect((await get("/mcp/group/promotions"))._body.view).to.equal("compact");
+    expect((await get("/mcp/group/promotions?view=full"))._body.tools[0]).to.have.property("schema");
+  });
+
+  it("GET /mcp/group/:group?view=compact hides protected tools and schemas", async function () {
+    const res = await get("/mcp/group/promotions?view=compact");
+    expect(res._body.group).to.equal("promotions");
+    expect(res._body.tools).to.deep.equal([{ name: "promotion-list", mode: "public", description: "List promotions." }]);
+  });
+
+  it("GET /mcp/tool/:names answers with schemas, a protected tool needs the key", async function () {
+    process.env.MCP_ADMIN_KEY = "test-secret";
+    const anonymous = await get("/mcp/tool/promotion-create");
+    expect(anonymous._status).to.equal(404);
+
+    const res = await get("/mcp/tool/promotion-create,promotion-list,nope", { "x-mcp-key": "test-secret" });
+    expect(res._status).to.equal(200);
+    expect(res._body.tools.map((t: any) => t.name)).to.deep.equal(["promotion-create", "promotion-list"]);
+    expect(res._body.tools[0].schema.properties).to.have.property("discount");
+    expect(res._body.notFound[0].name).to.equal("nope");
+    expect(res._body.usage.call).to.contain("POST /mcp/call/");
+  });
+
+  it("POST /mcp/call of an unknown tool names similar ones", async function () {
+    const res = makeRes();
+    await handle(makeReq({ method: "POST", url: "/mcp/call/promotion-lst" }), res, () => {});
+    expect(res._status).to.equal(404);
+    expect(res._body.similar).to.deep.equal(["promotion-list"]);
+  });
+});

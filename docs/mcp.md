@@ -46,24 +46,67 @@ modules/<name>/config/bootstrap.js
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/mcp` | Server info + catalogue of all tools visible to the caller |
+| `GET` | `/mcp` | Server info + catalogue of the tool groups visible to the caller |
+| `GET` | `/mcp/group/:group` | The tools of one group |
+| `GET` | `/mcp/tool/:name[,:name...]` | Full description + JSON Schema of the named tools |
 | `POST` | `/mcp/call/:toolName` | Invoke a tool |
+| `GET` | `/mcp?flat=1` | Legacy: every tool with its schema in one flat list |
 
 ### GET /mcp
-
-Returns JSON with three top-level keys:
 
 ```jsonc
 {
   "protocol": "mcp",
-  "version": "1.0",
+  "version": "1.1",
   "info": { /* auth status, description */ },
   "endpoints": { /* self-documenting call examples */ },
-  "tools": [ /* array of tool descriptors */ ]
+  "groups": [ /* groups; each lists its tools: name, mode, one-liner, call */ ]
 }
 ```
 
-Each tool descriptor includes a ready-to-copy `curl` example under `call.example`.
+`GET /mcp/group/:group` then returns every tool of the group with its JSON Schema
+and a ready-to-copy `curl` example under `call.example`.
+
+### Compact views
+
+The full views repeat the call documentation in every tool, and the catalogue
+describes every tool of every group. A client that pays for each byte it reads —
+an LLM agent — should discover tools in three steps instead, each step carrying
+only what the next one needs:
+
+| Step | Request | Answer |
+|------|---------|--------|
+| 1 | `GET /mcp?view=compact` | Groups: name, description, the **names** of their tools |
+| 2 | `GET /mcp/group/:group?view=compact` | Per tool: one line and the names of its parameters (`*` marks a required one) |
+| 3 | `GET /mcp/tool/:name[,:name...]` | Full description + JSON Schema of the named tools only |
+
+Tool names usually tell enough to go from step 1 straight to step 3. How to call
+a tool is said once per response, under `usage`.
+
+```jsonc
+// GET /mcp?view=compact
+{
+  "protocol": "mcp", "version": "1.1", "view": "compact",
+  "auth": "authenticated",
+  "usage": { "catalogue": "...", "group": "...", "tool": "...", "call": "...", "auth": "..." },
+  "groupCount": 24, "toolCount": 97,
+  "groups": [
+    { "name": "stock", "description": "Stock of dishes per place: ...", "tools": ["stock-list", "stock-set"] }
+  ]
+}
+```
+
+A name that is not registered comes back with the closest ones: `notFound[].similar`
+from `GET /mcp/tool/...`, `similar` in the 404 of `POST /mcp/call/...`.
+
+`MCP_DEFAULT_VIEW=compact` makes the compact view the answer of `GET /mcp` and
+`GET /mcp/group/:group` when the request names no view; `?view=full` then brings
+the full one back. `?flat=1` always answers with the legacy flat list.
+
+Nothing of this involves the tools themselves: the compact views are derived
+from what `registerTool` already receives. What makes them better is an explicit
+`group`, a `shortDescription` of one short sentence, and tool names that say
+what the tool does.
 
 ### POST /mcp/call/:toolName
 
@@ -123,6 +166,7 @@ The MCP server is **disabled by default**. Set environment variables to enable:
 ```bash
 MCP_ENABLED=true        # required — without this no tools are loaded
 MCP_ADMIN_KEY=<secret>  # required to access protected tools
+MCP_DEFAULT_VIEW=compact  # optional — GET /mcp answers with the compact view by default
 ```
 
 In development, add them to `.env` or pass inline:
@@ -383,6 +427,15 @@ callers such as an AI agent acting on behalf of an admin user.
 ```js
 const publicTools  = mcp.listTools('public');
 const allTools     = mcp.listTools('all');
+```
+
+The compact counterparts — the built-in assistant discovers tools through them:
+
+```js
+mcp.catalog('all');                       // groups with the names of their tools
+mcp.describeGroup('promotions');          // one line + parameter names per tool, null if no such group
+mcp.describeTools(['promotion-create']);  // { tools: [{ name, group, mode, description, schema }], notFound? }
+mcp.suggestTools('create-promotion');     // ['promotion-create', ...]
 ```
 
 ---

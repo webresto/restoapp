@@ -474,55 +474,44 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
 
         const listMcpTools = tool({
             description: [
-                'List MCP tools available to administrator users.',
-                'Call without a group to get the compact group catalogue.',
-                'Call with a group name to get full tool descriptions and input schemas for that group.',
+                'Discover MCP tools available to administrator users, in three steps.',
+                'No arguments: the catalogue — groups with the names of their tools.',
+                'tools: full description and input schema of the named tools — call this before call_mcp_tool.',
+                'group: the tools of one group with one-line descriptions and parameter names, when the names alone do not tell which tool fits.',
             ].join(' '),
             inputSchema: z.object({
                 group: z.string().min(1).optional(),
+                tools: z.array(z.string().min(1)).max(10).optional(),
             }),
-            execute: async (input: { group?: string }) => {
+            execute: async (input: { group?: string; tools?: string[] }) => {
                 if (!user.isAdministrator) {
                     return { error: 'MCP tools are only available for administrators.' };
                 }
 
                 const mcp = (globalThis as any).mcp;
-                if (!mcp || typeof mcp.listTools !== 'function') {
+                if (!mcp || typeof mcp.catalog !== 'function') {
                     return { error: 'MCP server is not available.' };
                 }
 
+                if (input.tools?.length) {
+                    return summarizeMcpResult('list_mcp_tools', mcp.describeTools(input.tools, 'all'));
+                }
+
                 if (input.group) {
-                    const tools = mcp.listTools('all', input.group);
-                    if (tools.length === 0) {
-                        const groups = typeof mcp.listGroups === 'function' ? mcp.listGroups() : [];
+                    const group = mcp.describeGroup(input.group, 'all');
+                    if (!group) {
                         return {
                             group: input.group,
                             count: 0,
                             tools: [],
                             error: `No tools found in group "${input.group}". This group name may not exist — check availableGroups below and retry with the matching one.`,
-                            availableGroups: groups,
+                            availableGroups: mcp.catalog('all').groups.map((entry: any) => entry.name),
                         };
                     }
-                    return summarizeMcpResult('list_mcp_tools', {
-                        group: input.group,
-                        count: tools.length,
-                        tools,
-                    });
+                    return summarizeMcpResult('list_mcp_tools', group);
                 }
 
-                const groups = typeof mcp.listGroups === 'function' ? mcp.listGroups() : [];
-                const tools = mcp.listTools('all').map((entry: any) => ({
-                    name: entry.name,
-                    group: entry.group,
-                    mode: entry.mode,
-                    description: entry.shortDescription || entry.description,
-                }));
-                return summarizeMcpResult('list_mcp_tools', {
-                    groupCount: groups.length,
-                    groups,
-                    toolCount: tools.length,
-                    tools,
-                });
+                return summarizeMcpResult('list_mcp_tools', mcp.catalog('all'));
             },
         });
 
@@ -544,6 +533,15 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
                 const mcp = (globalThis as any).mcp;
                 if (!mcp || typeof mcp.callTool !== 'function') {
                     return { error: 'MCP server is not available.' };
+                }
+
+                if (mcp.tools?.has && !mcp.tools.has(input.tool_name)) {
+                    const similar = typeof mcp.suggestTools === 'function' ? mcp.suggestTools(input.tool_name, 'all') : [];
+                    return {
+                        error: `MCP tool "${input.tool_name}" is not registered.`,
+                        ...(similar.length ? { similar } : {}),
+                        hint: 'Take the exact name from list_mcp_tools.',
+                    };
                 }
 
                 try {
@@ -621,8 +619,10 @@ export class OpenHarnessDataAgentService extends AbstractAiModelService {
                 'You can also use registered MCP tools.',
                 'If the user asks whether MCP tools are available, answer yes.',
                 'Do not say you lack context about MCP when list_mcp_tools is available in this chat.',
-                'Use list_mcp_tools first: without group for a compact catalogue, with group for exact schemas.',
-                'If list_mcp_tools with a group returns count:0, do not conclude the capability is missing — the group name was likely a guess; re-check availableGroups in the response (or call list_mcp_tools without group) and retry with the matching group.',
+                'Use list_mcp_tools first, without arguments: it returns the groups with the names of their tools.',
+                'Then call list_mcp_tools with tools:[names] to get the exact input schema of the tools you are going to call; ask only for those.',
+                'When the names alone do not tell which tool fits, call list_mcp_tools with a group: it returns one line and the parameter names per tool.',
+                'If list_mcp_tools with a group returns count:0, do not conclude the capability is missing — the group name was likely a guess; re-check availableGroups in the response (or call list_mcp_tools without arguments) and retry with the matching group.',
                 'Then use call_mcp_tool with the exact tool_name and params object.',
                 'Prefer read-only MCP tools for diagnostics. Do not call mutating MCP tools unless the user explicitly requested that operation.',
             ].join('\n')

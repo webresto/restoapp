@@ -17,10 +17,23 @@
  *                              (JSON Schema + call docs).
  *   POST /mcp/call/:tool     — invoke a tool.
  *
+ * Compact views (a client that pays for every byte it reads — an LLM):
+ *   GET  /mcp?view=compact              — groups with the NAMES of their tools.
+ *   GET  /mcp/group/:group?view=compact — one line + parameter names per tool.
+ *   GET  /mcp/tool/:name[,:name...]     — full description + JSON Schema of
+ *                                         the named tools only.
+ *   MCP_DEFAULT_VIEW=compact makes the compact view the default one;
+ *   ?view=full then brings the full view back.
+ *   In-process: mcp.catalog(), mcp.describeGroup(), mcp.describeTools(),
+ *   mcp.suggestTools().
+ *
  * Backward compatibility:
  *   - Tools registered without a `group` are auto-assigned to a group derived
  *     from their source file (the module that called registerTool).
  *   - GET /mcp?flat=1 returns the legacy flat list of all tools with schemas.
+ *   - The compact views are derived from what tools already declare: nothing
+ *     changes in registerTool / registerGroup, and listTools / listGroups keep
+ *     their shape.
  *
  * Usage:
  *   const mcp = require('./McpServer');
@@ -358,6 +371,189 @@ function toolList(req) {
   return visibleTools(req).map(toolDetail);
 }
 
+// ---------------------------------------------------------------------------
+// Compact views — progressive disclosure in three steps, each one carrying only
+// what the next step needs:
+//   1. catalogue  — groups with the NAMES of their tools
+//   2. group      — one line per tool + the names of its parameters
+//   3. tool       — full description + JSON Schema of the tools asked for
+// The registration contract (registerTool / registerGroup) is not involved:
+// everything here is derived from what tools already declare.
+// ---------------------------------------------------------------------------
+
+/**
+ * Parameter names of a tool as one string; a required one carries `*`.
+ * @param {Object} [schema]
+ * @returns {string}
+ */
+function paramSignature(schema) {
+  if (!schema || !schema.properties) return '';
+  const required = new Set(Array.isArray(schema.required) ? schema.required : []);
+  return Object.keys(schema.properties)
+    .map(key => (required.has(key) ? `${key}*` : key))
+    .join(', ');
+}
+
+/**
+ * Tools visible at an access level (the in-process counterpart of visibleTools).
+ * @param {'public'|'all'} level
+ * @returns {McpTool[]}
+ */
+function toolsAtLevel(level) {
+  return Array.from(tools.values()).filter(tool => level === 'all' || tool.mode === 'public');
+}
+
+/**
+ * Step 1: groups with the names of their tools — no descriptions of tools, no schemas.
+ * @param {McpTool[]} list
+ * @returns {{groupCount: number, toolCount: number, groups: Array}}
+ */
+function compactCatalog(list) {
+  const byGroup = new Map();
+  for (const tool of list) {
+    if (!byGroup.has(tool.group)) byGroup.set(tool.group, []);
+    byGroup.get(tool.group).push(tool.name);
+  }
+  const result = [];
+  for (const [name, names] of byGroup) {
+    const meta = groups.get(name);
+    const entry = { name };
+    if (meta && meta.description) entry.description = meta.description;
+    entry.tools = names;
+    result.push(entry);
+  }
+  result.sort((a, b) => a.name.localeCompare(b.name));
+  return { groupCount: result.length, toolCount: list.length, groups: result };
+}
+
+/**
+ * Step 2: the tools of one group — a one-liner and the parameter names of each.
+ * @param {McpTool[]} list  tools visible to the caller
+ * @param {string} groupName
+ * @returns {Object|null}  null when the caller sees no such group
+ */
+function compactGroup(list, groupName) {
+  const groupTools = list.filter(tool => tool.group === groupName);
+  if (groupTools.length === 0) return null;
+  const meta = groups.get(groupName);
+  const result = { group: groupName };
+  if (meta && meta.description) result.description = meta.description;
+  result.toolCount = groupTools.length;
+  result.paramsNote = 'params: names of the parameters, * marks a required one';
+  result.tools = groupTools.map(tool => {
+    const entry = {
+      name: tool.name,
+      mode: tool.mode,
+      description: tool.shortDescription || deriveShortDescription(tool.description),
+    };
+    const params = paramSignature(tool.schema);
+    if (params) entry.params = params;
+    return entry;
+  });
+  return result;
+}
+
+/**
+ * Names of the tools closest to a name that was not found: the same words in
+ * another order (`create-promotion` → `promotion-create`), a part of the name,
+ * a typo.
+ * @param {McpTool[]} list
+ * @param {string} name
+ * @param {number} [limit=5]
+ * @returns {string[]}
+ */
+function similarToolNames(list, name, limit = 5) {
+  const wanted = String(name || '').toLowerCase();
+  const words = wanted.split(/[^a-z0-9]+/).filter(Boolean);
+  if (words.length === 0) return [];
+  const scored = [];
+  for (const tool of list) {
+    const candidate = tool.name.toLowerCase();
+    const candidateWords = candidate.split(/[^a-z0-9]+/).filter(Boolean);
+    let score = 0;
+    for (const word of words) {
+      if (candidateWords.includes(word)) score += 3;
+      else if (word.length >= 3 && candidateWords.some(w => w.startsWith(word) || word.startsWith(w))) score += 2;
+      else if (word.length >= 3 && candidate.includes(word)) score += 1;
+    }
+    if (tool.group && words.includes(String(tool.group).toLowerCase())) score += 1;
+    if (score > 0) scored.push({ name: tool.name, score });
+  }
+  scored.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+  return scored.slice(0, limit).map(entry => entry.name);
+}
+
+/**
+ * Step 3: full description + JSON Schema of the named tools only.
+ * @param {McpTool[]} list  tools visible to the caller
+ * @param {string[]} names
+ * @returns {{tools: Array, notFound?: Array<{name: string, similar: string[]}>}}
+ */
+function describeAmong(list, names) {
+  const byName = new Map(list.map(tool => [tool.name, tool]));
+  const found = [];
+  const notFound = [];
+  for (const name of Array.from(new Set(names || []))) {
+    const tool = byName.get(name);
+    if (tool) {
+      found.push({
+        name: tool.name,
+        group: tool.group,
+        mode: tool.mode,
+        description: tool.description,
+        schema: tool.schema || { type: 'object', properties: {} },
+      });
+    } else {
+      notFound.push({ name, similar: similarToolNames(list, name) });
+    }
+  }
+  const result = { tools: found };
+  if (notFound.length) result.notFound = notFound;
+  return result;
+}
+
+/**
+ * How to go on from a compact response — said once per response instead of a
+ * `call` block inside every tool.
+ * @param {string} view  the view the caller is in: its links keep it
+ * @returns {Object}
+ */
+function compactUsage(view) {
+  const suffix = view === 'compact' && defaultView() !== 'compact' ? '?view=compact' : '';
+  return {
+    catalogue: `GET ${MCP_PATH}${suffix} — groups with the names of their tools`,
+    group: `GET ${MCP_PATH}/group/<group>${suffix} — the tools of a group with the names of their parameters`,
+    tool: `GET ${MCP_PATH}/tool/<name>[,<name>...] — full description and JSON Schema of the named tools`,
+    call: `POST ${MCP_PATH}/call/<name> with Content-Type: application/json, the body is the object of parameters; answers {"tool","result"} or {"error"}`,
+    auth: 'protected tools: X-Mcp-Key header or ?mcp_key= query param',
+  };
+}
+
+/**
+ * The view GET /mcp and GET /mcp/group/:group answer with when the request
+ * names none. `full` (the default) is the catalogue as it has always been;
+ * MCP_DEFAULT_VIEW=compact switches a server over without a release.
+ * @returns {'full'|'compact'}
+ */
+function defaultView() {
+  return process.env.MCP_DEFAULT_VIEW === 'compact' ? 'compact' : 'full';
+}
+
+/**
+ * The view a request asks for: ?view=compact | ?view=full, else the default.
+ * `req.query` may not be initialized this early in the pipeline — the raw URL
+ * is the fallback, as for the admin key.
+ * @param {Object} req
+ * @returns {'full'|'compact'}
+ */
+function requestedView(req) {
+  const query = (req && req.query) || {};
+  const rawQuery = req && typeof req.url === 'string' && req.url.split('?')[1];
+  const asked = query.view || (rawQuery && new URLSearchParams(rawQuery).get('view'));
+  if (asked === 'compact' || asked === 'full') return asked;
+  return defaultView();
+}
+
 /**
  * Returns an Express-compatible middleware function.
  * Mount it in sails.config.http.middleware before 'router'.
@@ -377,6 +573,18 @@ function middleware() {
     // GET /mcp — server info + group catalogue (or legacy flat list with ?flat=1)
     if (req.method === 'GET' && url === MCP_PATH) {
       const flat = req.query && (req.query.flat === '1' || req.query.flat === 'true' || req.query.all === '1');
+
+      // Compact catalogue: groups + tool names, the way to go on said once.
+      if (!flat && requestedView(req) === 'compact') {
+        return res.json({
+          protocol: 'mcp',
+          version: '1.1',
+          view: 'compact',
+          auth: isAdmin ? 'authenticated' : 'unauthenticated',
+          usage: compactUsage('compact'),
+          ...compactCatalog(visibleTools(req)),
+        });
+      }
 
       const base = {
         protocol: 'mcp',
@@ -445,6 +653,18 @@ function middleware() {
         return res.status(404).json({ error: `Group '${groupName}' not found` });
       }
 
+      if (requestedView(req) === 'compact') {
+        const compact = compactGroup(groupTools, groupName)
+          || { group: groupName, ...(meta.description ? { description: meta.description } : {}), toolCount: 0, tools: [] };
+        return res.json({
+          protocol: 'mcp',
+          version: '1.1',
+          view: 'compact',
+          usage: compactUsage('compact'),
+          ...compact,
+        });
+      }
+
       return res.json({
         protocol: 'mcp',
         version: '1.1',
@@ -458,13 +678,40 @@ function middleware() {
       });
     }
 
+    // GET /mcp/tool/:name[,:name...] — full description + schema of the named tools
+    if (req.method === 'GET' && url.startsWith(MCP_PATH + '/tool/')) {
+      const names = decodeURIComponent(url.slice((MCP_PATH + '/tool/').length))
+        .split(',').map(name => name.trim()).filter(Boolean);
+      // A protected tool the caller has no access to is reported as not found,
+      // the same way the catalogue does not show it.
+      const described = describeAmong(visibleTools(req), names);
+
+      if (described.tools.length === 0) {
+        return res.status(404).json({
+          error: names.length ? `Tool '${names.join("', '")}' not found` : 'Tool name is required',
+          ...(described.notFound ? { notFound: described.notFound } : {}),
+        });
+      }
+
+      return res.json({
+        protocol: 'mcp',
+        version: '1.1',
+        usage: compactUsage(requestedView(req)),
+        ...described,
+      });
+    }
+
     // POST /mcp/call/:tool — invoke
     if (req.method === 'POST' && url.startsWith(MCP_PATH + '/call/')) {
       const toolName = url.slice((MCP_PATH + '/call/').length);
       const tool = tools.get(toolName);
 
       if (!tool) {
-        return res.status(404).json({ error: `Tool '${toolName}' not found` });
+        const similar = similarToolNames(visibleTools(req), toolName);
+        return res.status(404).json({
+          error: `Tool '${toolName}' not found`,
+          ...(similar.length ? { similar } : {}),
+        });
       }
 
       if (tool.mode === 'protected' && !hasProtectedAccess(req)) {
@@ -537,6 +784,47 @@ function listGroups() {
   return Array.from(groups.values()).map(g => ({ ...g }));
 }
 
+/**
+ * Compact catalogue for in-process callers: groups with the names of their tools.
+ * @param {'public'|'all'} [level='all']
+ * @returns {{groupCount: number, toolCount: number, groups: Array<{name: string, description?: string, tools: string[]}>}}
+ */
+function catalog(level = 'all') {
+  return compactCatalog(toolsAtLevel(level));
+}
+
+/**
+ * The tools of one group for in-process callers: a one-liner and the parameter
+ * names of each. Null when there is no such group at this level.
+ * @param {string} groupName
+ * @param {'public'|'all'} [level='all']
+ * @returns {Object|null}
+ */
+function describeGroup(groupName, level = 'all') {
+  return compactGroup(toolsAtLevel(level), groupName);
+}
+
+/**
+ * Full description + JSON Schema of the named tools for in-process callers.
+ * A name that is not registered comes back in `notFound` with similar names.
+ * @param {string[]} names
+ * @param {'public'|'all'} [level='all']
+ * @returns {{tools: Array, notFound?: Array<{name: string, similar: string[]}>}}
+ */
+function describeTools(names, level = 'all') {
+  return describeAmong(toolsAtLevel(level), names);
+}
+
+/**
+ * Names of the registered tools closest to a name that was not found.
+ * @param {string} name
+ * @param {'public'|'all'} [level='all']
+ * @returns {string[]}
+ */
+function suggestTools(name, level = 'all') {
+  return similarToolNames(toolsAtLevel(level), name);
+}
+
 module.exports = {
   registerTool,
   registerGroup,
@@ -546,6 +834,10 @@ module.exports = {
   callTool,
   listTools,
   listGroups,
+  catalog,
+  describeGroup,
+  describeTools,
+  suggestTools,
 };
 
 // Expose as a global so any module can call mcp.registerTool(...)
