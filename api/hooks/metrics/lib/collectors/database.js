@@ -299,9 +299,11 @@ async function collect(sails, metrics, config) {
   });
 
   // ── Readiness, mirroring HealthController.readyz ───────────────────────
+  // Technical checks only (ORM + datastore); sales channels are business state
+  // and are exported via restoapp_sales_channels, not folded into readiness.
   await guard(sails, metrics, 'ready', async () => {
-    const enabledSalesChannels = await SalesChannel.count({ enabled: true });
-    metrics.ready.set(enabledSalesChannels >= 1 ? 1 : 0);
+    const ok = Boolean(sails.hooks.orm && sails.getDatastore());
+    metrics.ready.set(ok ? 1 : 0);
   });
 
   await guard(sails, metrics, 'maintenance', async () => {

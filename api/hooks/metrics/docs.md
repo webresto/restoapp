@@ -237,7 +237,8 @@ the classic IRSF opening); or sends approach the cap before it fires.
 
 ### Readiness and housekeeping
 
-`restoapp_ready` (the `/readyz` check: at least one enabled sales channel),
+`restoapp_ready` (the `/readyz` check: technical only — ORM and datastore are
+up; sales channels are business state, see `restoapp_sales_channels`),
 `restoapp_maintenance_enabled`, `restoapp_build_info{version,commit,branch,node,staging}`,
 `restoapp_bootstrap_completed`, `restoapp_collector_duration_seconds{collector}`,
 `restoapp_collector_errors_total{collector}` — the exporter also watches itself.
