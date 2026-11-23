@@ -124,7 +124,9 @@ ENV COMMIT_HASH=$COMMIT_HASH
 ARG CONTAINER_VERSION=
 ENV CONTAINER_VERSION=$CONTAINER_VERSION
 
-RUN apk add --no-cache nginx
+# The base stage may come from the build cache with older packages than the index now has: upgrade them first, or a
+# package split since (python3-ndbm out of python3, 2026-11) conflicts with the cached one
+RUN apk upgrade --no-cache && apk add --no-cache nginx
 RUN npm i -g pm2 tsx typescript
 COPY .ci/config/nginx.conf /etc/nginx/nginx.conf
 COPY .ci/config/maintenance.html /var/lib/html/maintenance.html
